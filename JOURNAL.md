@@ -4,6 +4,20 @@ Running log of decisions, notes, and learnings. Newest at top.
 (PLAN.md holds current policy; this file is the record.)
 
 ## 2026-10-23
+**23:17 — main4 verdict: volume DOUBLES real transfer, wall persists; band 10-35%
+-> postmortem decides the surgery.**
+typed_test (400): text 6.5->13.3% (squad2 13.5% w/ null_correct 86.6%, drop 12.5%),
+number 4.6% (5.6% when-solvable), list-text 10%. mean_conf 0.10 — calibration
+transfers, pointing still doesn't (third independent confirmation).
+val2 held: text 89.7, number 50.7 (76.7 when-solvable), date 85.1 (100% solvable),
+duration 100, datetime 100, list-text 99.4 (probe1's forgetting recovered),
+table-number still 2.5% (solvable 25%) — table is synthetic side's residual wall.
+real_eval: CUAD list-text 1.09% — unchanged in three attempts.
+Volume is not the lever for pointing. Val-loss best at ~9500 (4.545), final used
+(11704) — tail flat, no overfit drama. Postmortem chain armed on typed/val2/real:
+p@5 high/p@1 low -> Exp(B) reranker; p@5 low -> Exp(A+D) attn-query + scattered
+train3; p@1 high & exact ~0 -> decode hunt. GPU held for it.
+
 
 **22:45 — Tier A + Tier D built, tested, committed; scatter data pre-made.**
 Tier D `--cue-scatter` (afa12c9): rewrites `Label: value` cue lines to a
