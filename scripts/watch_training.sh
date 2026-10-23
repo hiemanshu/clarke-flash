@@ -5,11 +5,15 @@
 #   ./scripts/watch_training.sh 2          # refresh every 2s
 #   ./scripts/watch_training.sh status     # print one frame and exit
 #   ./scripts/watch_training.sh --full     # everything: all runs + reports + eval logs
-#   LOGDIR=/some/dir ./scripts/watch_training.sh
+#   LOGDIR=/some/dir CLEAR_EVERY=30 ./scripts/watch_training.sh
 #
-# Data source: runs/<run>/train.jsonl (step/total/loss + null/span/cand/op/present/dist
-# buckets, val rows) and runs/<run>/checkpoint-<step>/. Terminal alternate-screen
-# buffer, hidden cursor, repaint in place; Ctrl-C restores.
+# Data: runs/<run>/train.jsonl (step/total/loss + null/span/cand/op/present/dist
+# buckets, val rows) and checkpoint-* dirs. Hardware (GPU + corsair-psu rails)
+# and footer are pinned to the screen bottom; the frame is padded to full
+# terminal height. Full-screen purge every CLEAR_EVERY seconds (default 30) and
+# on resize clears shifted-line/wrap artifacts; between purges the frame paints
+# from home and erases below. Checkpoints render as ONE fixed row (growing
+# tables were the main line-shifter). Alternate screen; Ctrl-C restores.
 set -uo pipefail
 
 INTERVAL=1
@@ -26,8 +30,10 @@ done
 
 LOGDIR="${LOGDIR:-/tmp/opencode}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROWS=24 COLS=80
 W=72
 K=$'\033[K'
+CLEAR_EVERY=${CLEAR_EVERY:-30}
 TTY=0; [[ -t 1 ]] && TTY=1
 
 if (( TTY )); then
@@ -37,7 +43,7 @@ else
   B=; D=; R=; CY=; GR=; YE=; RD=
 fi
 
-lab() { printf ' %-10s ' "$1"; }                       # dim label, fixed width
+lab() { printf ' %-10s ' "$1"; }
 bar() {                                                  # value max width colour
   local v=$1 m=$2 w=$3 c=$4 f e out=""
   (( m <= 0 )) && m=1
@@ -54,7 +60,7 @@ active_run() {
     | xargs -r -n1 basename 2>/dev/null
 }
 
-# parse train.jsonl -> KEY=VALUE lines
+# parse train.jsonl -> KEY=VALUE lines (latest train + latest val + trend)
 state() { python3 - "$1" <<'PY' 2>/dev/null
 import json, sys
 rows = []
@@ -87,7 +93,8 @@ if val:
 PY
 }
 
-ckpts() { python3 - "$ROOT" "$1" <<'PY' 2>/dev/null
+# one fixed row for the whole checkpoint table (never grows -> never shifts lines)
+ckline() { python3 - "$ROOT" "$1" <<'PY' 2>/dev/null
 import glob, json, os, re, sys
 root, run = sys.argv[1], sys.argv[2]
 path = os.path.join(root, "runs", run, "train.jsonl")
@@ -100,20 +107,24 @@ if os.path.exists(path):
         except Exception: continue
         (val if r.get("val") else train).append(r)
 def at(rows, step):
-    r = [x for x in rows if x.get("step") == step] or [x for x in rows if x.get("step", 0) <= step]
+    r = [x for x in rows if x.get("step", 0) <= step]
     return r[-1] if r else None
-f = lambda v: "    -    " if not isinstance(v, float) else f"{v:8.3f}"
-prev = None
-for d in sorted(glob.glob(os.path.join(root, "runs", run, "checkpoint-*")),
-                key=lambda p: int(re.search(r"checkpoint-(\d+)", p).group(1)))[-10:]:
-    step = int(re.search(r"checkpoint-(\d+)", d).group(1))
-    t, v = at(train, step), at(val, step)
-    vl = v.get("loss") if v else None
-    trend = ""
-    if isinstance(vl, float) and isinstance(prev, float):
-        trend = "v" if vl < prev - 0.005 else ("^" if vl > prev + 0.005 else "=")
-    prev = vl
-    print(f"  {os.path.basename(d):>16} {f(t.get('loss') if t else None)} {f(vl)}  {trend}")
+cks = sorted((int(re.search(r"checkpoint-(\d+)", d).group(1))
+              for d in glob.glob(os.path.join(root, "runs", run, "checkpoint-*"))))
+if not cks:
+    print("none yet — first at step 1000")
+    raise SystemExit
+vals = [(c, (lambda v: v.get("loss") if v else None)(at(val, c))) for c in cks[-4:]]
+parts = []
+for i, (c, vl) in enumerate(vals):
+    mark = ""
+    if i and isinstance(vl, float) and isinstance(vals[i-1][1], float):
+        d = vl - vals[i-1][1]
+        mark = "▼" if d < -0.005 else ("▲" if d > 0.005 else "=")
+    parts.append(f"{c/1000:g}k:{'-' if vl is None else f'{vl:.3f}'}{mark}")
+last_t = at(train, cks[-1])
+lt = last_t.get("loss") if last_t else None
+print(f"{len(cks)} ckpt  [{'  '.join(parts)}]   latest train {'-' if lt is None else f'{lt:.3f}'}")
 PY
 }
 
@@ -150,19 +161,31 @@ psu_dir() {
 }
 hw_val() { local v; v=$(cat "$1" 2>/dev/null) || return; printf '%s' $(( v / $2 )); }
 
-rule() { printf '%s%s%s%s\n' "$D" "$(printf '─%.0s' $(seq 1 $W))" "$R" "$K"; }
-emit() { printf '%s\n' "$*$K"; }
+# ---- frame buffer -------------------------------------------------------
+# SINK selects the active block: OUT (top) / BOT (bottom-pinned) / MID (gap)
+declare -a OUT BOT MID
+SINK=OUT
+push() { local -n _ref="$SINK"; _ref+=("$1"); }
+rule() { push "${D}$(printf '─%.0s' $(seq 1 $W))${R}${K}"; }
+emit() { push "$*$K"; }
 
 PREV_STEP=-1; PREV_T=""
 
 draw() {
   local run STEP="" TOTAL="" EPOCH="" LOSS="" LR="" RPS="" GB="" COMPS=""
   local VSTEP="" VLOSS="" VCOMPS="" VTREND=""
+  OUT=(); BOT=(); MID=(); SINK=OUT
+  if (( TTY )); then
+    local sz; sz=$(stty size 2>/dev/null </dev/tty || echo "24 80")
+    ROWS=${sz%% *}; COLS=${sz##* }
+  fi
+  (( ROWS < 8 )) && ROWS=24
+  (( COLS < 40 )) && COLS=80
+  W=$(( COLS - 1 ))
 
-  emit ""
-  emit "${B}${CY}  clarke-flash trainer${R}                    $(date '+%H:%M:%S')"
+  emit "${B}${CY}  clarke-flash trainer${R}$(printf ' %*s' $(( W - 30 )) '')$(date '+%H:%M:%S')${K}"
   rule
-  emit ""
+  emit ""$K
 
   run="$(active_run)"
   local active=0
@@ -170,87 +193,86 @@ draw() {
   if (( ! active )); then run="$(ls -1t "$ROOT/runs" 2>/dev/null | head -1 || true)"; fi
 
   if [[ -n "$run" && -d "$ROOT/runs/$run" ]]; then
-    local log="$ROOT/runs/$run/train.jsonl"
-    local state_str=""
+    local log="$ROOT/runs/$run/train.jsonl" state_str="" c v
     [[ -f "$log" ]] && state_str="$(state "$log")"
-    local c v
     while IFS='=' read -r c v; do
       case "$c" in
-        STEP) STEP=$v;; TOTAL) TOTAL=$v;; EPOCH) EPOCH=$v;; LOSS) LOSS=$v;;
-        LR) LR=$v;; RPS) RPS=$v;; GB) GB=$v;; COMPS) COMPS=$v;;
+        STEP) STEP=$v;; TOTAL) TOTAL=$v;; EPOCH) EPOCH=$v;; LOSS) LOSS=$v;; LR) LR=$v;;
+        RPS) RPS=$v;; GB) GB=$v;; COMPS) COMPS=$v;;
         VSTEP) VSTEP=$v;; VLOSS) VLOSS=$v;; VCOMPS) VCOMPS=$v;; VTREND) VTREND=$v;;
       esac
-    done <<< "$state_str"
+    done <<< "$state_str" 2>/dev/null || true
 
     local now=$(date +%s%N) rate=""
     if [[ -n "$STEP" ]] && (( PREV_STEP >= 0 )) && (( STEP > PREV_STEP )) && [[ -n "$PREV_T" ]]; then
       rate=$(awk -v s="$STEP" -v p="$PREV_STEP" -v n="$now" -v t="$PREV_T" \
              'BEGIN{printf "%.2f", (s-p)/((n-t)/1e9)}')
     fi
-    [[ -n "$STEP" ]] && { PREV_STEP="$STEP"; PREV_T="$now"; } || { PREV_STEP=-1; }
+    if [[ -n "$STEP" ]]; then PREV_STEP="$STEP"; PREV_T="$now"; else PREV_STEP=-1; fi
 
     if (( active )); then
-      emit "$(lab run)${B}${run}${R}  ${GR}ACTIVE${R}  (step ${STEP:-0})"
+      emit "$(lab run)${B}${run}${R}  ${GR}ACTIVE${R}${K}"
     else
-      emit "$(lab run)${B}${run}${R}  ${D}idle (newest run)${R}"
+      emit "$(lab run)${B}${run}${R}  ${D}idle (newest run)${R}${K}"
     fi
-    emit ""
 
     if [[ -n "$STEP" && -n "$TOTAL" ]]; then
       local pct=$(( STEP * 100 / TOTAL )); (( pct > 100 )) && pct=100
       local eta="…"
       [[ -n "$rate" && "$rate" != "0.00" ]] && eta=$(awk -v r="$rate" -v s="$STEP" -v t="$TOTAL" \
         'BEGIN{e=(t-s)/r; if (e<0) e=0; printf "%dh%02dm", e/3600, (e%3600)/60}')
-      emit "$(lab progress)[$(bar "$STEP" "$TOTAL" 36 "$GR")]  ${B}${STEP}${R} / ${TOTAL}  ${B}${pct}%${R}  ep ${EPOCH:-?}  eta ${eta}"
-      emit "$(lab train)loss ${B}${LOSS:-—}${R}   lr ${LR:-—}   ${D}${RPS:-—} rec/s · ${GB:-—} GB${R}   ${D}${rate:+${rate} steps/s}${R}"
+      emit "$(lab progress)[$(bar "$STEP" "$TOTAL" 36 "$GR")]  ${B}${STEP}${R}/${TOTAL}  ${B}${pct}%${R}  ep ${EPOCH:-?}  eta ${eta}${K}"
     elif [[ -n "$STEP" ]]; then
-      emit "$(lab progress)step ${B}${STEP}${R}  ${D}(no total in jsonl — run started before the total field existed)${R}"
-      emit "$(lab train)loss ${B}${LOSS:-—}${R}   ${D}${RPS:-—} rec/s${R}"
+      emit "$(lab progress)step ${B}${STEP}${R}  ${D}(total unknown — run predates jsonl total field)${R}${K}"
     else
-      emit "$(lab progress)${D}starting… (loading backbone / first steps pending)${R}"
+      emit "$(lab progress)${D}starting… (loading backbone)${R}${K}"
     fi
-    [[ -n "$COMPS" ]] && emit "$(lab components)${D}${COMPS}${R}"
+    emit "$(lab train)loss ${B}${LOSS:-—}${R}   lr ${LR:-—}   ${D}${RPS:-—} rec/s · ${GB:-—} GB${R}   ${D}${rate:+${rate} steps/s}${R}${K}"
+    [[ -n "$COMPS" ]] && emit "$(lab components)${D}${COMPS}${R}${K}"
     if [[ -n "$VLOSS" ]]; then
       local tc="$GR"; [[ "$VTREND" == UP* ]] && tc="$RD"
-      emit "$(lab validation)val@${VSTEP}  loss ${B}${VLOSS}${R}  ${tc}${VTREND}${R}"
-      [[ -n "$VCOMPS" ]] && emit "              ${D}${VCOMPS}${R}"
+      emit "$(lab validation)val@${VSTEP} loss ${B}${VLOSS}${R} ${tc}${VTREND}${R}  ${D}${VCOMPS}${R}${K}"
     fi
-    emit ""
-    rule
-    emit ""
-    emit "    ${B}checkpoints${R} ${D}(train | val@≤step | trend)${R}"
-    emit ""
-    local ck; ck="$(ckpts "$run")"
-    if [[ -n "$ck" ]]; then
-      emit "    ${D}        checkpoint    train      val${R}"
-      local line
-      while IFS= read -r line; do
-        local cc="$R"
-        case "$line" in *v) cc="$GR";; *^*) cc="$RD";; esac
-        emit "  ${cc}${line}${R}"
-      done <<< "$ck"
-    else
-      emit "    ${D}(none yet — first at step 1000)${R}"
-    fi
-    emit ""
+    local ck; ck="$(ckline "$run")"
+    emit "$(lab checkpoints)${D}${ck}${R}${K}"
+    emit ""$K
   else
-    emit "$(lab run)${D}no runs/ yet — see README + PLAN (clarke-train …)${R}"
-    emit ""
+    emit "$(lab run)${D}no runs/ yet — see README + PLAN (clarke-train …)${R}${K}"
+    rule; emit ""$K
+  fi
+  rule
+  emit ""$K
+
+  if (( FULL )); then
+    emit "    ${B}all runs${R}${K}"
+    local l
+    while IFS= read -r l; do emit "${D}  ${l}${R}${K}"; done < <(all_runs)
+    emit ""$K
+    emit "    ${B}reports${R}${K}"
+    local f
+    for f in "$ROOT"/reports/*.json; do [[ -e "$f" ]] && emit "  ${f##*/}${K}"; done
+    for f in "$LOGDIR"/eval-*.log; do
+      [[ -e "$f" ]] || continue
+      emit "  ${D}${f##*/}:${R}${K}"
+      while IFS= read -r l; do emit "    ${l:0:110}${K}"; done < <(tail -3 "$f" | tr -d '\r')
+    done
+    emit ""$K
     rule
   fi
 
-  # ---- hardware ----
+  # ---- bottom-pinned hardware + footer ----
+  SINK=BOT
   local g; g="$(gpu_line)"
   if [[ -n "$g" ]]; then
-    emit ""
     local used tot util temp pw plim
     used=${g%%|*}; g=${g#*|}; tot=${g%%|*}; g=${g#*|}; util=${g%%|*}; g=${g#*|}
     temp=${g%%|*}; g=${g#*|}; pw=${g%%|*}; plim=${g##*|}
     used=${used//[^0-9]/}; tot=${tot//[^0-9]/}; util=${util//[^0-9]/}
-    temp=${temp//[^0-9]/}; pw=${pw%%.*}; pw=${pw//[^0-9]/}; plim=${plim%%.*}; plim=${plim//[^0-9]/}
+    temp=${temp//[^0-9]/}; pw=${pw//[^0-9.]/}; plim=${plim//[^0-9.]/}
+    pw=${pw%%.*}; plim=${plim%%.*}
     local ug=$(( used / 1024 )) tg=$(( tot / 1024 ))
     local c2="$GR"; (( util < 40 )) && c2="$YE"; (( used * 100 / (tot + 1) > 90 )) && c2="$RD"
-    emit "$(lab gpu)[$(bar "$used" "$tot" 40 "$c2")]  ${B}${ug}${R}/${D}${tg}${R} GB   util ${B}${util}%${R}   ${D}${temp}°C${R}"
+    emit "$(lab gpu)[$(bar "$used" "$tot" 40 "$c2")]  ${B}${ug}${R}/${D}${tg}${R} GB   util ${B}${util}%${R}   ${D}${temp}°C${R}${K}"
     local psu; psu="$(psu_dir)"
     if [[ -n "$psu" ]]; then
       local p1 p2 ac pt
@@ -259,42 +281,49 @@ draw() {
       local pmax=${PSU_MAX:-1200}
       local pload=$(( p1 * 100 / pmax ))
       local pc="$GR"; (( pload > 60 )) && pc="$YE"; (( pload > 85 )) && pc="$RD"
-      emit "$(lab power)${D}GPU ${pw} / ${plim} W${R}   ${pc}PSU ${p1} W (${pload}% of ${pmax})${R}   ${D}+12V ${p2} W · ${ac} V AC · ${pt}°C${R}"
+      emit "$(lab power)${D}GPU ${pw}/${plim} W${R}   ${pc}PSU ${p1} W (${pload}%)${R}   ${D}+12V ${p2} W · ${ac} V · ${pt}°C${R}${K}"
     else
-      emit "$(lab power)${D}GPU ${pw} / ${plim} W  (no PSU sensors)${R}"
+      emit "$(lab power)${D}GPU ${pw}/${plim} W  (no PSU sensors)${R}${K}"
     fi
-    emit ""
   fi
   rule
+  emit "${D}  Ctrl-C to exit · --full: all runs/reports/logs · refresh ${INTERVAL}s · CLEAR_EVERY=${CLEAR_EVERY}s purge${R}${K}"
+  SINK=OUT
+}
 
-  if (( FULL )); then
-    emit ""
-    emit "    ${B}all runs${R}"
-    emit ""
-    all_runs | while IFS= read -r l; do emit "${D}${l}${R}"; done
-    emit ""
-    emit "    ${B}reports${R}"
-    local f
-    for f in "$ROOT"/reports/*.json; do [[ -e "$f" ]] && emit "  ${f##*/}"; done
-    emit ""
-    emit "    ${B}eval console tails${R}"
-    for f in "$LOGDIR"/eval-*.log; do
-      [[ -e "$f" ]] || continue
-      emit "  ${D}${f##*/}:${R}"
-      tail -3 "$f" | tr -d '\r' | while IFS= read -r l; do emit "    ${l:0:110}"; done
-    done
-    emit ""
+paint() {
+  local total=$(( ${#OUT[@]} + ${#BOT[@]} ))
+  local gap=$(( ROWS - total ))
+  (( gap < 0 )) && gap=0
+  printf '%s\n' "${OUT[@]}"
+  local i
+  for (( i = 0; i < gap; i++ )); do printf '%s\n' "$K"; done
+  printf '%s\n' "${BOT[@]}"
+}
+
+render() {
+  local now dims
+  now=$(date +%s)
+  dims="${ROWS}x${COLS}"
+  if [[ "$dims" != "$LAST_DIMS" ]] || (( now >= NEXT_CLEAR )); then
+    printf '\033[H\033[2J'                       # full purge: kills wrap/shift artifacts
+    LAST_DIMS="$dims"; NEXT_CLEAR=$(( now + CLEAR_EVERY ))
+  else
+    printf '\033[H'
   fi
-  emit "$(printf '%*s' 4 '')${D}Ctrl-C to exit · --full for everything · refresh ${INTERVAL}s · 'status' for one frame${R}"
+  paint
+  printf '\033[J'
 }
 
 if (( TTY && ! STATUS )); then printf '\033[?1049h'; fi
 cleanup() { printf '\033[?25h\033[?1049l'; exit 0; }
 trap cleanup INT TERM
-(( TTY && ! STATUS )) && printf '\033[?25l\033[2J'
+(( TTY && ! STATUS )) && printf '\033[?25l'
 
-if (( STATUS )); then draw; exit 0; fi
+if (( STATUS )); then draw; paint; exit 0; fi
+LAST_DIMS=""; NEXT_CLEAR=0
 while true; do
   draw
+  render
   sleep "$INTERVAL"
 done
