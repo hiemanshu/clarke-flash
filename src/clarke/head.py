@@ -417,6 +417,14 @@ class JointExtractionHead(nn.Module):
                         device=logits.null.device)))
 
                 if target.null:
+                    # a null LIST must still train the present head toward the
+                    # zero vector: without this, 91%-absent regimes (CUAD) get
+                    # no "no list" gradient and every decode fabricates items
+                    if spec.type == "list" and logits.present is not None:
+                        zeros = torch.zeros(logits.present.shape[-1],
+                                            device=logits.present.device)
+                        add("present", F.binary_cross_entropy_with_logits(
+                            logits.present.float(), zeros))
                     continue
                 if spec.type == "text" and target.start is not None:
                     add("span", F.cross_entropy(logits.start.view(1, -1),

@@ -77,25 +77,27 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits) -
     elif spec.type == "list" and spec.items == "text":
         values, spans = [], []
         present = torch.sigmoid(logits.present.float())
-        for slot in range(LIST_SLOTS):
-            if present[slot] < 0.5:
-                continue
-            part = _decode_span(logits.start[slot], logits.end[slot], record, spec,
-                                torch.tensor(0.0))
-            if part.get("value"):
-                values.append(part["value"])
-                spans.append(part["span"])
+        if float(p_null) <= 0.5:  # absent list: honor the trained null head
+            for slot in range(LIST_SLOTS):
+                if present[slot] < 0.5:
+                    continue
+                part = _decode_span(logits.start[slot], logits.end[slot], record, spec,
+                                    torch.tensor(0.0))
+                if part.get("value"):
+                    values.append(part["value"])
+                    spans.append(part["span"])
         answer["value"] = values or None
         answer["spans"] = spans
+        answer["p_null"] = _probability(p_null)
     elif spec.type == "list" and spec.items in ("number", "date", "time"):
         from .candidates import field_atoms
 
         present = torch.sigmoid(logits.present.float())
         values, confidences, spans = [], [], []
-        if logits.cand_a is not None:
+        used_agg = False
+        if logits.cand_a is not None and float(p_null) <= 0.5:
             atoms = field_atoms(spec, record.pool)
             n_plain = len(record.pool.numbers)
-            used_agg = False
             for slot in range(min(LIST_SLOTS, logits.cand_a.shape[0])):
                 if present[slot] < 0.5 or not atoms:
                     continue
