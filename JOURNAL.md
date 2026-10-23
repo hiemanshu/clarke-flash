@@ -1,3 +1,19 @@
+**03:40 — B2 verdict + decode attribution. expFinal (full stack) launched 03:31.**
+B2 (rerank+attn on train3, init expA1D, fix5-decode in eval): typed text .144->.157,
+number .056->.068 (reranker: p@3 .477->.505, med 3->2, p@1 .200->.196 — improves
+top-band recall, NOT top-1; pair net's ceiling is the features), retention perfect
+(val3 text .900). CUAD real: exact .0109->.022, null_ok 0->.727.
+ATTRIBUTION via decode-matched re-eval of expA1D (fix5 DECODE only, untrained present):
+CUAD null_ok .7365 (!) >= B2's .727 -> the 0.0 -> 0.7+ leap was 100% DECODE ARTIFACT:
+the null head has been trained+calibrated on lists all along; the old decoder simply
+never consulted it (fabricated items regardless). The fix5 LOSS half (present zero-vec
+supervision) adds robustness, not the win — measured at expFinal. Lesson for the
+morning: p_null existed, honesty was optional; every answer type must consult it.
+expFinal = rerank+attn+scatter+agg-atoms+fix5-loss, init B2-5852, verdict ~05:40;
+then decide morning: resume-extension (same run, +2ep) vs fresh analysis. CPU notes:
+pair-net memory footprint fine (19.3GB steady), OOM warnings during eval transitions
+were recoverable cache-flush retries, confirmed no zombies.
+
 ## 2026-10-24
 
 **01:25 — Exp(A+D) verdict: real +1.1pp (text 13.3->14.4), adjacency SHORTCUT KILLED on
