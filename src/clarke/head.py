@@ -127,9 +127,12 @@ class JointExtractionHead(nn.Module):
         feedforward: int = 4096,
         dropout: float = 0.0,
         rerank: bool = False,
+        query_pool: str = "mean",
     ):
         super().__init__()
         self.rerank = bool(rerank)
+        assert query_pool in ("mean", "last", "attn")
+        self.query_pool = query_pool
         self.hidden_norm = nn.LayerNorm(hidden_size)
         self.field_projection = nn.Linear(hidden_size, width, bias=False)
         self.global_projection = nn.Linear(hidden_size, width, bias=False)
@@ -171,6 +174,12 @@ class JointExtractionHead(nn.Module):
                 )
             self.pair_a = pair_net()
             self.pair_b = pair_net()
+        if self.query_pool == "attn":
+            # Tier A: learned attention pooling over the instruction span —
+            # mean-pool washes out question structure ("after", "before",
+            # "excluding") that last-token/attentive pooling preserves.
+            # Applied to the raw hidden states (before field_projection).
+            self.query_attn = nn.Linear(hidden_size, 1, bias=False)
         self.date_heads = nn.ModuleList([
             nn.Linear(width, YEAR_BINS), nn.Linear(width, 12), nn.Linear(width, DAY_BINS),
         ])
@@ -195,7 +204,17 @@ class JointExtractionHead(nn.Module):
             global_vector = self.global_projection(sequence[-1])
 
             field_spans = [f.field_span for f in record.fields]
-            pooled = torch.stack([sequence[start:end].mean(dim=0) for start, end in field_spans])
+            if self.query_pool == "last":
+                pooled = torch.stack([sequence[end - 1] for _, end in field_spans])
+            elif self.query_pool == "attn":
+                rows = []
+                for start, end in field_spans:
+                    span = sequence[start:end]
+                    weights = torch.softmax(self.query_attn(span).squeeze(-1), dim=0)
+                    rows.append((span * weights.unsqueeze(-1)).sum(dim=0))
+                pooled = torch.stack(rows)
+            else:
+                pooled = torch.stack([sequence[start:end].mean(dim=0) for start, end in field_spans])
             type_ids = torch.tensor([f.type_id for f in record.fields], device=sequence.device)
             configs = torch.tensor([spec_features(f.spec) for f in record.fields],
                                    device=sequence.device, dtype=torch.float32)
