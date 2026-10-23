@@ -5,6 +5,28 @@ Running log of decisions, notes, and learnings. Newest at top.
 
 ## 2026-10-23
 
+**22:45 — Tier A + Tier D built, tested, committed; scatter data pre-made.**
+Tier D `--cue-scatter` (afa12c9): rewrites `Label: value` cue lines to a
+placeholder, plants the bare value >=2 lines below. Spans remapped
+POSITIONALLY + byte-verified (search-based re-derivation rejected: money
+format mismatch + repeated atoms silently mangle labels); uncarryable field
+-> dropped whole, never corrupted. Atom-only lines (Subtotal/Tax operands,
+no gold span) also move — the numeric pointer is the same adjacency victim.
+Verified: ticket gold-adjacency 600->118, invoice cue-atom lines 1500->636,
+NON-target domains byte-identical, build_targets reaches every gold exactly
+as before (944->944 cand, 360->360 spans, 0 fields dropped). train3/val3
+generated from the actual train2/val2 records (scatter applied per-record,
+identical base — cleanest possible contrast to main4) so a scatter-armed
+run needs no GPU-idle data step.
+Tier A `--query-pool {mean,last,attn}` (166ee51): mean/last/attn all
+forward+backward finite + config round-trip; rerank+attn combined head gets
+gradients on both new nets (likely surgery config). Caught attn dim bug
+(Linear must be hidden_size->1, pools BEFORE field_projection).
+Verdict instruments ready: postmortem p@1/3/5 decides branch (p@5 high/p@1
+low -> Exp(B); p@5 low -> Exp(A+D) on train3; exact~0/p@1 high -> decode
+hunt). GPU held for main4; nothing above touched it. exp_template.sh staged
+in /tmp/opencode for the launch after verdict.
+
 **21:40 — arsenal pre-built (Phase 0).** Postmortem mode (`clarke-eval
 --postmortem`: gold rank p@1/3/5 + unrankable rate by domain x kind) and
 Tier B pairwise reranker (`--rerank`: cross-encoder features [q;c;q*c;|q-c|]
