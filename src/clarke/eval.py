@@ -34,10 +34,10 @@ def match_scalar(spec: FieldSpec, predicted: Any, gold: Any) -> bool:
 @torch.no_grad()
 def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              device: torch.device, batch_size: int = 8) -> dict[str, Any]:
-    stats: dict[str, dict[str, float]] = {}
+    stats: dict[tuple[str, str], dict[str, float]] = {}
 
-    def stat(kind: str) -> dict[str, float]:
-        return stats.setdefault(kind, {"n": 0, "exact": 0, "located": 0, "null_correct": 0,
+    def stat(dom: str, kind: str) -> dict[str, float]:
+        return stats.setdefault((dom, kind), {"n": 0, "exact": 0, "located": 0, "null_correct": 0,
                                        "answered": 0, "conf_sum": 0.0, "coverage": 0,
                                        "ape_sum": 0.0, "pinball": 0.0,
                                        "brier_sum": 0.0, "brier_n": 0,
@@ -61,7 +61,7 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                 gold = record.answers.get(name) or {}
                 got = record_answers[name]
                 kind = spec.type if spec.type != "list" else f"list-{spec.items}"
-                bucket = stat(kind)
+                bucket = stat(record.domain or "?", kind)
                 bucket["n"] += 1
                 gold_null = gold.get("value") is None and gold.get("values") is None
                 got_null = got.get("value") is None and got.get("values") is None
@@ -129,27 +129,44 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                         bucket["exact"] += int(ok)
                     if isinstance(got.get("confidence"), (int, float)):
                         bucket["conf_sum"] += float(got["confidence"])
-    summary: dict[str, Any] = {}
-    for kind, bucket in stats.items():
-        answered = bucket["answered"]
-        summary[kind] = {
-            "n": int(bucket["n"]),
-            "exact": round(bucket["exact"] / max(answered, 1), 4),
-            "located": round(bucket["located"] / max(answered, 1), 4) if bucket["located"] else None,
-            "null_correct": round(bucket["null_correct"] / max(bucket.get("null_n", 0), 1), 4),
-            "mean_confidence": round(bucket["conf_sum"] / max(answered, 1), 4),
-            "brier_null": round(bucket["brier_sum"] / max(bucket["brier_n"], 1), 4),
+    def fmt(b: dict) -> dict[str, Any]:
+        answered = b["answered"]
+        out: dict[str, Any] = {
+            "n": int(b["n"]),
+            "exact": round(b["exact"] / max(answered, 1), 4),
+            "located": round(b["located"] / max(answered, 1), 4) if b["located"] else None,
+            "null_correct": round(b["null_correct"] / max(b.get("null_n", 0), 1), 4),
+            "mean_confidence": round(b["conf_sum"] / max(answered, 1), 4),
+            "brier_null": round(b["brier_sum"] / max(b["brier_n"], 1), 4),
         }
-        if bucket["solved"]:
-            summary[kind]["solvable_rate"] = round(bucket["solved"] / max(answered, 1), 4)
-            summary[kind]["exact_when_solvable"] = round(
-                bucket["exact_solvable"] / bucket["solved"], 4)
-        if bucket["ape_sum"]:
-            steps = max(bucket.get("steps", 0), 1)
-            summary[kind]["median_ape"] = round(bucket["ape_sum"] / steps, 4)
-            summary[kind]["coverage_80"] = round(bucket["coverage"] / steps, 4)
-            summary[kind]["pinball"] = round(bucket["pinball"] / steps, 4)
-    return summary
+        if b["solved"]:
+            out["solvable_rate"] = round(b["solved"] / max(answered, 1), 4)
+            out["exact_when_solvable"] = round(b["exact_solvable"] / b["solved"], 4)
+        if b["ape_sum"]:
+            steps = max(b.get("steps", 0), 1)
+            out["median_ape"] = round(b["ape_sum"] / steps, 4)
+            out["coverage_80"] = round(b["coverage"] / steps, 4)
+        return out
+
+    def rollup(match) -> dict:
+        from collections import defaultdict
+        agg = defaultdict(float)
+        for (dom, kind), b in stats.items():
+            if match(dom, kind):
+                for key, val in b.items():
+                    agg[key] += val
+        return agg
+
+    kinds = sorted({kind for (_, kind) in stats})
+    overall = {kind: rollup(lambda d, k, kind=kind: k == kind) for kind in kinds}
+    overall = {kind: fmt(agg) for kind, agg in overall.items()}
+    domains = sorted({dom for (dom, _) in stats})
+    by_domain = {}
+    for dom in domains:
+        dk = sorted({k for (d, k) in stats if d == dom})
+        by_domain[dom] = {k: fmt(rollup(lambda d, kk, dom=dom, k=k: d == dom and kk == k))
+                          for k in dk}
+    return {"overall": overall, "by_domain": by_domain}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -172,7 +189,8 @@ def main(argv: list[str] | None = None) -> None:
     records = dataset.records[: args.limit]
     summary = evaluate(records, model, processor.tokenizer, device,
                        batch_size=args.batch_size)
-    report = {"checkpoint": args.head, "data": args.data, "records": len(records), "metrics": summary}
+    report = {"checkpoint": args.head, "data": args.data, "records": len(records),
+              "metrics": summary["overall"], "by_domain": summary["by_domain"]}
     print(json.dumps(report, indent=2))
     if args.out:
         Path(args.out).write_text(json.dumps(report, indent=2))

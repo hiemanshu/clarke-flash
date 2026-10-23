@@ -50,6 +50,7 @@ class EncodedRecord:
     fields: tuple[EncodedField, ...]
     answers: dict[str, Any] = dataclass_field(default_factory=dict, compare=False)
     pool: Any = dataclass_field(default=None, compare=False, repr=False)
+    domain: str = ""
 
 
 def _tokens(tokenizer: Any, text: str) -> list[int]:
@@ -120,6 +121,7 @@ def encode_record(
         fields=fields,
         answers=record.get("answers") or {},
         pool=Pool(state),
+        domain=str(record.get("domain", "")),
     )
 
 

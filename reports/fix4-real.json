@@ -1,0 +1,15 @@
+{
+  "checkpoint": "runs/fix4/checkpoint-9338",
+  "data": "data/real_eval.jsonl",
+  "records": 168,
+  "metrics": {
+    "list-text": {
+      "n": 6088,
+      "exact": 0.001,
+      "located": 0.001,
+      "null_correct": 0.0,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0
+    }
+  }
+}

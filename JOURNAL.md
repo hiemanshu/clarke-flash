@@ -5,6 +5,27 @@ Running log of decisions, notes, and learnings. Newest at top.
 
 ## 2026-10-23
 
+**18:35 — fix4 gate PASSED on synthetic; hard wall on real text; probe launched.**
+fix4 (op-head heal, 2 ep) results, val2: duration 0→**100%**, number 20→**51%**
+overall / **77% when-solvable** (the remaining 34% = multi-row aggregates, by-design
+unsupervised), date 85%/100%-solvable, datetime 100%, text 90.2% (null F1 100%,
+brier_null 0.0), list-text 99.4%. Weaker: list-number 39%, estimate APE 30%
+(coverage 91% = too wide), forecast APE 11% cov 80% (good). The candidate-pointer
+thesis is fully vindicated on home turf.
+
+Real world, same checkpoint: **typed_test text 0.6%, CUAD list-text 0.1%** —
+near-total collapse despite solvable_rate 0.81 (the values ARE in the text; the
+model just can't find them). Diagnosis (measured, not modeled): states avg 472
+chars in training vs 8-24k in eval; ~7 fields/record trained vs 41; 7% nulls
+trained vs 91% CUAD. Hypothesis ranked: (1) length/count OOD on the pointer path,
+(2) p_null regime shift, (3) instruction style. This is PLAN Path B →
+**probe1**: 1 epoch typed_train ONLY, lr 1e-4 (gentle, avoid destroy), init-head
+fix4-9338; then eval typed_test (does it adapt?), val2 (did we catastrophically
+forget?), real_eval. Eval upgraded meanwhile: by_domain family breakdown (don't
+confuse a measuring wall with a modeling wall) + per-solvable splits. Reports
+commit as evidence; probe answers decide main4 (mix) vs length-OOD surgery
+(context-windowed pointers / position-robust pooling) next.
+
 **14:50 — Goal.** Train Qwen3.5-9B to behave like Cloudflare's Clairic:
 one forward pass, no generated tokens, typed answers (spans, numbers,
 dates, lists, calibrated distributions). Clef's open-weights repo

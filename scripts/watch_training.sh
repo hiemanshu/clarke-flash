@@ -242,10 +242,11 @@ draw() {
       used=${used//[^0-9]/}; tot=${tot//[^0-9]/}; util=${util//[^0-9]/}
       temp=${temp//[^0-9]/}; pw=${pw//[^0-9.]/}; plim=${plim//[^0-9.]/}
       pw=${pw%%.*}; plim=${plim%%.*}
-      # quantize live sensors so an idle frame is byte-stable (no repaint from
-      # power/util wobble — repaints come from content, not the meters)
-      util=$(( util / 5 * 5 )); temp=$(( temp / 2 * 2 ))
-      pw=$(( pw / 25 * 25 )); plim=$(( plim / 25 * 25 ))
+      # quantize live sensors so an idle frame is byte-stable: repaints come
+      # from content (jsonl/checkpoints), never from meter sampling noise
+      used=$(( used / 2048 * 2048 ))            # 2 GB buckets
+      util=$(( util / 10 * 10 )); temp=$(( temp / 4 * 4 ))
+      pw=$(( pw / 50 * 50 )); plim=$(( plim / 50 * 50 ))
       local ug=$(( used / 1024 ))
       local tg=$(( tot / 1024 ))
       local c2="$GR"; (( util < 40 )) && c2="$YE"; (( used * 100 / (tot + 1) > 90 )) && c2="$RD"
@@ -255,7 +256,7 @@ draw() {
         local p1 p2 ac pt
         p1=$(hw_val "$psu/power1_input" 1000000); p2=$(hw_val "$psu/power2_input" 1000000)
         ac=$(hw_val "$psu/in0_input" 1000); pt=$(hw_val "$psu/temp1_input" 1000)
-        p1=$(( p1 / 25 * 25 )); p2=$(( p2 / 25 * 25 )); pt=$(( pt / 2 * 2 ))
+        p1=$(( p1 / 50 * 50 )); p2=$(( p2 / 50 * 50 )); pt=$(( pt / 4 * 4 ))
         local pmax=${PSU_MAX:-1200}
         local pload=$(( p1 * 100 / pmax ))
         local pc="$GR"; (( pload > 60 )) && pc="$YE"; (( pload > 85 )) && pc="$RD"
@@ -282,12 +283,12 @@ draw() {
       for (( i=${#CK[@]}-n; i<${#CK[@]}; i++ )); do
         read -r col1 col2 col3 mark <<< "${CK[i]}"
         cc="$R"; [[ "$mark" == "▼" ]] && cc="$GR"; [[ "$mark" == "▲" ]] && cc="$RD"
-        printf -v line '    %6s  %8s  %8s  %s' \
-          "$(awk -v s="$col1" 'BEGIN{printf "%gk", s/1000}')" "$col2" "$col3" "$mark"
+        printf -v line '    %7s  %8s  %8s  %s' "$col1" "$col2" "$col3" "$mark"
         emit "${D}${line}${R}${K}"
       done
     else
-      local summ; summ="$(printf '%s\n' "${CK[@]: -4}" | awk '{printf "%gk:%s%s", $1/1000, $3, $4}')"
+      local summ; summ="$(printf '%s\n' "${CK[@]}" | tail -n 4 \
+        | awk '{printf "%s:%s%s ", $1, $3, $4}')"
       emit "$(lab checkpoints)${D}${summ}${R}${K}"
     fi
     rule
