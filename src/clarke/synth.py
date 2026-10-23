@@ -12,10 +12,12 @@ Domains: support email, invoice, ticket, table (aggregates), comparables
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 import math
 import random
+import re
 import zipfile
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -524,11 +526,171 @@ DOMAINS = {
     "forecast": forecast_record,
 }
 
+CUE_RE = re.compile(r"^([A-Za-z][A-Za-z /\-]{2,30}): ?(.+)$")
 
-def generate(count: int, seed: int = 0, domains: list[str] | None = None) -> list[dict[str, Any]]:
+# Tier D targets prose domains where 'Label: value' lines teach the pointer
+# to answer by adjacency. CSV blocks, item rows and forecast tables must
+# keep their structure (aggregates and horizon semantics depend on it).
+SCATTER_DOMAINS = ("invoice", "ticket")
+SCATTER_PLACEHOLDER = "value appears later in this document."
+
+
+def _line_table(state: str) -> tuple[list[tuple[int, str]], list[int]]:
+    lines, starts, pos = [], [], 0
+    for line in state.split("\n"):
+        lines.append((pos, line))
+        starts.append(pos)
+        pos += len(line) + 1
+    return lines, starts
+
+
+def scatter_record(rng: random.Random, record: dict[str, Any]) -> dict[str, Any]:
+    """Tier D: dissolve within-line label-adjacency at the data level.
+
+    A 'Tax: $308.03' line becomes 'Tax: value appears later...' and the bare
+    '$308.03' is planted >=2 lines below, so cue-to-value binding has to run
+    through meaning, not position. Spans are remapped POSITIONALLY (we know
+    exactly where every line's text lands) and every carried span is
+    byte-verified against the rewritten state; a field whose span cannot be
+    carried cleanly is dropped from fields+answers together, never corrupted
+    (search-based re-derivation was rejected: money values like 308.03 vs
+    '$308.03' and legitimately repeated atoms would silently mangle labels).
+    """
+    if record.get("domain") not in SCATTER_DOMAINS:
+        return record
+    state = record["state"]
+    if state.count("\n") < 3:
+        return record
+    lines, starts = _line_table(state)
+
+    def line_of(pos: int) -> int:
+        return bisect.bisect_right(starts, pos) - 1
+
+    # boundaries that fall inside a multi-line span: never insert there
+    blocked: set[int] = set()
+    all_spans = [tuple(v["span"]) for v in record["answers"].values()
+                 if isinstance(v, dict) and v.get("span")]
+    for answer in record["answers"].values():
+        if isinstance(answer, dict) and answer.get("spans"):
+            all_spans += [tuple(sp) for sp in answer["spans"]]
+    for s, e in all_spans:
+        for j in range(line_of(s), line_of(e - 1)):
+            blocked.add(j)
+
+    field_span = {k: tuple(v["span"]) for k, v in record["answers"].items()
+                  if isinstance(v, dict) and v.get("span")}
+
+    # cue lines whose value IS the whole line suffix are move candidates
+    candidates: list[tuple[int, str, str | None, str]] = []  # (line, label, field|None, value)
+    for idx, (base, line) in enumerate(lines):
+        if line.count(",") >= 2:
+            continue
+        m = CUE_RE.match(line)
+        if not m:
+            continue
+        value = line[m.start(2):]
+        if not (1 < len(value) <= 44):
+            continue
+        hits = [f for f, (s, e) in field_span.items()
+                if s == base + m.start(2) and e == base + len(line)]
+        if hits:
+            field: str | None = hits[0]
+        else:
+            # no gold span claims this line, but a label-adjacent atom
+            # ("Subtotal: $4,248.73") is exactly what teaches the NUMERIC
+            # pointer to answer by lexical adjacency — move the bare value too
+            vs, ve = base + m.start(2), base + len(line)
+            if any(s < ve and e > vs for s, e in field_span.values()):
+                continue
+            if len(value) > 30 or not any(ch.isdigit() for ch in value):
+                continue
+            field = None
+        if rng.random() < 0.8:
+            candidates.append((idx, m.group(1), field, value))
+    if not candidates:
+        return record
+
+    # place each moved value >=2 lines under its cue, outside blocked spans
+    rng.shuffle(candidates)
+    placed: dict[int, list[tuple[str, str]]] = {}
+    repl: dict[int, str] = {}
+    moved: dict[str, str] = {}
+    for idx, label, field, value in candidates:
+        options = [j for j in range(idx + 2, len(lines)) if j not in blocked]
+        if not options:
+            continue  # nowhere clean to put it: leave this cue line intact
+        key = field if field is not None else f"~atom-{idx}"  # atom moves are spanless
+        placed.setdefault(rng.choice(options), []).append((key, value))
+        repl[idx] = f"{label}: {SCATTER_PLACEHOLDER}"
+        moved[key] = value
+    if not moved:
+        return record
+
+    # rebuild the state, tracking where each line and each moved value lands
+    parts: list[str] = []
+    line_new_start: dict[int, int] = {}
+    moved_start: dict[str, int] = {}
+    pos = 0
+    for j, (_, text) in enumerate(lines):
+        line_new_start[j] = pos
+        line_text = repl.get(j, text)
+        parts.append(line_text)
+        pos += len(line_text) + 1
+        for field, value in placed.get(j, ()):
+            moved_start[field] = pos
+            parts.append(value)
+            pos += len(value) + 1
+    new_state = "\n".join(parts)
+
+    def carry_span(s: int, e: int) -> tuple[int, int] | None:
+        l0, l1 = line_of(s), line_of(e - 1)
+        if any(j in repl for j in range(l0, l1 + 1)):
+            return None  # this span touches a rewritten cue line
+        return (line_new_start[l0] + (s - starts[l0]),
+                line_new_start[l1] + (e - starts[l1]))
+
+    for name in list(record["answers"]):
+        answer = record["answers"][name]
+        if not isinstance(answer, dict):
+            continue
+        ok = True
+        if answer.get("span"):
+            s, e = answer["span"][0], answer["span"][1]
+            if name in moved_start:
+                span = (moved_start[name], moved_start[name] + len(moved[name]))
+            else:
+                span = carry_span(s, e)
+            if span is None or new_state[span[0]:span[1]] != state[s:e]:
+                ok = False
+            else:
+                answer["span"] = [span[0], span[1]]
+        if answer.get("spans") and ok:
+            remapped = []
+            for s, e in answer["spans"]:
+                span = carry_span(s, e)
+                if span is None or new_state[span[0]:span[1]] != state[s:e]:
+                    ok = False
+                    break
+                remapped.append([span[0], span[1]])
+            if ok:
+                answer["spans"] = remapped
+        if not ok:
+            del record["answers"][name]
+            record["fields"].pop(name, None)
+
+    record["state"] = new_state
+    return record
+
+
+def generate(count: int, seed: int = 0, domains: list[str] | None = None,
+             cue_scatter: bool = False) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     names = domains or list(DOMAINS)
-    return [DOMAINS[name](rng, i) for i, name in enumerate(rng.choices(names, k=count))]
+    records = [DOMAINS[name](rng, i) for i, name in enumerate(rng.choices(names, k=count))]
+    if cue_scatter:
+        scatter_rng = random.Random(seed + 7919)  # independent stream: base data unchanged
+        records = [scatter_record(scatter_rng, r) for r in records]
+    return records
 
 
 def write_jsonl(records: list[dict[str, Any]], path: Path) -> None:
@@ -547,9 +709,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--domains", nargs="*", default=None, choices=list(DOMAINS))
     parser.add_argument("--zip", action="store_true", help="also write a .zip next to the jsonl")
+    parser.add_argument("--cue-scatter", dest="cue_scatter", action="store_true",
+                        help="Tier D: move 'Label: value' figures >=2 lines off their cue line")
     args = parser.parse_args(argv)
 
-    records = generate(args.count, args.seed, args.domains)
+    records = generate(args.count, args.seed, args.domains, cue_scatter=args.cue_scatter)
     write_jsonl(records, args.out)
     if args.zip:
         with zipfile.ZipFile(str(args.out) + ".zip", "w", zipfile.ZIP_DEFLATED) as archive:
