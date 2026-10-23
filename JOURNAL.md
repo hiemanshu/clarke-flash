@@ -5,6 +5,18 @@ Running log of decisions, notes, and learnings. Newest at top.
 
 ## 2026-10-23
 
+**19:10 — probe1 verdict: partial transfer; wall refined.** After 1 epoch of
+typed_train: typed_test text 0.6→6.5%, null_ok 0→72%, conf still 0.04, number
+flat at 4%. Calibration/style transfers; pointing does not. Crucially squad2
+(~500-800 token contexts, well within typed_train exposure) sits at 7% — so
+the wall is NOT purely state length; it is the pointer/selection machinery on
+real prose with many fields, at either severe-undertrain or architecture
+resolution. Next rung (PLAN Path A): **main4 = train2 + typed_train, 4 epochs,
+lr 2e-4, bs6, init-head probe1-final** — the volume test. squad/drop >~40% ⇒
+data volume; ~10% ⇒ architecture surgery (chunked evidence routing /
+position-robust pooling), then NQ long-tier. Probe val2 drift: loss 3.83→4.16
+plateau (mild forgetting; replay in mix protects it).
+
 **18:35 — fix4 gate PASSED on synthetic; hard wall on real text; probe launched.**
 fix4 (op-head heal, 2 ep) results, val2: duration 0→**100%**, number 20→**51%**
 overall / **77% when-solvable** (the remaining 34% = multi-row aggregates, by-design
