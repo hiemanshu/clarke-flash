@@ -5,6 +5,21 @@ Running log of decisions, notes, and learnings. Newest at top.
 
 ## 2026-10-23
 
+**19:15 — probe1 FULL verdict.** Real-eval stayed ~dead (CUAD 0.4%, typed text
+6.5%: squad2 7.1%, drop 4.7%, keyphrase 3.8%) while synthetic drifted mildly
+(text 90.2→86.6, **list-text 99.4→79.4**, number 50.9→43.0, duration/date hold).
+Interpretation: the gentle probe neither proves nor kills the volume hypothesis
+— but squad2's *medium-length* contexts failing at 7% means the pointer is NOT
+length-blind-luck; it is instruction-semantics-blind (overfit to synthetic's
+label-adjacency: "Subtotal: $X" puts gold next to the cue; real answers sit
+wherever meaning lives). Main4 (launched 19:15, the pre-registered volume test:
+4 ep mix, lr 2e-4) decides: typed-text >~35% ⇒ volume; flat ⇒ architecture
+surgery on the routing/pointer binding (position-strided candidate attention),
+then re-run typed eval. If surgery wins, NQ long-tier pull becomes worthwhile —
+until then more real data just feeds a mechanism that can't point.
+Note: table-domain number was already 2% (multi-row aggregates — the documented
+wall, unchanged).
+
 **19:10 — probe1 verdict: partial transfer; wall refined.** After 1 epoch of
 typed_train: typed_test text 0.6→6.5%, null_ok 0→72%, conf still 0.04, number
 flat at 4%. Calibration/style transfers; pointing does not. Crucially squad2
