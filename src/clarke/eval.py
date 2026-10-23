@@ -158,6 +158,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--head", required=True, help="checkpoint dir with extraction_head.safetensors")
     parser.add_argument("--data", required=True, help="records JSONL to evaluate")
     parser.add_argument("--limit", type=int, default=256)
+    parser.add_argument("--batch-size", dest="batch_size", type=int, default=4,
+                        help="records per forward (long CUAD windows need <=4)")
     parser.add_argument("--out", default=None, help="write JSON report here")
     args = parser.parse_args(argv)
 
@@ -168,7 +170,8 @@ def main(argv: list[str] | None = None) -> None:
 
     dataset = RecordDataset([Path(args.data)])
     records = dataset.records[: args.limit]
-    summary = evaluate(records, model, processor.tokenizer, device)
+    summary = evaluate(records, model, processor.tokenizer, device,
+                       batch_size=args.batch_size)
     report = {"checkpoint": args.head, "data": args.data, "records": len(records), "metrics": summary}
     print(json.dumps(report, indent=2))
     if args.out:

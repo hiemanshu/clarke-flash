@@ -396,8 +396,11 @@ class JointExtractionHead(nn.Module):
                         add("cand", F.cross_entropy(logits.cand_b.view(1, -1),
                             torch.tensor([b], device=logits.cand_b.device),
                             label_smoothing=label_smoothing))
-                        add("op", F.cross_entropy(logits.op.view(1, -1),
-                            torch.tensor([op], device=logits.op.device), label_smoothing=0.05))
+                    # op is supervised on EVERY solved scalar, including
+                    # single-atom "id" answers — an untrained op head turns
+                    # read answers into random arithmetic (duration 0% bug)
+                    add("op", F.cross_entropy(logits.op.view(1, -1),
+                        torch.tensor([op], device=logits.op.device), label_smoothing=0.05))
                 elif spec.type == "list" and spec.items in ("number", "date", "time") \
                         and logits.cand_a is not None:
                     items = target.cands[:LIST_SLOTS]
