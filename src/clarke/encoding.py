@@ -62,6 +62,7 @@ def encode_record(
     record: dict[str, Any],
     max_length: int = 8192,
     max_state_tokens: int | None = None,
+    agg_atoms: bool = False,
 ) -> EncodedRecord:
     """Encode one {state, fields, answers} record into model input + spans."""
     specs = {name: FieldSpec(name, spec) for name, spec in record["fields"].items()}
@@ -120,7 +121,7 @@ def encode_record(
         char_offsets=tuple(char_offsets),
         fields=fields,
         answers=record.get("answers") or {},
-        pool=Pool(state),
+        pool=Pool(state, agg_atoms=agg_atoms),
         domain=str(record.get("domain", "")),
     )
 

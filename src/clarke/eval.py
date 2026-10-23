@@ -33,7 +33,8 @@ def match_scalar(spec: FieldSpec, predicted: Any, gold: Any) -> bool:
 
 @torch.no_grad()
 def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
-             device: torch.device, batch_size: int = 8) -> dict[str, Any]:
+             device: torch.device, batch_size: int = 8,
+             agg_atoms: bool = False) -> dict[str, Any]:
     stats: dict[tuple[str, str], dict[str, float]] = {}
 
     def stat(dom: str, kind: str) -> dict[str, float]:
@@ -46,7 +47,7 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
     encoded_records = []
     for record in records:
         try:
-            encoded_records.append(encode_record(tokenizer, record))
+            encoded_records.append(encode_record(tokenizer, record, agg_atoms=agg_atoms))
         except ValueError:
             continue
 
@@ -171,7 +172,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
 
 @torch.no_grad()
 def postmortem(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
-               device: torch.device, batch_size: int = 4, max_records: int = 96) -> dict:
+               device: torch.device, batch_size: int = 4, max_records: int = 96,
+               agg_atoms: bool = False) -> dict:
     """Ranking diagnostics: where does the GOLD atom/token rank in the head's
     own scores? Decides which surgery the failure needs:
       - p@1 decent but exact low          -> decode/render issue, not the pointer
@@ -183,7 +185,7 @@ def postmortem(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any
     encoded = []
     for r in records[:max_records]:
         try:
-            encoded.append(encode_record(tokenizer, r))
+            encoded.append(encode_record(tokenizer, r, agg_atoms=agg_atoms))
         except ValueError:
             continue
 
@@ -252,6 +254,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", default=None, help="write JSON report here")
     parser.add_argument("--postmortem", action="store_true",
                         help="gold-rank diagnostics (p@1/3/5 by domain+kind) instead of scored eval")
+    parser.add_argument("--agg-atoms", dest="agg_atoms", action="store_true",
+                        help="virtual CSV column-aggregate atoms (must match training)")
     args = parser.parse_args(argv)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -264,10 +268,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.postmortem:
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "postmortem": postmortem(records, model, processor.tokenizer, device,
-                                           batch_size=args.batch_size)}
+                                           batch_size=args.batch_size, agg_atoms=args.agg_atoms)}
     else:
         summary = evaluate(records, model, processor.tokenizer, device,
-                           batch_size=args.batch_size)
+                           batch_size=args.batch_size, agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "metrics": summary["overall"], "by_domain": summary["by_domain"]}
     print(json.dumps(report, indent=2))

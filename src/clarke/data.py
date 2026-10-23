@@ -37,10 +37,12 @@ class RecordDataset(torch.utils.data.Dataset):
 class Collator:
     """Encode + build targets in workers; pad into model batches."""
 
-    def __init__(self, tokenizer: Any, max_length: int = 8192, max_fields: int = 32):
+    def __init__(self, tokenizer: Any, max_length: int = 8192, max_fields: int = 32,
+                 agg_atoms: bool = False):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.max_fields = max_fields
+        self.agg_atoms = agg_atoms
 
     def __call__(self, records: list[dict[str, Any]]) -> dict[str, Any] | None:
         encoded = []
@@ -49,7 +51,8 @@ class Collator:
             if len(record["fields"]) > self.max_fields:
                 continue
             try:
-                piece = encode_record(self.tokenizer, record, max_length=self.max_length)
+                piece = encode_record(self.tokenizer, record, max_length=self.max_length,
+                                  agg_atoms=self.agg_atoms)
             except ValueError:
                 continue
             encoded.append(piece)
@@ -69,13 +72,14 @@ def build_loader(
     num_workers: int = 6,
     max_length: int = 8192,
     drop_last: bool = False,
+    agg_atoms: bool = False,
 ) -> torch.utils.data.DataLoader:
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
-        collate_fn=Collator(tokenizer, max_length=max_length),
+        collate_fn=Collator(tokenizer, max_length=max_length, agg_atoms=agg_atoms),
         drop_last=drop_last,
         persistent_workers=num_workers > 0,
         prefetch_factor=2 if num_workers > 0 else None,

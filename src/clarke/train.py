@@ -72,9 +72,11 @@ class Trainer:
         tokenizer = self.processor.tokenizer
         self.train_loader = build_loader(RecordDataset([Path(p) for p in args.train]),
                                          tokenizer, args.batch_size, True,
-                                         args.workers, args.max_length)
+                                         args.workers, args.max_length,
+                                         agg_atoms=args.agg_atoms)
         self.val_loader = build_loader(RecordDataset([Path(args.val)]), tokenizer,
-                                       args.batch_size, False, args.workers, args.max_length) \
+                                       args.batch_size, False, args.workers, args.max_length,
+                                       agg_atoms=args.agg_atoms) \
             if args.val else None
         # schedule spans from the RESUMED step, not from zero
         self.total_steps = max(self.step + args.epochs * len(self.train_loader), 1)
@@ -221,6 +223,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--query-pool", dest="query_pool", default="mean",
                         choices=["mean", "last", "attn"],
                         help="Tier A: field-query pooling over the instruction span")
+    parser.add_argument("--agg-atoms", dest="agg_atoms", action="store_true",
+                        help="virtual CSV column-aggregate atoms (table-domain wall)")
     parser.add_argument("--log-every", type=int, default=20)
     parser.add_argument("--max-steps", dest="max_steps", type=int, default=0,
                         help="stop after N steps (smoke tests)")

@@ -67,16 +67,87 @@ def parse_number(text: str) -> float | None:
         return None
 
 
-class Pool:
-    """Candidate atoms for one record: (value, char_span) per extracted form."""
+def _csv_aggregates(state: str, cap: int = 48) -> list[tuple[float, tuple[int, int]]]:
+    """Detect CSV blocks (header + >=3 rows with matching column counts) and
+    emit per-numeric-column aggregates anchored at the header cell span."""
+    out: list[tuple[float, tuple[int, int]]] = []
+    lines: list[tuple[int, str]] = []
+    pos = 0
+    for line in state.split("\n"):
+        lines.append((pos, line))
+        pos += len(line) + 1
+    i = 0
+    while i < len(lines) and len(out) < cap:
+        base, header = lines[i]
+        cells = header.split(",")
+        ncols = len(cells)
+        j = i + 1
+        rows: list[list[str]] = []
+        while j < len(lines):
+            rc = lines[j][1].split(",")
+            if len(rc) != ncols:
+                break
+            rows.append(rc)
+            j += 1
+        if ncols >= 3 and len(rows) >= 3 and not any(
+                parse_number(c.strip().strip('"')) is not None for c in cells):
+            off = 0
+            for ci in range(ncols):
+                cell = cells[ci]
+                name = cell.strip()
+                cstart = off + (len(cell) - len(cell.lstrip()))
+                cend = off + len(cell.rstrip())
+                off += len(cell) + 1
+                if len(name) < 2:
+                    continue
+                vals: list[float] = []
+                ok = True
+                for rc in rows:
+                    v = parse_number(rc[ci].strip().strip('"'))
+                    if v is None:
+                        ok = False
+                        break
+                    vals.append(v)
+                if not ok or len(set(vals)) < 2:
+                    continue
+                n = len(vals)
+                s = sum(vals)
+                sv = sorted(vals)
+                med = sv[n // 2] if n % 2 else (sv[n // 2 - 1] + sv[n // 2]) / 2.0
+                anchor = (base + cstart, base + cend)
+                out.extend([(s, anchor), (s / n, anchor), (sv[0], anchor),
+                            (sv[-1], anchor), (med, anchor), (float(n), anchor)])
+                if len(out) >= cap:
+                    break
+            i = j if rows else i + 1
+        else:
+            i += 1
+    return out[:cap]
 
-    def __init__(self, state: str):
+
+class Pool:
+    """Candidate atoms for one record: (value, char_span) per extracted form.
+
+    agg_atoms=True adds VIRTUAL atoms: whole-column aggregates over CSV blocks
+    (sum/mean/min/max/median/count), anchored at the column's header cell.
+    They turn the table-domain wall (gold aggregates absent from the pool ->
+    solvable_rate 25%) into the same pick-don't-compute problem every other
+    number field already is; the +/-8-token context pooling reads the column
+    name, so "total revenue" binds to the 'revenue' header by meaning.
+    """
+
+    MAX_AGG = 48
+
+    def __init__(self, state: str, agg_atoms: bool = False):
         self.state = state
         self.numbers: list[tuple[float, tuple[int, int]]] = []
+        self.aggs: list[tuple[float, tuple[int, int]]] = []
         self.dates: list[tuple[str, tuple[int, int]]] = []
         self.times: list[tuple[str, tuple[int, int]]] = []
         self.datetimes: list[tuple[str, tuple[int, int]]] = []
         self._extract(state)
+        if agg_atoms:
+            self.aggs = _csv_aggregates(state, self.MAX_AGG)
 
     def _extract(self, state: str) -> None:
         taken_iso: list[tuple[int, int]] = []
@@ -135,20 +206,20 @@ class Pool:
         return out[:MAX_ATOMS * 2]
 
 
-def value_features(value: float, span_chars: int) -> list[float]:
+def value_features(value: float, span_chars: int, is_agg: bool = False) -> list[float]:
     import math
     return [
         1.0 if value >= 0 else 0.0,
         math.log10(abs(value) + 1.0) / 10.0,
         (abs(value) % 1) ,
-        span_chars / 64.0,
+        4.0 if is_agg else span_chars / 64.0,  # 4.0: virtual aggregate marker
     ]
 
 
 def solve(spec: FieldSpec, pool: Pool, gold: float, decimals: int):
     """Find (a, b, op) producing the gold value, or None when unrepresentable."""
     tolerance = 1.5 * (10 ** -decimals)
-    atoms = pool.duration_atoms(spec) if spec.type == "duration" else pool.numbers
+    atoms = pool.duration_atoms(spec) if spec.type == "duration" else pool.numbers + pool.aggs
     for i, (value, _) in enumerate(atoms):
         if abs(value - gold) <= tolerance:
             return i, -1, OP_IDS["id"]
@@ -197,7 +268,10 @@ def field_atoms(spec: FieldSpec, pool: Pool) -> list[tuple[Any, tuple[int, int] 
     Order is deterministic (pool order) so training targets and decoding agree.
     """
     if spec.type == "number" or (spec.type == "list" and spec.items == "number"):
-        return [(v, span, value_features(v, span[1] - span[0])) for v, span in pool.numbers]
+        # order MUST mirror solve()'s atom list: pool.numbers then pool.aggs
+        return ([(v, span, value_features(v, span[1] - span[0])) for v, span in pool.numbers]
+                + [(v, span, value_features(v, span[1] - span[0], is_agg=True))
+                   for v, span in pool.aggs])
     if spec.type == "duration":
         return [(v, span, value_features(v, span[1] - span[0])) for v, span in pool.duration_atoms(spec)]
     if spec.type == "date" or (spec.type == "list" and spec.items == "date"):

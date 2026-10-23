@@ -4,6 +4,22 @@ Running log of decisions, notes, and learnings. Newest at top.
 (PLAN.md holds current policy; this file is the record.)
 
 ## 2026-10-23
+**23:30 — --agg-atoms built while GPU busy: table solvability 25% -> 100% (CPU-verified).**
+Root cause of the val2 table wall (number exact 2.5%) was NOT the model: gold
+aggregates were never in the candidate pool (solve() found 79/316). Pool gains
+virtual atoms: per-numeric-column sum/mean/min/max/median/count over detected
+CSV blocks (header + >=3 consistent rows, numeric-header rejection so headerless
+blocks are skipped rather than silently dropping row 0), anchored at the HEADER
+CELL so context-pooling reads the column name ("total revenue" -> 'revenue'
+header + the sum value). field_atoms mirrors solve's index order (comment pins
+it); value_features marker 4.0; decode honesty: aggregates origin=computed,
+no grounding span; literals keep read+span (direct decode test passes both
+ways). Non-CSV domains: numbers pools byte-identical, aggs=0 everywhere except
+comps (24 — its median estimate just became id-op reachable!) and forecast (6,
+inert). Flag-gated (train+eval --agg-atoms, default off), no regen needed
+(pool computed at encode time). Slot: stacks onto tomorrow's winner run.
+Also wrote exp_b1.sh / exp_b2.sh so the 01:30-02:15 decision fires instantly.
+
 **23:24 — pm-drop completes the branch picture: drop-NUMBERS p@1 .19/p@5 .61, median rank 3
 (reranker's exact sweet spot); drop text .19/.54. Trainer healthy (55 steps/min,
 attn loop costs nothing) -> Exp(A+D) verdict ~01:25.**

@@ -94,6 +94,8 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits) -
         values, confidences, spans = [], [], []
         if logits.cand_a is not None:
             atoms = field_atoms(spec, record.pool)
+            n_plain = len(record.pool.numbers)
+            used_agg = False
             for slot in range(min(LIST_SLOTS, logits.cand_a.shape[0])):
                 if present[slot] < 0.5 or not atoms:
                     continue
@@ -102,13 +104,17 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits) -
                 atom = atoms[idx]
                 values.append(_round_value(float(atom[0]), spec) if spec.items == "number"
                               else str(atom[0]))
-                spans.append(list(atom[1]) if atom[1] else None)
+                if spec.items == "number" and idx >= n_plain:
+                    used_agg = True
+                    spans.append(None)
+                else:
+                    spans.append(list(atom[1]) if atom[1] else None)
                 confidences.append(float(probs[idx]))
         answer["value"] = values or None
         answer["spans"] = spans
         answer["p_null"] = _probability(p_null)
         answer["confidence"] = round(sum(confidences) / len(confidences), 6) if confidences else 0.0
-        answer["origin"] = "read"
+        answer["origin"] = "computed" if used_agg else "read"
     elif spec.type in ("number", "duration", "date", "time", "datetime"):
         from .candidates import OP_IDS, apply_op, field_atoms
 
@@ -131,8 +137,11 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits) -
                 confidence *= float(torch.softmax(logits.op.float(), dim=-1)[op])
             raw = apply_op(float(atom[0]), float(atoms[b][0]) if b >= 0 else None, op)
             raw = _round_value(raw, spec)
-            answer["origin"] = "read" if op == OP_IDS["id"] else "computed"
-            if op == OP_IDS["id"] and atom[1]:
+            # index past plain atoms -> virtual column aggregate: the value is
+            # computed, and the header anchor is context, never a grounding span
+            is_agg = spec.type == "number" and a >= len(record.pool.numbers)
+            answer["origin"] = "computed" if (op != OP_IDS["id"] or is_agg) else "read"
+            if op == OP_IDS["id"] and atom[1] and not is_agg:
                 answer["span"] = list(atom[1])
             if float(p_null) > 0.5:
                 answer.update({"value": None, "guess": raw, "confidence": _probability(p_null)})
