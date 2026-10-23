@@ -177,6 +177,7 @@ class Trainer:
                     records_per_second = window_batches * args.batch_size / max(elapsed, 1e-6)
                     gpu_gb = torch.cuda.memory_allocated() / 2**30 if torch.cuda.is_available() else 0.0
                     self._write({"step": self.step, "epoch": epoch, "lr": round(lr, 7),
+                                 "total": self.total_steps, "bs": args.batch_size,
                                  "gpu_gb": round(gpu_gb, 1), "recs_per_s": round(records_per_second, 2),
                                  **{key: round(value, 4) for key, value in metrics.items()}})
                     self.log(f"step {self.step}/{self.total_steps} loss={metrics['loss']:.3f} "
@@ -189,7 +190,7 @@ class Trainer:
                     self.log(f"saved checkpoint {directory}")
                 if self.val_loader and self.step % args.val_every == 0:
                     val = self.validation()
-                    self._write({"step": self.step, "val": True,
+                    self._write({"step": self.step, "val": True, "total": self.total_steps,
                                  **{key: round(value, 4) for key, value in val.items()}})
                     self.log(f"val step {self.step}: loss={val.get('loss', float('nan')):.3f}")
         self.save_checkpoint()
