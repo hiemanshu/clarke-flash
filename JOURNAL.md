@@ -5,6 +5,16 @@ Running log of decisions, notes, and learnings. Newest at top.
 
 ## 2026-10-23
 
+**21:40 — arsenal pre-built (Phase 0).** Postmortem mode (`clarke-eval
+--postmortem`: gold rank p@1/3/5 + unrankable rate by domain x kind) and
+Tier B pairwise reranker (`--rerank`: cross-encoder features [q;c;q*c;|q-c|]
+-> MLP, flag-gated, config round-trips, old checkpoints load unchanged)
+committed BEFORE main4's verdict, CPU-sane both modes. Branch mapping at
+verdict: p@5 high/p@1 low -> Exp(B) only; p@5 low -> Exp(A+D); exact ~0
+with p@1 high -> decode bug hunt. Constraint honored: repo code + existing
+python libs only, no installs, no pushes.
+
+
 **19:15 — probe1 FULL verdict.** Real-eval stayed ~dead (CUAD 0.4%, typed text
 6.5%: squad2 7.1%, drop 4.7%, keyphrase 3.8%) while synthetic drifted mildly
 (text 90.2→86.6, **list-text 99.4→79.4**, number 50.9→43.0, duration/date hold).

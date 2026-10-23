@@ -126,8 +126,10 @@ class JointExtractionHead(nn.Module):
         heads: int = 16,
         feedforward: int = 4096,
         dropout: float = 0.0,
+        rerank: bool = False,
     ):
         super().__init__()
+        self.rerank = bool(rerank)
         self.hidden_norm = nn.LayerNorm(hidden_size)
         self.field_projection = nn.Linear(hidden_size, width, bias=False)
         self.global_projection = nn.Linear(hidden_size, width, bias=False)
@@ -160,6 +162,15 @@ class JointExtractionHead(nn.Module):
         ])
         self.cand_value_proj = nn.Linear(4, width)
         self.op_head = nn.Linear(width, 5)
+        if self.rerank:
+            # Tier B: cross-encoder style pair scorer for candidate selection
+            def pair_net():
+                return nn.Sequential(
+                    nn.Linear(4 * width, width), nn.GELU(), nn.Dropout(dropout),
+                    nn.Linear(width, 1),
+                )
+            self.pair_a = pair_net()
+            self.pair_b = pair_net()
         self.date_heads = nn.ModuleList([
             nn.Linear(width, YEAR_BINS), nn.Linear(width, 12), nn.Linear(width, DAY_BINS),
         ])
@@ -221,8 +232,12 @@ class JointExtractionHead(nn.Module):
                 elif spec.type in ("number", "duration", "date", "time", "datetime"):
                     emb = self._candidate_embeddings(record, state_memory, spec)
                     if emb is not None:
-                        logits.cand_a = (self.start_projection(field) @ emb.T) * scale
-                        logits.cand_b = (self.end_projection(field) @ emb.T) * scale
+                        if self.rerank:
+                            logits.cand_a = self._pair_score(field, emb, self.pair_a)[0]
+                            logits.cand_b = self._pair_score(field, emb, self.pair_b)[0]
+                        else:
+                            logits.cand_a = (self.start_projection(field) @ emb.T) * scale
+                            logits.cand_b = (self.end_projection(field) @ emb.T) * scale
                         logits.op = self.op_head(field)
                 elif spec.type in ("estimate", "forecast"):
                     steps = max(spec.horizon, 1) if spec.type == "forecast" else 1
@@ -239,10 +254,22 @@ class JointExtractionHead(nn.Module):
                     if spec.items in ("number", "date", "time"):
                         emb = self._candidate_embeddings(record, state_memory, spec)
                         if emb is not None:
-                            logits.cand_a = (self.start_projection(slots) @ emb.T) * scale
+                            if self.rerank:
+                                logits.cand_a = self._pair_score(slots, emb, self.pair_a)
+                            else:
+                                logits.cand_a = (self.start_projection(slots) @ emb.T) * scale
                 record_logits.append(logits)
             results.append(record_logits)
         return results
+
+    def _pair_score(self, query: torch.Tensor, emb: torch.Tensor, net: nn.Module) -> torch.Tensor:
+        """Tier B reranker: MLP over [q; c; q*c; |q-c|] for every (query, candidate)
+        pair — turns 'looks similar' into 'answers the question'."""
+        q = query if query.dim() == 2 else query.unsqueeze(0)
+        qq = q.unsqueeze(1).expand(-1, emb.shape[0], -1)
+        cc = emb.unsqueeze(0).expand(q.shape[0], -1, -1)
+        feats = torch.cat([qq, cc, qq * cc, (qq - cc).abs()], dim=-1)
+        return net(feats).squeeze(-1)
 
     def _candidate_embeddings(self, record: EncodedRecord, state_memory: torch.Tensor,
                               spec: FieldSpec) -> torch.Tensor | None:

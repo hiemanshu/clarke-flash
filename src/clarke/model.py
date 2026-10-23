@@ -361,6 +361,7 @@ def save_head(head: JointExtractionHead, directory: Path) -> None:
         "heads": head.layers[0].self_attn.num_heads,
         "feedforward": head.layers[0].linear1.out_features,
         "dropout": 0.0,
+        "rerank": bool(getattr(head, "rerank", False)),
     }
     (directory / "extraction_head_config.json").write_text(json.dumps(config, indent=2))
     save_file({k: v.detach().cpu().contiguous() for k, v in head.state_dict().items()},

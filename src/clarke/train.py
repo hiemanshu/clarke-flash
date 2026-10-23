@@ -51,6 +51,7 @@ class Trainer:
             hidden_size=self.hidden_size, width=args.width,
             routing_layers=args.routing_layers, layers=args.layers,
             heads=args.heads, feedforward=args.feedforward,
+            rerank=args.rerank,
         ).to(self.device, dtype=torch.float32)
         if args.init_head:
             prior = load_head(Path(args.init_head), device=str(self.device),
@@ -215,6 +216,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--layers", type=int, default=4)
     parser.add_argument("--heads", type=int, default=16)
     parser.add_argument("--feedforward", type=int, default=4096)
+    parser.add_argument("--rerank", action="store_true",
+                        help="Tier B: pairwise cross-encoder reranker for candidate scoring")
     parser.add_argument("--log-every", type=int, default=20)
     parser.add_argument("--max-steps", dest="max_steps", type=int, default=0,
                         help="stop after N steps (smoke tests)")

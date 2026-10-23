@@ -169,6 +169,78 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
     return {"overall": overall, "by_domain": by_domain}
 
 
+@torch.no_grad()
+def postmortem(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
+               device: torch.device, batch_size: int = 4, max_records: int = 96) -> dict:
+    """Ranking diagnostics: where does the GOLD atom/token rank in the head's
+    own scores? Decides which surgery the failure needs:
+      - p@1 decent but exact low          -> decode/render issue, not the pointer
+      - p@5 high, p@1 low                 -> ranking failure: Tier B reranker
+      - gold rarely in top-5              -> query/representation failure: Tier A/D
+    """
+    from .head import JointExtractionHead
+
+    encoded = []
+    for r in records[:max_records]:
+        try:
+            encoded.append(encode_record(tokenizer, r))
+        except ValueError:
+            continue
+
+    agg: dict[tuple[str, str], dict[str, Any]] = {}
+
+    def bucket(dom: str, kind: str) -> dict:
+        return agg.setdefault((dom, kind), {"n": 0, "p1": 0, "p3": 0, "p5": 0,
+                                            "ranks": [], "unrankable": 0})
+
+    def rank_of(scores: torch.Tensor, idx: int) -> int:
+        s = scores.float()
+        return int((s > s[min(idx, s.shape[0] - 1)]).sum())
+
+    for start in range(0, len(encoded), batch_size):
+        batch_records = encoded[start:start + batch_size]
+        batch = collate_records(batch_records, tokenizer.pad_token_id, device)
+        outputs = model.forward(batch)
+        for record, record_logits in zip(batch_records, outputs):
+            targets = JointExtractionHead.build_targets(record)
+            for encoded_field, lg, tg in zip(record.fields, record_logits, targets):
+                spec = encoded_field.spec
+                kind = spec.type if spec.type != "list" else f"list-{spec.items}"
+                b = bucket(record.domain or "?", kind)
+                rank = None
+                if spec.type == "text" and lg.start is not None and tg.start is not None:
+                    rank = rank_of(lg.start, tg.start)
+                elif spec.type == "list" and spec.items == "text" \
+                        and lg.start is not None and tg.spans:
+                    rank = rank_of(lg.start[0], tg.spans[0][0])
+                elif spec.type == "list" and lg.cand_a is not None \
+                        and any(c >= 0 for c in tg.cands or []):
+                    idx = next(c for c in tg.cands if c >= 0)
+                    rank = rank_of(lg.cand_a[0], idx)
+                elif tg.cand is not None and lg.cand_a is not None:
+                    rank = rank_of(lg.cand_a, tg.cand[0])
+                elif spec.type in ("estimate", "forecast") and lg.dist is not None and tg.dist:
+                    rank = rank_of(lg.dist[0], tg.dist[0])
+                if rank is None:
+                    b["unrankable"] += 1
+                else:
+                    b["n"] += 1
+                    b["p1"] += int(rank < 1)
+                    b["p3"] += int(rank < 3)
+                    b["p5"] += int(rank < 5)
+                    b["ranks"].append(rank)
+
+    result: dict = {}
+    for (dom, kind), b in sorted(agg.items()):
+        n = max(b["n"], 1)
+        entry = {"scored": b["n"], "unrankable": b["unrankable"],
+                 "p@1": round(b["p1"] / n, 3), "p@3": round(b["p3"] / n, 3),
+                 "p@5": round(b["p5"] / n, 3),
+                 "median_rank": int(sorted(b["ranks"])[len(b["ranks"]) // 2]) if b["ranks"] else None}
+        result.setdefault(dom, {})[kind] = entry
+    return result
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Evaluate a clarke-flash checkpoint")
     parser.add_argument("--backbone", default="Qwen/Qwen3.5-9B")
@@ -178,6 +250,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--batch-size", dest="batch_size", type=int, default=4,
                         help="records per forward (long CUAD windows need <=4)")
     parser.add_argument("--out", default=None, help="write JSON report here")
+    parser.add_argument("--postmortem", action="store_true",
+                        help="gold-rank diagnostics (p@1/3/5 by domain+kind) instead of scored eval")
     args = parser.parse_args(argv)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -187,10 +261,15 @@ def main(argv: list[str] | None = None) -> None:
 
     dataset = RecordDataset([Path(args.data)])
     records = dataset.records[: args.limit]
-    summary = evaluate(records, model, processor.tokenizer, device,
-                       batch_size=args.batch_size)
-    report = {"checkpoint": args.head, "data": args.data, "records": len(records),
-              "metrics": summary["overall"], "by_domain": summary["by_domain"]}
+    if args.postmortem:
+        report = {"checkpoint": args.head, "data": args.data, "records": len(records),
+                  "postmortem": postmortem(records, model, processor.tokenizer, device,
+                                           batch_size=args.batch_size)}
+    else:
+        summary = evaluate(records, model, processor.tokenizer, device,
+                           batch_size=args.batch_size)
+        report = {"checkpoint": args.head, "data": args.data, "records": len(records),
+                  "metrics": summary["overall"], "by_domain": summary["by_domain"]}
     print(json.dumps(report, indent=2))
     if args.out:
         Path(args.out).write_text(json.dumps(report, indent=2))
