@@ -25,7 +25,7 @@ Updated 17:55 after the op-head bug fix and the owner's operating rules:
 
 | Wall | Why it's structural | Accept & document |
 |---|---|---|
-| multi-row aggregates (`total_revenue`, `average_revenue`) | >2-operand math; blog's own Clairic punts: "let code do the math" | yes — `origin: computed` unsupervised |
+| ~~multi-row aggregates (`total_revenue`, `average_revenue`)~~ **WALL BROKEN 23:30** | was: >2-operand math with no pool atoms; now `--agg-atoms` virtual column aggregates (solvable 25%→100% CPU-verified) | training slot queued after tonight's A+D/B verdicts |
 | spelled-out amounts ("one hundred"), locale numerals, "1M", "%" semantics | parser coverage, not model capacity | extend `candidates.py` parsers if cheap; else out of scope |
 | >8 list items (LIST_SLOTS=8) | head capacity choice | note; raise slots only if eval shows it matters |
 | evidence outside the 8k window in giant docs | context budget | v2: chunk-and-merge serving strategy |
