@@ -1,3 +1,19 @@
+## 2026-10-24
+
+**01:25 — Exp(A+D) verdict: real +1.1pp (text 13.3->14.4), adjacency SHORTCUT KILLED on
+synthetic (val3 text 89.9% with cues dissolved — the pointer genuinely reads), but transfer
+to real docs stayed marginal. pm deltas: squad2 p@1 .197->.218, drop number p@1 .189->.200,
+p@5 .614->.627. The p@5~.60 / p@1~.20 selection gap is now the measured, stable signature
+across text+number, squad2+drop. DEVIATION FROM PRE-REGISTRATION (documented): rule said
+B1 (rerank on main4) since text <16%; firing **B2** (rerank STACKED on expA1D) instead —
+expA1D is strictly better than main4 on EVERY real metric AND held val3, so B1 would isolate
+the reranker on a dominated base; A/B vs expA1D-as-control keeps the single-factor test clean.
+B2 launched 01:28 (init expA1D-5852, 8 fresh pair tensors verified), verdict ~03:50.
+Slot after B2 (pre-registering now): combined-winner candidate = --rerank --query-pool attn
+--agg-atoms, init B2-best, 2ep on train3+typed -> finish ~06:10, evals ~06:35; resume-same-
+run for further epochs until ~07:45 if ahead. If B2 reranker fails to close p@1 gap: drop
+rerank from the combo, keep attn+agg.
+
 # Journal — clarke-flash
 
 Running log of decisions, notes, and learnings. Newest at top.
