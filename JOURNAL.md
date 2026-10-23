@@ -4,6 +4,24 @@ Running log of decisions, notes, and learnings. Newest at top.
 (PLAN.md holds current policy; this file is the record.)
 
 ## 2026-10-23
+**23:20 — Postmortem verdict: no window loss anywhere; pointer sees everything, points blind
+on real docs. Exp(A+D) launched.**
+Breakdown (main4/checkpoint-11704): val2 synthetic -> candidate p@5 0.96-1.0, median rank
+0-1 (pointer PERFECT at home). typed-squad2 text: p@1 0.197/p@3 0.40/p@5 0.52 with
+ZERO out-of-window (CPU decomposition: 1004 non-null golds all mapped; the 451
+"unrankable" were legitimate nulls = squad2's unanswerable design, 47%).
+CUAD: 89 scored = all 9% non-null regime (nothing truncated), p@5 0.034, median
+rank 743 -> near-random on 41-field contracts.
+=> ranking failure (52% top-5 on squad2) + query failure (CUAD random); volume and
+window falsified. Pre-registered branch: p@5 low => Tier A+D. expA1D = --query-pool
+attn on scattered train3 (+typed), 2 ep, lr 1e-4, init main4-11704, dev evals +
+before/after postmortems chained (~2h). drop-domain NUMBERS postmortem added to the
+chain (first-96-typed-slice was all-squad2; Tier B's own zone undiagnosed ->
+pm-drop decides whether reranker fires tomorrow). Confirmation slice (typed_test
+400-1612) untouched; dev = first 400 only.
+Estimate/forecast bin p@1 ~0.0-0.08 vs ~200 bins = median_rank 36-71, consistent with
+mode-vs-draw noise, not breakage (coverage 89/79% backs this).
+
 **23:17 — main4 verdict: volume DOUBLES real transfer, wall persists; band 10-35%
 -> postmortem decides the surgery.**
 typed_test (400): text 6.5->13.3% (squad2 13.5% w/ null_correct 86.6%, drop 12.5%),
