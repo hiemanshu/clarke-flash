@@ -4,6 +4,20 @@ Running log of decisions, notes, and learnings. Newest at top.
 (PLAN.md holds current policy; this file is the record.)
 
 ## 2026-10-23
+**23:24 — pm-drop completes the branch picture: drop-NUMBERS p@1 .19/p@5 .61, median rank 3
+(reranker's exact sweet spot); drop text .19/.54. Trainer healthy (55 steps/min,
+attn loop costs nothing) -> Exp(A+D) verdict ~01:25.**
+Next-run rules (pre-registered tonight, applies at ~01:30):
+- expA1D typed text >=26% (2x main4) OR squad2 p@1 >=1.5x -> A+D works -> Exp(B2)
+  = --rerank --query-pool attn, init expA1D best, 2ep lr 1e-4 (stacked).
+- expA1D typed text <16% but drop numbers p@5 >=.6 holds -> Exp(B1) = --rerank only
+  (mean pool, unscattered train2+typed), init main4-11704, 2ep — numeric half.
+- Both fail -> head-surgery discussion in journal, sleep GPU.
+While GPU busy: building --agg-atoms candidate-engine fix for the TABLE wall
+(val2 number 2.5%: gold aggregates aren't pool atoms -> solvable 25% ceiling;
+virtual per-column agg atoms anchored at header cells; pool is computed at
+encode time -> no data regen needed). Test offline only; no GPU before 01:25.
+
 **23:20 — Postmortem verdict: no window loss anywhere; pointer sees everything, points blind
 on real docs. Exp(A+D) launched.**
 Breakdown (main4/checkpoint-11704): val2 synthetic -> candidate p@5 0.96-1.0, median rank
