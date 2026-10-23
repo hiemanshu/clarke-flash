@@ -1,63 +1,70 @@
-# Plan — what happens after main3's evals
+# Plan — decision protocol for clarke-flash
 
-Decision protocol for the next training phase (**main4**), written down at
-17:37 before the triple eval runs, so the branch is chosen by numbers, not
-by vibes.
+Updated 17:55 after the op-head bug fix and the owner's operating rules:
+
+> **80%+ bar, sensible steps, don't fight unbreakable walls, document
+> everything, keep going until we hit one.**
+
+## Definitions
+
+- **The bar (acceptance):** on the real-world evals (`typed_test.jsonl`,
+  `real_eval.jsonl`), headline metric = **exact match over the SOLVABLE
+  subset ≥ 80%** per family group, plus sanity: null accuracy ≥ 90%,
+  interval coverage within ±10pt of nominal, `origin: read` answers
+  byte-verifiable at their spans (by construction — must stay 100%).
+  Raw overall numbers are reported alongside; solvable-only is the
+  judging number because the denominator is honest.
+- **A sensible step:** one change, one hypothesis, one committed eval
+  report measuring it. No step may require hardware we don't have
+  (1× RTX 5090 32GB, frozen bf16 9B forward ≈ 19GB + head).
+- **A wall:** a gap that survives two consecutive steps aimed at it,
+  where the mechanism is known to exceed the current tool (see table).
+  Walls get documented, not attacked.
+
+## Known/likely walls for this toolset (do not grind on these)
+
+| Wall | Why it's structural | Accept & document |
+|---|---|---|
+| multi-row aggregates (`total_revenue`, `average_revenue`) | >2-operand math; blog's own Clairic punts: "let code do the math" | yes — `origin: computed` unsupervised |
+| spelled-out amounts ("one hundred"), locale numerals, "1M", "%" semantics | parser coverage, not model capacity | extend `candidates.py` parsers if cheap; else out of scope |
+| >8 list items (LIST_SLOTS=8) | head capacity choice | note; raise slots only if eval shows it matters |
+| evidence outside the 8k window in giant docs | context budget | v2: chunk-and-merge serving strategy |
+| image states (receipts, charts) | v2 by plan | ExtractBenchPro waits |
+| 9B reading depth on adversarial legalese | model scale | LoRA phase is the last escalation, not scale-up |
+
+## The ladder (each rung unlocks on eval evidence, not vibes)
+
+1. **fix4** (running, ETA ~19:15): op-head supervision fix (single-atom
+   answers left op untrained → duration 0%). Heal 2 epochs from
+   main3/checkpoint-6670, then triple eval: val2 regression, real_eval,
+   typed_test. Gate to next rung: val2 duration recovered (≥60%) &
+   number-when-solvable climbing.
+2. **main4 — data mix (Path A)**: `train2 + typed_train` (~17.5k records,
+   resume fix4-final, 3–5 epochs). Hypothesis: real surface forms close
+   most of the typed_test gap. Gate: typed_test solvable ≥ 80% → done
+   with training, go to polish.
+3. **targeted fixes** if <80%: per-family report pins the weak subset;
+   each gets ONE mechanism step (date-format parsing, candidate context
+   window tuning, alts-accepted scoring, LIST_SLOTS). Two failed steps
+   on the same subset → declare that family's wall, move on.
+4. **LoRA phase (final escalation)**: rank-256 adapters trained jointly
+   with the head — Cloudflare's own validated recipe for exactly this
+   backbone class. Gradient checkpointing, bs 1–2, ~seq 4k. If LoRA
+   plateau still <80%: WALL — write it up with evidence.
+5. **Polish (post-bar)**: calibration pass (temperature/conformal on val),
+   `clarke-serve` (clef-server shape), model card + weight push
+   (`hiemanshu/clarke-flash`, Apache-2.0, dataset credits). Then v2: vision.
 
 ## Standing conventions
 
-- **reports/** holds committed eval evidence: `reports/main<N>-<dataset>.json`,
-  one per (checkpoint, dataset) pair. Code + reports in every commit;
-  runs/ and data/ stay gitignored and regenerable.
-- Every GPU run is preceded by a clean working tree (commit first, then run).
-- Publish target (when an HF account exists): `hiemanshu/clarke-flash`,
-  Apache-2.0 code + weights, model card credits the public datasets used
-  (CUAD CC-BY-4.0, typed-extraction CC-BY-SA-4.0, Keyphrase MIT).
-- **Dedupe rule, always:** `cuad_all.jsonl` (470 contracts) is never mixed
-  into any training set while `real_eval.jsonl` / `typed_test.jsonl` are the
-  eval slices — typed-extraction embeds CUAD- and ExtractBench-derived
-  records, so training on raw CUAD risks eval contamination. Contract
-  training data, if any, comes through `typed_train.jsonl` only.
-
-## The triple eval decides the branch
-
-| Eval set | Question it answers |
-|---|---|
-| `data/val2.jsonl` | Did the context-aware candidate fix work at all? (regression vs main2: number 20%, duration 14%, date 85%) |
-| `data/real_eval.jsonl` | CUAD contracts + keyphrase — can it survive 91%-null, legalese real text? |
-| `data/typed_test.jsonl` | 15 real families (invoice, lease, bank statement, wikipedia, squad2, …) — demo or tool? |
-
-### Path A — val2 healthy, typed_test decent (e.g. text ≥ 60-70%, number-when-solvable ≥ 50%)
-main4 = the mix: `data/train2.jsonl + data/typed_train.jsonl` (~17.5k records),
-5 epochs, `--init-head` from main3's best checkpoint. Rationale: real surface
-forms enter training the only safe way (typed_train is disjoint from both eval
-slices by the doc-start/doc-end rule); expect the CUAD number to climb toward
-typed_test's without ever having seen it.
-
-### Path B — val2 healthy, typed_test weak (< ~40% text)
-Pure transfer failure, not a capacity failure. Don't mix real data blindly —
-first do a **small transfer run**: 1 epoch on typed_train (or even a few
-hundred records), re-eval typed_test; if the slope is steep, main4 = the mix.
-If flat, the candidate embeddings still lean on synthetic surface patterns →
-diversify synth states (legalese templates, longer/messier tables) before
-scaling.
-
-### Path C — val2 itself regressed (cand loss stalls high / number ~flat)
-Architecture debug, not data. First artifact: a per-record candidate-selection
-dump (top-3 atoms with scores vs the gold atom) for ~20 failing val2 records
-— tells us whether confusion is between value-features (log-scale, sign) or
-pooled-context (attention), and which fix is cheap.
-
-### Path D (after any A/B/C winner)
-- Calibration pass: temperature scaling on val, conformal-style coverage check
-  on estimate/forecast (target: 80% interval ⊇ 75-85% realized).
-- Serve: `clarke-serve` mirroring clef-server's shape (`/v1/extraction`).
-- v2 vision: ExtractBenchPro + rendered synthetic receipts.
-
-## Open questions for the owner
-
-1. Thresholds: are 60-70% (text) / 50% (number-when-solvable) the right
-   lines between A/B/C, or do you want typed_test to pass a stricter bar
-   (e.g. ≥80%) before we believe the model at all?
-2. For Path B's small transfer run: is a ~30-45 min 1-epoch experiment okay
-   to run overnight unsupervised, or should it wait for your eyes on numbers?
+- Commit before every GPU run; message carries the **why**; push is the
+  owner's act.
+- `reports/main<N>-<dataset>.json` are committed evidence, one per
+  (checkpoint, dataset).
+- **Dedupe rule:** `cuad_all.jsonl` never enters training while CUAD
+  derivatives sit in the eval slices; contract training flows only
+  through `typed_train.jsonl`.
+- Eval hygiene to implement after fix4 (don't confuse a measuring wall
+  with a modeling wall): per-family breakdown, accept typed-extraction
+  `alts`, split metrics by gold `source` (span/computed/relative).
+- Everything that happens is journaled in `JOURNAL.md`.
