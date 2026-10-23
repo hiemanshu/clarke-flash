@@ -1,0 +1,232 @@
+"""Trainer for clarke-flash: frozen Qwen3.5 backbone, trained joint head.
+
+The backbone runs one forward pass under ``no_grad`` (bf16, ~19 GB resident
+on a 32 GB card); only the ~120M-parameter extraction head gets gradients.
+Pass ``--lora`` to additionally train low-rank adapters in a second phase.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import torch
+
+from .data import Collator, RecordDataset, build_loader
+from .head import JointExtractionHead
+from .model import ClarkeModel, load_backbone, load_head, save_head
+
+
+def cosine_lr(step: int, total_steps: int, warmup: int, base_lr: float) -> float:
+    if step < warmup:
+        return base_lr * (step + 1) / warmup
+    progress = (step - warmup) / max(total_steps - warmup, 1)
+    return base_lr * (0.5 + 0.5 * math.cos(math.pi * min(progress, 1.0)))
+
+
+class Trainer:
+    def __init__(self, args: argparse.Namespace):
+        self.args = args
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.run_dir = Path(args.run_dir or
+                            f"runs/{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}")
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.log_path = self.run_dir / "train.jsonl"
+        self.log(f"run_dir={self.run_dir}")
+        self.log(f"watch with: scripts/watch_training.sh   (tail -f {self.log_path})")
+
+        print(f"[{time.strftime('%H:%M:%S')}] loading backbone {args.backbone} ...", flush=True)
+        self.backbone, self.processor = load_backbone(args.backbone, device=str(self.device))
+        config = getattr(self.backbone.config, "text_config", self.backbone.config)
+        self.hidden_size = int(config.hidden_size)
+        for parameter in self.backbone.parameters():
+            parameter.requires_grad_(False)
+
+        self.head = JointExtractionHead(
+            hidden_size=self.hidden_size, width=args.width,
+            routing_layers=args.routing_layers, layers=args.layers,
+            heads=args.heads, feedforward=args.feedforward,
+        ).to(self.device, dtype=torch.float32)
+        if args.init_head:
+            prior = load_head(Path(args.init_head), device=str(self.device),
+                              dtype=torch.float32, strict=False)
+            transferred = self.head.load_state_dict(prior.state_dict(), strict=False)
+            self.log(f"init-head from {args.init_head}: missing={len(transferred.missing_keys)} "
+                     f"unexpected={len(transferred.unexpected_keys)}")
+            del prior
+        self.model = ClarkeModel(self.backbone, self.head).eval()
+        self.log(json.dumps({"event": "loaded", "hidden_size": self.hidden_size,
+                             "head_params": sum(p.numel() for p in self.head.parameters())}))
+
+        self.optimizer = torch.optim.AdamW(self.head.parameters(), lr=args.lr, weight_decay=0.01)
+        self.step = 0
+        if args.resume:
+            self._load_checkpoint(Path(args.resume))
+
+        tokenizer = self.processor.tokenizer
+        self.train_loader = build_loader(RecordDataset([Path(p) for p in args.train]),
+                                         tokenizer, args.batch_size, True,
+                                         args.workers, args.max_length)
+        self.val_loader = build_loader(RecordDataset([Path(args.val)]), tokenizer,
+                                       args.batch_size, False, args.workers, args.max_length) \
+            if args.val else None
+        # schedule spans from the RESUMED step, not from zero
+        self.total_steps = max(self.step + args.epochs * len(self.train_loader), 1)
+
+    # -- plumbing -----------------------------------------------------------
+
+    def log(self, message: str) -> None:
+        print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
+
+    def _write(self, payload: dict[str, Any]) -> None:
+        with self.log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload) + "\n")
+
+    def save_checkpoint(self) -> Path:
+        directory = self.run_dir / f"checkpoint-{self.step}"
+        save_head(self.head, directory)
+        torch.save({"optimizer": self.optimizer.state_dict(), "step": self.step,
+                    "args": vars(self.args)}, directory / "train_state.pt")
+        keep = sorted(self.run_dir.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
+        for stale in keep[:-3]:
+            for part in stale.iterdir():
+                part.unlink()
+            stale.rmdir()
+        return directory
+
+    def _load_checkpoint(self, directory: Path) -> None:
+        from safetensors.torch import load_file
+
+        self.head.load_state_dict(load_file(directory / "extraction_head.safetensors"), strict=True)
+        state = torch.load(directory / "train_state.pt", map_location="cpu", weights_only=False)
+        self.optimizer.load_state_dict(state["optimizer"])
+        self.step = int(state["step"])
+        self.log(f"resumed from {directory} at step {self.step}")
+
+    # -- steps ---------------------------------------------------------------
+
+    def training_step(self, batch: dict[str, Any]) -> dict[str, float]:
+        records = batch["records"]
+        targets = batch["targets"]
+        model_batch = {
+            "input_ids": batch["input_ids"].to(self.device),
+            "attention_mask": batch["attention_mask"].to(self.device),
+            "records": records,
+        }
+        outputs = self.model(model_batch)
+        report = self.head.compute_loss(outputs, records, targets)
+        metrics = {key: float(value.detach() if torch.is_tensor(value) else value)
+                   for key, value in report.items()}
+        report["loss"].backward()
+        return metrics
+
+    @torch.no_grad()
+    def validation(self) -> dict[str, float]:
+        assert self.val_loader is not None
+        sums: dict[str, float] = {}
+        count = 0
+        for batch in self.val_loader:
+            if batch is None:
+                continue
+            outputs = self.model({
+                "input_ids": batch["input_ids"].to(self.device),
+                "attention_mask": batch["attention_mask"].to(self.device),
+                "records": batch["records"],
+            })
+            report = self.head.compute_loss(outputs, batch["records"], batch["targets"])
+            for key, value in report.items():
+                sums[key] = sums.get(key, 0.0) + float(value)
+            count += 1
+            if count >= self.args.val_batches:
+                break
+        return {key: value / max(count, 1) for key, value in sums.items()}
+
+    # -- loop ---------------------------------------------------------------
+
+    def run(self) -> None:
+        args = self.args
+        self.log(f"steps_per_epoch={len(self.train_loader)} epochs={args.epochs}")
+        optimizer = self.optimizer
+        window_start = time.time()
+        window_batches = 0
+        for epoch in range(args.epochs):
+            for batch in self.train_loader:
+                if batch is None:
+                    continue
+                lr = cosine_lr(self.step, self.total_steps, args.warmup, args.lr)
+                for group in optimizer.param_groups:
+                    group["lr"] = lr
+                optimizer.zero_grad(set_to_none=True)
+                metrics = self.training_step(batch)
+                torch.nn.utils.clip_grad_norm_(self.head.parameters(), args.clip)
+                optimizer.step()
+                self.step += 1
+                window_batches += 1
+
+                if args.max_steps and self.step >= args.max_steps:
+                    directory = self.save_checkpoint()
+                    self.log(f"hit --max-steps {args.max_steps}; saved {directory}")
+                    return
+                if self.step % args.log_every == 0:
+                    elapsed = time.time() - window_start
+                    records_per_second = window_batches * args.batch_size / max(elapsed, 1e-6)
+                    gpu_gb = torch.cuda.memory_allocated() / 2**30 if torch.cuda.is_available() else 0.0
+                    self._write({"step": self.step, "epoch": epoch, "lr": round(lr, 7),
+                                 "gpu_gb": round(gpu_gb, 1), "recs_per_s": round(records_per_second, 2),
+                                 **{key: round(value, 4) for key, value in metrics.items()}})
+                    self.log(f"step {self.step}/{self.total_steps} loss={metrics['loss']:.3f} "
+                             f"({records_per_second:.2f} rec/s, {gpu_gb:.1f} GB) "
+                             f"-> {self.log_path}")
+                    window_start, window_batches = time.time(), 0
+
+                if self.step % args.save_every == 0:
+                    directory = self.save_checkpoint()
+                    self.log(f"saved checkpoint {directory}")
+                if self.val_loader and self.step % args.val_every == 0:
+                    val = self.validation()
+                    self._write({"step": self.step, "val": True,
+                                 **{key: round(value, 4) for key, value in val.items()}})
+                    self.log(f"val step {self.step}: loss={val.get('loss', float('nan')):.3f}")
+        self.save_checkpoint()
+        self.log("training complete")
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Train the clarke extraction head")
+    parser.add_argument("--backbone", default="Qwen/Qwen3.5-9B",
+                        help="backbone repo or local dir; Cloudflare/clef-flash is a transfer-init option")
+    parser.add_argument("--train", nargs="+", required=True, help="training JSONL paths")
+    parser.add_argument("--val", default=None, help="validation JSONL path")
+    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--workers", type=int, default=6)
+    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--warmup", type=int, default=500)
+    parser.add_argument("--clip", type=float, default=1.0)
+    parser.add_argument("--max-length", type=int, default=8192)
+    parser.add_argument("--width", type=int, default=1024)
+    parser.add_argument("--routing-layers", dest="routing_layers", type=int, default=2)
+    parser.add_argument("--layers", type=int, default=4)
+    parser.add_argument("--heads", type=int, default=16)
+    parser.add_argument("--feedforward", type=int, default=4096)
+    parser.add_argument("--log-every", type=int, default=20)
+    parser.add_argument("--max-steps", dest="max_steps", type=int, default=0,
+                        help="stop after N steps (smoke tests)")
+    parser.add_argument("--val-every", type=int, default=500)
+    parser.add_argument("--val-batches", dest="val_batches", type=int, default=20)
+    parser.add_argument("--save-every", type=int, default=1000)
+    parser.add_argument("--run-dir", default=None)
+    parser.add_argument("--resume", default=None, help="checkpoint directory")
+    parser.add_argument("--init-head", dest="init_head", default=None,
+                        help="initialize head weights from another checkpoint (partial, strict=False)")
+    args = parser.parse_args(argv)
+    Trainer(args).run()
+
+
+if __name__ == "__main__":
+    main()

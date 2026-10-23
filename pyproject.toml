@@ -1,0 +1,38 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[project]
+name = "clarke-flash"
+version = "0.1.0"
+description = "System One extraction model post-trained from Qwen3.5-9B: typed extract/compute/estimate/forecast in one parallel pass"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "accelerate>=1.0",
+  "huggingface-hub>=0.30",
+  "numpy>=1.26",
+  "pillow>=10",
+  "safetensors>=0.4",
+  "torch>=2.13",
+  "torchvision>=0.28",
+  "transformers>=5.17",
+]
+
+[project.optional-dependencies]
+public = ["datasets>=3.0"]
+serve = ["fastapi>=0.111", "uvicorn[standard]>=0.30", "pillow>=10"]
+
+[project.scripts]
+clarke-gen = "clarke.synth:main"
+clarke-public = "clarke.public:main"
+clarke-train = "clarke.train:main"
+clarke-eval = "clarke.eval:main"
+
+[tool.uv]
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clarke"]

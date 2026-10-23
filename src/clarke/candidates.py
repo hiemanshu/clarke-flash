@@ -1,0 +1,211 @@
+"""Candidate pools: values that literally occur in the state (or combine in
+one arithmetic step), with their character spans.
+
+Clarke's contract is that numbers/dates are *read from the input* (typed
+spans) or computed from it in one or two steps. So instead of regressing
+digit bins, the head picks from these pools and code renders the exact value
+from the span text — grounding comes for free, and arithmetic stays at the
+1-2 step ceiling the blog itself describes.
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import date, datetime
+from typing import Any
+
+from .schema import FieldSpec
+
+NUMBER_RE = re.compile(r"[-+]?\$?\d[\d,]*(?:\.\d+)?")
+MONTH = (r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:ril)?|May|Jun(?:e)?|Jul(?:y)?|"
+         r"Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)")
+DATE_RES = (
+    re.compile(r"\d{4}-\d{2}-\d{2}"),
+    re.compile(r"\d{1,2}/\d{1,2}/\d{4}"),
+    re.compile(rf"{MONTH}\.?\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+\d{{4}}"),
+    re.compile(rf"\d{{1,2}}(?:st|nd|rd|th)?\s+{MONTH}\.?,?\s+\d{{4}}"),
+)
+DT_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?")
+TIME_RE = re.compile(r"\d{1,2}:\d{2}(?::\d{2})?\s*(?:[APap]\.?[Mm]\.?)?")
+
+MAX_ATOMS = 64
+
+DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%m/%d/%y", "%Y/%m/%d",
+                "%b %d %Y", "%b %d, %Y", "%B %d %Y", "%B %d, %Y", "%d %b %Y", "%d %B %Y")
+
+UNIT_SECONDS = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400,
+                "weeks": 604800, "months": 2592000, "years": 31536000}
+
+OP_IDS = {"id": 0, "add": 1, "sub": 2, "mul": 3, "div": 4}
+
+
+def parse_date(text: str) -> str | None:
+    cleaned = re.sub(r"(\d)(?:st|nd|rd|th)", r"\1", text).replace("Sept", "Sep")
+    for fmt in DATE_FORMATS:
+        try:
+            return datetime.strptime(cleaned, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def parse_time(text: str) -> str | None:
+    cleaned = re.sub(r"[.\s]+", "", text).upper()
+    for fmt in ("%H:%M:%S", "%H:%M", "%I:%M:%SP", "%I:%MP"):
+        try:
+            return datetime.strptime(cleaned, fmt).strftime("%H:%M:%S")
+        except ValueError:
+            continue
+    return None
+
+
+def parse_number(text: str) -> float | None:
+    cleaned = text.replace(",", "").replace("$", "").replace("+", "")
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+class Pool:
+    """Candidate atoms for one record: (value, char_span) per extracted form."""
+
+    def __init__(self, state: str):
+        self.state = state
+        self.numbers: list[tuple[float, tuple[int, int]]] = []
+        self.dates: list[tuple[str, tuple[int, int]]] = []
+        self.times: list[tuple[str, tuple[int, int]]] = []
+        self.datetimes: list[tuple[str, tuple[int, int]]] = []
+        self._extract(state)
+
+    def _extract(self, state: str) -> None:
+        taken_iso: list[tuple[int, int]] = []
+        for match in DT_RE.finditer(state):
+            raw = match.group()
+            try:
+                canon = datetime.fromisoformat(raw if len(raw) > 16 else raw + ":00")
+            except ValueError:
+                continue
+            self.datetimes.append((canon.strftime("%Y-%m-%dT%H:%M:%S"),
+                                   (match.start(), match.end())))
+            taken_iso.append((match.start(), match.end()))
+        for regex in DATE_RES:
+            for match in regex.finditer(state):
+                iso = parse_date(match.group())
+                if iso is None or any(s <= match.start() < e for s, e in taken_iso):
+                    continue
+                self.dates.append((iso, (match.start(), match.end())))
+        for match in TIME_RE.finditer(state):
+            if any(s <= match.start() < e for s, e in taken_iso):
+                continue
+            hms = parse_time(match.group())
+            if hms:
+                self.times.append((hms, (match.start(), match.end())))
+        for match in NUMBER_RE.finditer(state):
+            value = parse_number(match.group())
+            if value is not None and len(self.numbers) < MAX_ATOMS:
+                self.numbers.append((value, (match.start(), match.end())))
+        self.dates = self.dates[:MAX_ATOMS]
+        self.times = self.times[:MAX_ATOMS]
+        self.datetimes = self.datetimes[:MAX_ATOMS]
+
+    def duration_atoms(self, spec: FieldSpec) -> list[tuple[float, tuple[int, int]]]:
+        """Candidate durations: differences between date/time atoms, in the
+        declared unit, plus number atoms that are directly tagged by the unit
+        word in the text ("11 days late"). Bare numbers are NOT duration
+        candidates — otherwise every ticket ID pollutes the pool."""
+        factor = UNIT_SECONDS.get(str(spec.unit or "days"), 86400)
+        unit = str(spec.unit or "days").lower()
+        out: list[tuple[float, tuple[int, int]]] = []
+        moments: list[tuple[Any, tuple[int, int]]] = []
+        for iso, span in self.dates:
+            moments.append((datetime.fromisoformat(iso), span))
+        for iso, span in self.datetimes:
+            text = iso if len(iso) > 16 else iso + ":00"
+            moments.append((datetime.fromisoformat(text), span))
+        for i in range(len(moments)):
+            for j in range(i + 1, len(moments)):
+                delta = abs((moments[j][0] - moments[i][0]).total_seconds()) / factor
+                span = (min(moments[i][1][0], moments[j][1][0]), max(moments[i][1][1], moments[j][1][1]))
+                out.append((delta, span))
+        for value, span in self.numbers:
+            tail = self.state[span[1]:span[1] + 14].lstrip().lower()
+            if tail.startswith(unit.rstrip("s")) or tail.startswith(unit):
+                out.append((value, span))
+        return out[:MAX_ATOMS * 2]
+
+
+def value_features(value: float, span_chars: int) -> list[float]:
+    import math
+    return [
+        1.0 if value >= 0 else 0.0,
+        math.log10(abs(value) + 1.0) / 10.0,
+        (abs(value) % 1) ,
+        span_chars / 64.0,
+    ]
+
+
+def solve(spec: FieldSpec, pool: Pool, gold: float, decimals: int):
+    """Find (a, b, op) producing the gold value, or None when unrepresentable."""
+    tolerance = 1.5 * (10 ** -decimals)
+    atoms = pool.duration_atoms(spec) if spec.type == "duration" else pool.numbers
+    for i, (value, _) in enumerate(atoms):
+        if abs(value - gold) <= tolerance:
+            return i, -1, OP_IDS["id"]
+    for i, (a, _) in enumerate(atoms):
+        for j, (b, _) in enumerate(atoms):
+            if i == j:
+                continue
+            if abs(a + b - gold) <= tolerance:
+                return i, j, OP_IDS["add"]
+            if abs(a - b - gold) <= tolerance:
+                return i, j, OP_IDS["sub"]
+            if abs(a * b - gold) <= tolerance:
+                return i, j, OP_IDS["mul"]
+            if b != 0 and abs(a / b - gold) <= tolerance:
+                return i, j, OP_IDS["div"]
+    return None
+
+
+def apply_op(a: float, b: float | None, op: int) -> float:
+    if b is None or op == OP_IDS["id"]:
+        return a
+    if op == OP_IDS["add"]:
+        return a + b
+    if op == OP_IDS["sub"]:
+        return a - b
+    if op == OP_IDS["mul"]:
+        return a * b
+    return a / b if b else a
+
+
+def _date_feats(iso: str) -> list[float]:
+    d = date.fromisoformat(iso)
+    return [(d.year - 2000) / 50.0, d.timetuple().tm_yday / 365.0, d.day / 31.0, 0.0]
+
+
+def _time_feats(hms: str) -> list[float]:
+    parts = [int(p) for p in hms.split(":")]
+    while len(parts) < 3:
+        parts.append(0)
+    return [parts[0] / 24.0, parts[1] / 60.0, parts[2] / 60.0, 0.0]
+
+
+def field_atoms(spec: FieldSpec, pool: Pool) -> list[tuple[Any, tuple[int, int] | None, list[float]]]:
+    """The candidate list for one field: (value, evidence span, features).
+
+    Order is deterministic (pool order) so training targets and decoding agree.
+    """
+    if spec.type == "number" or (spec.type == "list" and spec.items == "number"):
+        return [(v, span, value_features(v, span[1] - span[0])) for v, span in pool.numbers]
+    if spec.type == "duration":
+        return [(v, span, value_features(v, span[1] - span[0])) for v, span in pool.duration_atoms(spec)]
+    if spec.type == "date" or (spec.type == "list" and spec.items == "date"):
+        return [(iso, span, _date_feats(iso)) for iso, span in pool.dates]
+    if spec.type == "time" or (spec.type == "list" and spec.items == "time"):
+        return [(hms, span, _time_feats(hms)) for hms, span in pool.times]
+    if spec.type == "datetime":
+        return [(iso, span,
+                 [_date_feats(iso[:10])[0]] + _time_feats(iso[11:])[:3])
+                for iso, span in pool.datetimes]
+    return []

@@ -1,0 +1,28 @@
+# --- python environments / builds ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# --- training artifacts: heavy, regenerable, published to the Hub (not git) ---
+runs/
+data/
+*.safetensors
+*.pt
+wandb/
+
+# --- local state / secrets ---
+.env
+*.key
+keys.json
+
+# --- editors / OS noise ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
