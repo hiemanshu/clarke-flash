@@ -1,3 +1,16 @@
+**08:45 — second failure caught + diagnosed: genuine CUDA OOM at step ~250 of the restart.**
+Not my code: failing alloc (~560MB) was the same size since step 20; the post-reboot
+desktop stack (kwin_wayland 254MB GPU-resident + plasmashell + firefox) ate the margin,
+PyTorch caching allocator fragmented ([W] retries show free<560MB), and a long-doc batch
+finished it. Trainer steady ~29.8GB on a 32GB card = zero-sum game with the GUI.
+MITIGATION: PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True exported in BOTH chain
+scripts (stock torch knob, zero effect on training math, kills fragmentation failures).
+Fallback if it dies again: ask user to close Firefox (reclaims ~1GB system/GPU pressure)
+or drop bs 6->5 ONLY as explicit, documented deviation. Relaunched 08:45, harness shell
+sh_16be56beb... will notify; partial train.jsonl of the dead attempt cleared, crashed
+run dir preserved. Note for all future evals/runs today: the env var travels with the
+scripts; any manually-launched GPU command must set it too.
+
 **08:40 — machine crash 07:32 + recovery.** expSpan died at step 1540/5852 (mid epoch 0);
 checkpoint-1000 verified loads-strict; /tmp/opencode wiped (scripts + drop_test regenerated).
 RESTART decision: fresh restart over resume -- because max-steps does NOT retune the LR
