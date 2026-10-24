@@ -1,3 +1,45 @@
+**16:45 — Owner dataset list triaged; ACORD converted into the mix (batch 2 staged).**
+Owner handed 12 sources (6 HF + 4 Kaggle) with mandate: use what's useful for training,
+KEEP the bench-y ones for eval. Triage (all verdicts evidence-based):
+- theatticusproject/acord ACCEPTED, CONVERTED (scripts/adapt_acord.py): 114 attorney
+  queries x 3,931 real contract clauses, 130k expert-graded (0-4) query-clause pairs.
+  Record shape: 14-clause window (score-4 gold + 3-star HARD decoys + 2/0-star filler),
+  field instruction = the attorney's own query text, list<answer> = gold clause spans,
+  no-gold windows = honest nulls. -> data/acord_train.jsonl 684 windows (372 answerable/
+  312 null) from train+valid qrels; data/acord_test.jsonl 228 windows from official TEST
+  qrels = HOLDOUT EVAL (never trained; added to every future battery). Splits keyed on
+  QRELS membership, not queries.jsonl metadata (they DISAGREE on some ids - caught in
+  build). Contamination audit dropped 380 corpus clauses whose text byte-overlaps
+  real_eval/typed_test surfaces (ACORD is CUAD-cousin, "cuad1" query type); BEIR pairing
+  check: 0 test-query pairs in train states (160 shared-corpus sightings are legit -
+  retrieval corpora are known by design). Encodes 3.8-7.9k tokens, spans byte-exact.
+- alexdzm/extraction-examples REJECTED: UK planning PDFs + geojson/metadata pointers;
+  no verbatim field-answers over prose text; building records = PDF pipeline (v2 bucket).
+- LocalLLaMA/typed-extraction ALREADY INTEGRATED (typed_train/typed_test = Path-A +
+  acceptance eval). No new pull.
+- llamaindex/ExtractBench KEPT FOR EVAL per owner mandate: rows carry data_schema +
+  expected_output + per-field evidence (page+bbox) - real bench - but text lives in PDFs
+  (short.jsonl 163MB metadata + docs/). Needs a PDF-text stage; batch-3 eval candidate;
+  never trains.
+- wikimedia/structured-wikipedia DEFERRED-with-plan: whole-wiki parquet dumps; the
+  infoboxes/tables fields are exact table-regime material for the table-text .076 wall -
+  batch 3 mining target (stream a shard, keep eval split).
+- gonnascore/structuredlogs REJECTED: 5.4GB CSV, log-line->event-TEMPLATE mining - no
+  verbatim schema-field gold over prose, wrong task shape.
+- Kaggle x4: invoice-images -> vision v2 (PLAN-deferred); legal-citation/multilabel/
+  sentiment -> classification, wrong API shape (same rationale as MAUD rejection). Also
+  no kaggle creds on this box; not needed given above.
+STAGED: /tmp/opencode/exp_acord.sh = expAcord chain (init expReal final ckpt; +acord_train
+into mix; battery now includes acord_test NEW + real/typed/contractval/val3/pm-real; and
+a PRE-train acord_test baseline eval of expReal so the ACORD effect is attributable).
+Launch gated on expReal verdict (~19:40): the decision tree survives either branch -
+if expReal transfers, ACORD scales the win; if it doesn't, ACORD's real attorney queries
+are the last real-data lever before the LoRA question gets brought back with evidence.
+GPU note (owner asked "why cooking on CPU?"): expReal has held the 5090 at 100% since
+16:01; ALL list-triage work is CPU/network on purpose (downloads, schema probes, adapters
+can never use the GPU) so the next run launches with zero GPU idle. Probes pinned
+CUDA_VISIBLE_DEVICES="" to keep VRAM exclusively with the trainer - crash-era discipline.
+
 **15:30 — expReal launched (user-approved: "start with cuad, pull in all the keyphrase and
 other training data"). Real-corpus mining done with leak audit — near-miss recorded.**
 Data build (scripts/mine_real.py, committed):
