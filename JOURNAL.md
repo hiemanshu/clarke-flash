@@ -1,3 +1,30 @@
+**09:35 — crash autopsies COMPLETE + fix landed (user moved display to iGPU).**
+Reconstruction from persistent journals + last(1) boot table:
+- 07:32 & 08:40: TRAINING PROCESS died (allocator OOM, classic mode: fragmentation,
+  "free 273MB, wanted 560MB"). Machine survived both — Friday-night boot only ended
+  as 'crash' at 08:28, so at 07:32 the box was up; I mis-read it as a machine crash.
+- 08:50: FULL MACHINE CRASH, smoking gun in boot -7 journal: kwin_wayland
+  "Failed to allocate egl gbm swapchain buffer" + nvidia_drm *ERROR* "Failed to
+  allocate NVKMS memory" x20 at the exact death second. Trainer (with my
+  expandable_segments setting reserving 32074/33577 MiB) STARVED the display
+  compositor -> driver cascade -> hard reset. Guilty knob was mine; the knob was
+  meant to fix the 08:40 fragmentation death and did its job for memory — but the
+  desktop was quietly living on the same 32GB. My 08:45 note "desktop ate the
+  margin" was directionally right, mechanism wrong.
+- 08:52-09:26: boot loop (6 boots, some <60s) = desktop-on-nvidia failures during
+  recovery attempts; not our workload (nothing running then).
+GPU HEALTH: no evidence of damage — idle 38-46C, no pending repairs, ECC N/A
+(GeForce has no counters; absence is not a red flag), power throttle counters
+idle. It was suffocated, not burned.
+FIX: display now on iGPU (user decision, 09:2x). 5090 = 56MiB baseline, training
+sole tenant. expandable_segments NOW KEPT (safe + prevents fragmentation); bs6
+restored to preserve control comparability. If a batch spike ever again threatens
+the card, the documented fallback is --grad-accum 2 (micro-batch 3) — designed
+today, not needed now.
+Protocol for user gaming on the 5090: ping me (or Ctrl-C the chain) — runs checkpoint
+every 1000 steps; stopping is lossless to ~20 min.
+expSpan attempt #4 launching 09:35; expMix armed next per rule.
+
 **08:45 — second failure caught + diagnosed: genuine CUDA OOM at step ~250 of the restart.**
 Not my code: failing alloc (~560MB) was the same size since step 20; the post-reboot
 desktop stack (kwin_wayland 254MB GPU-resident + plasmashell + firefox) ate the margin,
