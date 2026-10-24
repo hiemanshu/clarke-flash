@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p28683998p33770542.xml.bz2",
+ "pages": 1109702,
+ "coverage_pct": {
+  "infobox": 22.8,
+  "categories": 36.6,
+  "anytable": 6.4,
+  "cites": 26.0,
+  "external_links": 30.7,
+  "sections": 35.1,
+  "redirect_page": 63.0,
+  "shortdesc": 24.2,
+  "files_images": 8.1,
+  "life_date_templates": 15.9,
+  "ipa_scripts": 0.9,
+  "flags": 3.2,
+  "hatnote": 0.3,
+  "disambiguation_page": 2.3,
+  "succession": 0.1
+ },
+ "mean_counts": {
+  "categories_n": 2.1,
+  "sections_n": 1.81,
+  "wikitables_n": 0.18,
+  "cites_n": 2.2,
+  "images_n": 0.26,
+  "bullets_n": 3.23,
+  "infobox_params_n": 1.91
+ },
+ "top_infobox_types": [
+  [
+   "settlement",
+   25386
+  ],
+  [
+   "football",
+   20598
+  ],
+  [
+   "person",
+   17459
+  ],
+  [
+   "film",
+   10868
+  ],
+  [
+   "album",
+   9960
+  ],
+  [
+   "officeholder",
+   9688
+  ],
+  [
+   "military",
+   7386
+  ],
+  [
+   "musical",
+   6302
+  ],
+  [
+   "nrhp",
+   6033
+  ],
+  [
+   "television",
+   6014
+  ],
+  [
+   "song",
+   5323
+  ],
+  [
+   "company",
+   4914
+  ],
+  [
+   "river",
+   3799
+  ],
+  [
+   "sportsperson",
+   3784
+  ],
+  [
+   "ice",
+   3164
+  ],
+  [
+   "election",
+   3036
+  ],
+  [
+   "station",
+   2888
+  ],
+  [
+   "book",
+   2800
+  ],
+  [
+   "baseball",
+   2790
+  ],
+  [
+   "ship/career",
+   2427
+  ]
+ ],
+ "samples": {
+  "infobox": "{{Infobox song\n| name          = This Woman Needs\n| cover         = This Woman Needs.jpg\n| alt           = \n| type          = single\n| artist        =",
+  "categories": "HeDAISY}}\n[[Category:1999 singles]]\n[[Category:1999 songs]]\n[[Category:SHeDAISY songs]]\n[[Category:Song recordings produced by Dann Huff]]\n[[Category:",
+  "anytable": " 4, 1999.\n{|class=&quot;wikitable sortable&quot;\n!align=&quot;left&quot;|Chart (1999\u20132000)\n!align=&quot;center&quot;|Peak&lt;br /&gt;position\n|-\n{{sin",
+  "cites": "lt;ref&gt;{{Cite magazine | url=http://www.billboard.com/charts/year-end/2000/hot-country-songs| title=Best of 2000: Country Songs | magazine=[[Billbo",
+  "external_links": "t;ref&gt;[http://www.collectionscanada.gc.ca/rpm/028020-119.01-e.php?brws_s=1&amp;file_num=nlc008388.9755&amp;type=1&amp;interval=24&amp;PHPSESSID=pru",
+  "sections": "/ref&gt;\n\n==Charts==\n&quot;This Woman Needs&quot; debuted at number 70 on the U.S. ''Billboard'' Hot Country Singles &amp; Tracks for the week of Sept",
+  "shortdesc": "{{Short description|Bay in Avannaata, Greenland}}\n{{Use dmy dates|date=January 2025}}{{Use British English|date=January 2025}}\n{{For|disambiguation|Ta",
+  "files_images": "ands ====\n[[File:KRABBE(29) Greenland. View over the Tasiusaq-bay (10976060063).jpg|thumbnail|Tasiusaq Bay (c.1900)|300px]]\nThe southern group of isla",
+  "life_date_templates": "eenland}}\n{{Use dmy dates|date=January 2025}}{{Use British English|date=January 2025}}\n{{For|disambiguation|Tasiusaq (disambiguation){{!}}Tasiusaq}}\n\n",
+  "ipa_scripts": "Gabrc''' ({{IPA|sl|\u02c8\u0261a\u02d0b\u0259\u027ets|pron}}) is a small settlement in the [[Municipality of Sveti Jurij ob \u0160\u010davnici]] in northeastern [[Slovenia]]. It lies in",
+  "flags": "[[Amman]] {{flagicon|Jordan}}\n|coordinates = \n|employees = \n|budget =\n|chief1_name = [[Khaled Toukan|Dr. Khaled Toukan]]\n|chief1_position = Chairman\n|",
+  "hatnote": " States}}\n{{about|Como Zoo|Como Park as a whole|Como Park Zoo and Conservatory}}\n{{More citations needed|date=April 2023}}\n{{Use American English|date",
+  "succession": "s-media}}\n{{Succession box |before=[[Bj\u00f8rn Evje]] | title=Chief editor of ''[[Demokraten|Smaalenenes Socialdemokrat]]''&lt;br&gt;(''acting'') |years=1"
+ }
+}

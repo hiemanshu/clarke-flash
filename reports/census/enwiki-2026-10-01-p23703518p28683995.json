@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p23703518p28683995.xml.bz2",
+ "pages": 1154481,
+ "coverage_pct": {
+  "infobox": 23.0,
+  "categories": 37.6,
+  "external_links": 31.5,
+  "sections": 36.1,
+  "redirect_page": 61.9,
+  "shortdesc": 25.0,
+  "life_date_templates": 16.4,
+  "anytable": 6.0,
+  "cites": 26.2,
+  "flags": 3.5,
+  "files_images": 8.4,
+  "ipa_scripts": 1.0,
+  "hatnote": 0.4,
+  "disambiguation_page": 7.0,
+  "succession": 0.1
+ },
+ "mean_counts": {
+  "categories_n": 2.12,
+  "sections_n": 1.83,
+  "wikitables_n": 0.17,
+  "cites_n": 2.14,
+  "images_n": 0.28,
+  "bullets_n": 3.34,
+  "infobox_params_n": 2.18
+ },
+ "top_infobox_types": [
+  [
+   "settlement",
+   36894
+  ],
+  [
+   "football",
+   22031
+  ],
+  [
+   "person",
+   16857
+  ],
+  [
+   "officeholder",
+   11766
+  ],
+  [
+   "album",
+   10912
+  ],
+  [
+   "film",
+   10328
+  ],
+  [
+   "military",
+   8764
+  ],
+  [
+   "nrhp",
+   7562
+  ],
+  [
+   "musical",
+   6849
+  ],
+  [
+   "song",
+   6096
+  ],
+  [
+   "television",
+   4969
+  ],
+  [
+   "company",
+   4847
+  ],
+  [
+   "station",
+   3885
+  ],
+  [
+   "mountain",
+   3357
+  ],
+  [
+   "school",
+   3079
+  ],
+  [
+   "sportsperson",
+   3063
+  ],
+  [
+   "book",
+   2944
+  ],
+  [
+   "rugby",
+   2889
+  ],
+  [
+   "ship/career",
+   2858
+  ],
+  [
+   "ship/characteristics",
+   2558
+  ]
+ ],
+ "samples": {
+  "infobox": "{{Infobox journal\n| title        = Goettingen Journal of International Law\n| abbreviation= Goettingen J. Int. Law\n| cover        =\n| editor       =\n| ",
+  "categories": "nal Law}}\n[[Category:German law journals]]\n[[Category:Law journals edited by students]]\n[[Category:Academic journals established in 2007]]\n[[Category:",
+  "external_links": "te      = http://www.gojil.eu\n| ISSN         = 1868-1581\n}}\n\nThe '''''Goettingen Journal of International Law''''' '''(GoJIL)''' is a jurisprudential ",
+  "sections": "ttingen.\n\n== Overview ==\nThe ''Goettingen Journal of International Law'' focuses primarily on international law. It also encompasses a wide variety of",
+  "shortdesc": "{{Short description|HTML editor and CSS editor for Windows}}\n{{Infobox Software\n|name                   = CSS HTML Validator\n|logo                   =",
+  "life_date_templates": "n 1957)}}\n{{Use mdy dates|date=July 2024}}\n{{Infobox baseball biography\n|image=1988 Best - Mark Funderburk (cropped).jpg\n|caption=Funderburk as a coac",
+  "anytable": "bsp;km===\n{| cellspacing=&quot;0&quot; cellpadding=&quot;3&quot; style=&quot;border:1px solid #AAAAAA;font-size:90%&quot; \n|-bgcolor=&quot;#E4E4E4&quo",
+  "cites": "lt;ref&gt;{{cite web|url=https://www.marathon.se/nyheter/musse-far-em-brons-i-efterhand|title=Musse f\u00e5r EM-brons i efterhand|publisher=Marathon|langua",
+  "flags": "ft&quot;| {{flagicon|GBR}} [[Jon Brown (runner)|Jon Brown]] ||align=&quot;right&quot;| 32:37\n|-align=&quot;center&quot;\n|align=&quot;center&quot;|{{si",
+  "files_images": ".com}}\n}}\n[[File:Gorman-School.jpg|thumb|Gorman Elementary School has two classrooms.]]\n'''Gorman Joint School District''' is a public school district",
+  "ipa_scripts": "nwein''' ({{IPAc-en|\u02c8|k|ou|d\u0292|i|_|\u02c8|h|\u025b|l|\u0259n|w|ai|n}};&lt;ref&gt;{{cite web |title=Kojii Helnwein Models of the Runway |url=https://www.youtube.com/wa",
+  "hatnote": "p group}}\n{{about||the 2002 Swedish police film|Beck \u2013 Kartellen|other uses|Cartel (disambiguation)}}\n\n'''Kartellen''' (English: ''The Cartel'') was a",
+  "succession": "failed }}\n{{Succession box\n|title  = [[Commander of the Navy (Taiwan)|Minister of Navy]]\n|before = [[Liu Guanxiong]]\n|after  = [[Li Dingxin]]\n|years  "
+ }
+}

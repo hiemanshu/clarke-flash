@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p71270301p75710815.xml.bz2",
+ "pages": 934852,
+ "coverage_pct": {
+  "infobox": 20.0,
+  "shortdesc": 22.4,
+  "categories": 30.3,
+  "anytable": 6.7,
+  "cites": 25.5,
+  "files_images": 5.7,
+  "external_links": 26.3,
+  "sections": 28.0,
+  "redirect_page": 70.1,
+  "disambiguation_page": 2.3,
+  "life_date_templates": 12.1,
+  "flags": 2.3,
+  "hatnote": 0.2,
+  "ipa_scripts": 0.4,
+  "succession": 0.0
+ },
+ "mean_counts": {
+  "categories_n": 1.72,
+  "sections_n": 1.68,
+  "wikitables_n": 0.29,
+  "cites_n": 3.08,
+  "images_n": 0.24,
+  "bullets_n": 2.55,
+  "infobox_params_n": 0.97
+ },
+ "top_infobox_types": [
+  [
+   "officeholder",
+   17652
+  ],
+  [
+   "person",
+   16788
+  ],
+  [
+   "football",
+   15163
+  ],
+  [
+   "film",
+   8681
+  ],
+  [
+   "settlement",
+   7976
+  ],
+  [
+   "album",
+   6087
+  ],
+  [
+   "military",
+   4907
+  ],
+  [
+   "college",
+   4787
+  ],
+  [
+   "television",
+   4768
+  ],
+  [
+   "election",
+   4619
+  ],
+  [
+   "musical",
+   3528
+  ],
+  [
+   "song",
+   3464
+  ],
+  [
+   "turkey",
+   3446
+  ],
+  [
+   "sports",
+   2913
+  ],
+  [
+   "company",
+   2462
+  ],
+  [
+   "scientist",
+   2436
+  ],
+  [
+   "book",
+   2427
+  ],
+  [
+   "name",
+   2377
+  ],
+  [
+   "sportsperson",
+   2298
+  ],
+  [
+   "rugby",
+   2168
+  ]
+ ],
+ "samples": {
+  "infobox": "istrict}}\n{{Infobox constituency\n|name = Bataan's 3rd congressional district\n|parl_name = [[House of Representatives of the Philippines]]\n|image = {{m",
+  "shortdesc": "{{Short description|House of Representatives of the Philippines legislative district}}\n{{Infobox constituency\n|name = Bataan's 3rd congressional distr",
+  "categories": "on III}}\n\n[[Category:Congressional districts of the Philippines]]\n[[Category:Politics of Bataan]]\n[[Category:Congressional districts of Central Luzon]",
+  "anytable": "history==\n{| class=wikitable \n|-\n! rowspan=&quot;2&quot; | #\n! rowspan=&quot;2&quot; colspan=2 | Image\n! rowspan=&quot;2&quot; | Member\n! colspan=2 | ",
+  "cites": "lt;ref&gt;{{cite web|url=https://psa.gov.ph/sites/default/files/attachments/ird/specialrelease/2_Table%201%20Population%20of%20Legislative%20Districts",
+  "files_images": "2&quot; | [[File:Rep. Maria Angela Garcia (20th Congress).jpg|100px]]\n| rowspan=&quot;2&quot; | [[Maria Angela Garcia]]\n| rowspan=&quot;2&quot; | June",
+  "external_links": "e web|url=https://psa.gov.ph/sites/default/files/attachments/ird/specialrelease/2_Table%201%20Population%20of%20Legislative%20Districts%20by%20Provinc",
+  "sections": "/ref&gt;\n\n==Representation history==\n{| class=wikitable \n|-\n! rowspan=&quot;2&quot; | #\n! rowspan=&quot;2&quot; colspan=2 | Image\n! rowspan=&quot;2&qu",
+  "life_date_templates": "ver SUV}}\n{{Use mdy dates|date=February 2026}}\n{{Use American English|date=February 2026}}\n{{Infobox automobile\n| name = Li L9\n| image = Li Auto L9 IM",
+  "flags": "ance    = {{flag|Kingdom of Italy}}\n| service_years = \n| branch        = {{army|Kingdom of Italy}}\n| rank          = [[Captain (rank)|Captain]]\n| unit",
+  "hatnote": "company}}\n{{about|the holding company|the television network|MDTV (Indonesian TV network){{!}}MDTV}}\n\n{{Infobox company\n| name                = PT MDT",
+  "ipa_scripts": ")\n |class={{sclass|Acorn|destroyer}}\n |displacement={{convert|748|LT|t|lk=on}} [[Normal displacement|normal]]\n |length= {{convert|246|ft|m|abbr=on}} [",
+  "succession": "culture}}\n{{Succession box\n | title  = President of the [[Royal Canadian Academy of Arts]]\n | years  = 1964-1967\n | with   =\n | before = [[Franklin Ar"
+ }
+}

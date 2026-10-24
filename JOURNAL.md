@@ -1,3 +1,32 @@
+**22:18 — expReal2 VERDICT: REAL DATA IS THE LEVER. CUAD .097 -> .381 (3.9x).**
+Controls: expFinal .026 / expMix .097 / expSpan .156 (best before tonight).
+READ (init expMix-6852, 2 epochs, mix = synth stack + REAL cuad 1,714 + keyphrase 20 +
+ACORD 684; battery incl. new acord_test):
+- CUAD real_eval list-text exact **.3806** (n=6,068) — +.284 absolute, 2.4x best-ever,
+  3.9x expMix. null_correct **.9893** (was .875) — the not-present regime is now reliable.
+- pm-real: median gold rank **8** (was 71), p@5 **.382** (was .135), p@1 .157 — pointing
+  transformed; this is real contract-reading, not decode luck.
+- typed: list-text **.840** set-F1 (was .317; n=82), text **.181** (was .161-.169),
+  located .234, number .085 (flat — number side was already atom-solved).
+- ACORD holdout: **.048** vs pre-train baseline .009 (5.3x; null_ok .603) — the regime
+  learns its own domain from 684 expert-graded windows.
+- RETENTION INTACT: contract_val text .997 / number 1.000 / list 1.000 / date .983;
+  val3 text .902, number .876, date .964, list-text .986, list-number .344; keyphrase .064
+  (n=20, noisy).
+METRIC CAVEAT (honest): `exact` = correct / ATTEMPTED answers (false nulls drop out of the
+denominator, eval.py). So .381 is precision-on-attempts, not recall; the independent
+evidence that this isn't answer-suppression: null_ok rose to .989 AND pm median rank fell
+to 8 (the gold is ranked 8th, so the pointer genuinely sees it).
+ATTRIBUTION CAVEAT: expReal2 = expMix + 2 real corpora + 2 more epochs from expMix's
+checkpoint. The bundle (data + continued training) is what moved; single-variable split
+was traded away deliberately (journal 16:52).
+DECISION RULE EXECUTED: CUAD .381 >= .097 -> batch3 init = runs/expReal2/checkpoint-7658.
+Batch3 chain: census 19/19 at 22:15 (notification sent), MINE START 22:15, 6-way.
+CENSUS FINAL (19 shards, **19,304,708 pages**): redirect 61.7% (so ~7.4M real articles),
+infobox 24.3%, shortdesc 26.4%, categories 37.9%, in-prose tables 6.9%, cites 29.0%,
+sections 36.1%, life-dates 16.5%, images 9.0%. Top infobox types: settlement/person/
+football/officeholder/album/film. Numbers stable from 8->19 shards (no sampling surprise).
+
 **22:02 — TWO-TIER MOBILE NOTIFICATIONS LIVE (owner design).**
 Layer 1 (buzz): ntfy https://notify.heems.dev/alerts — publish token stored ONLY in
 ~/.config/clarke/notify.env (chmod 600, outside the repo; never committed). Anonymous

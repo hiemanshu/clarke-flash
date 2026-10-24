@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p53408687p58111405.xml.bz2",
+ "pages": 1038463,
+ "coverage_pct": {
+  "shortdesc": 25.4,
+  "categories": 36.6,
+  "cites": 28.5,
+  "external_links": 31.6,
+  "sections": 34.1,
+  "redirect_page": 64.3,
+  "infobox": 22.2,
+  "life_date_templates": 15.1,
+  "anytable": 6.8,
+  "files_images": 6.3,
+  "flags": 2.5,
+  "ipa_scripts": 0.5,
+  "disambiguation_page": 1.5,
+  "hatnote": 0.2,
+  "succession": 0.1
+ },
+ "mean_counts": {
+  "categories_n": 2.11,
+  "sections_n": 1.74,
+  "wikitables_n": 0.21,
+  "cites_n": 2.74,
+  "images_n": 0.24,
+  "bullets_n": 2.9,
+  "infobox_params_n": 1.11
+ },
+ "top_infobox_types": [
+  [
+   "person",
+   20646
+  ],
+  [
+   "football",
+   18760
+  ],
+  [
+   "sportsperson",
+   15371
+  ],
+  [
+   "officeholder",
+   12722
+  ],
+  [
+   "film",
+   9624
+  ],
+  [
+   "settlement",
+   9560
+  ],
+  [
+   "album",
+   7287
+  ],
+  [
+   "musical",
+   5343
+  ],
+  [
+   "television",
+   5314
+  ],
+  [
+   "military",
+   5171
+  ],
+  [
+   "song",
+   4593
+  ],
+  [
+   "nrhp",
+   4522
+  ],
+  [
+   "college",
+   3819
+  ],
+  [
+   "scientist",
+   3730
+  ],
+  [
+   "road",
+   3658
+  ],
+  [
+   "company",
+   3500
+  ],
+  [
+   "election",
+   3138
+  ],
+  [
+   "basketball",
+   2820
+  ],
+  [
+   "station",
+   2799
+  ],
+  [
+   "artist",
+   2315
+  ]
+ ],
+ "samples": {
+  "shortdesc": "{{Short description|Species of damselfly}}\n{{Speciesbox\n| image = Black Torrent Dart (Dysphaea ethela) male. (25602242838).jpg \n| image_caption = Male",
+  "categories": "088979}}\n\n[[Category:Euphaeidae]]\n[[Category:Insects described in 1924]]\n[[Category:Taxa named by Frederic Charles Fraser]]\n[[Category:Odonata of Asia",
+  "cites": "&quot;&gt;{{cite iucn |author=Dow, R.A. |date=2019 |title=''Dysphaea ethela'' |volume=2019 |article-number=e.T163734A122208779 |doi=10.2305/IUCN.UK.20",
+  "external_links": "\u2013168 |url=http://www.dragonflyfund.org/images/reports/IDF_Report_80_Hamalainen_2015_small.pdf |issn = 1435-3393|access-date=18 September 2020}}&lt;/re",
+  "sections": "/ref&gt;\n\n==Description==\nIt is a medium sized damselfly with black head and brown-capped pale grey eyes. Its thorax is black, marked with narrow ante",
+  "infobox": "ay 2025}}\n{{Infobox album|\n| name       = Cheese Cake\n| type       = Live album\n| artist     = [[Dexter Gordon]] Quartet\n| cover      = Cheese Cake (a",
+  "life_date_templates": "{{Use mdy dates|date=May 2025}}\n{{Infobox album|\n| name       = Cheese Cake\n| type       = Live album\n| artist     = [[Dexter Gordon]] Quartet\n| cover",
+  "anytable": "ach Side\n\n{| class=&quot;wikitable&quot;\n|-\n! Train number !! Station code  !! Departure station  !! Departure time !! Departure day !! Arrival statio",
+  "files_images": "        = [[File:(Mannargudi - Bhagat Ki Kothi) Express Route map.png|300px]]\n| map_state          = \n}}\nThe 22673 / 22674 '''Bhagat Ki Kothi\u2013Mannargu",
+  "flags": "|country= {{flag|South Africa|1928}}\n|allegiance=\n|branch={{army|South Africa|1981}}\n|type=Motorised infantry\n|role=\n|size=\n|command_structure= [[Sout",
+  "ipa_scripts": "ellir''' ({{IPA|is|\u02c8aus\u02ccv\u025btl\u026ar\u0325}}) is a sports venue in [[Hafnarfj\u00f6r\u00f0ur]], [[Iceland]] with a gym, pool, basketball court and football field.\n\nTwo dec",
+  "hatnote": "y Steps}}\n{{about|a song by British group, Steps}}\n{{Use dmy dates|date=March 2017}}\n{{Use British English|date=March 2017}}\n{{Infobox song\n| name    ",
+  "succession": "-rel|ca}}\n{{Succession box\n|title=[[Roman Catholic Diocese of Santiago de Cabo Verde|Bishop of Santiago de Cape Verde]]\n|years=1975\u20132009\n|before=[[Jos"
+ }
+}

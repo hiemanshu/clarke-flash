@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p38830114p43486389.xml.bz2",
+ "pages": 1037092,
+ "coverage_pct": {
+  "redirect_page": 59.5,
+  "shortdesc": 27.2,
+  "categories": 40.2,
+  "cites": 29.1,
+  "external_links": 33.6,
+  "sections": 38.5,
+  "infobox": 25.0,
+  "files_images": 7.2,
+  "life_date_templates": 16.7,
+  "flags": 3.9,
+  "anytable": 6.7,
+  "ipa_scripts": 0.5,
+  "disambiguation_page": 1.8,
+  "hatnote": 0.3,
+  "succession": 0.1
+ },
+ "mean_counts": {
+  "categories_n": 2.2,
+  "sections_n": 1.87,
+  "wikitables_n": 0.21,
+  "cites_n": 2.56,
+  "images_n": 0.29,
+  "bullets_n": 3.15,
+  "infobox_params_n": 2.3
+ },
+ "top_infobox_types": [
+  [
+   "settlement",
+   37953
+  ],
+  [
+   "person",
+   21398
+  ],
+  [
+   "football",
+   16455
+  ],
+  [
+   "officeholder",
+   12728
+  ],
+  [
+   "film",
+   11073
+  ],
+  [
+   "album",
+   9096
+  ],
+  [
+   "nrhp",
+   7072
+  ],
+  [
+   "musical",
+   6401
+  ],
+  [
+   "television",
+   5795
+  ],
+  [
+   "military",
+   5514
+  ],
+  [
+   "song",
+   5304
+  ],
+  [
+   "company",
+   4809
+  ],
+  [
+   "rockunit",
+   3904
+  ],
+  [
+   "road",
+   2992
+  ],
+  [
+   "sportsperson",
+   2866
+  ],
+  [
+   "scientist",
+   2845
+  ],
+  [
+   "station",
+   2570
+  ],
+  [
+   "book",
+   2557
+  ],
+  [
+   "sports",
+   2337
+  ],
+  [
+   "college",
+   2306
+  ]
+ ],
+ "samples": {
+  "shortdesc": "{{Short description|Russia-born American photographer (1914\u20131995)}}\n'''Nina Leen''' (born 1914, died January 1, 1995)&lt;ref name=NYT /&gt; was an [[A",
+  "categories": "n, Nina}}\n[[Category:Soviet emigrants to the United States]]\n[[Category:American photojournalists]]\n[[Category:1914 births]]\n[[Category:1995 deaths]]\n",
+  "cites": "lt;ref&gt;{{Cite web |last=Gazeta.ua |date=2018-08-29 |title=\u0416\u0456\u043d\u043a\u0438, \u044f\u043a\u0456 \u0431\u0443\u043b\u0438 \u0435\u0442\u0430\u043b\u043e\u043d\u0430\u043c\u0438 \u043a\u0440\u0430\u0441\u0438 \u0443 \u0425\u0425 \u0441\u0442\u043e\u043b\u0456\u0442\u0442\u044f - \u0434\u043e\u0431\u0456\u0440\u043a\u0430 \u0444\u043e\u0442\u043e |url=https://gazeta.ua/artic",
+  "external_links": "\u0444\u043e\u0442\u043e |url=https://gazeta.ua/articles/history/_zinki-yaki-buli-etalonami-krasi-u-hh-stolittya-dobirka-foto/856172 |access-date=2022-09-27 |website=Gaze",
+  "sections": "rtraits.\n\n==Biography==\nBorn in Russia (probably between 1909 and 1914 although she kept her age a secret), Leen studied painting in [[Berlin]].&lt;re",
+  "infobox": "ry 2019}}\n{{Infobox settlement\n|name                     = Nagerbazar\n|official_name            =\n|nickname                 =\n|type          = Neighbo",
+  "files_images": "History==\n[[File:Clive House, Rastraguru Ave, Nagerbazar.jpg|thumb|Clive House, Nagerbazar]]\n\n'''Clive House''' is located on Rastraguru Avenue at Ram",
+  "life_date_templates": "{{Use dmy dates|date=January 2019}}\n{{Use Indian English|date=January 2019}}\n{{Infobox settlement\n|name                     = Nagerbazar\n|official_nam",
+  "flags": "        = {{flag|India}}\n|subdivision_type1        = [[States and territories of India|State]]\n|subdivision_name1        = [[West Bengal]]\n| subdivisi",
+  "anytable": "tional===\n{| class=&quot;wikitable&quot; style=&quot;text-align:center&quot;\n|-\n!colspan=3|[[Tajikistan national football team|Tajikistan national tea",
+  "ipa_scripts": "OMRI]]}} ({{IPA|it|\u02c8laura bol\u02c8dri\u02d0ni}}; born 28 April 1961)&lt;ref name=Profile /&gt; is an Italian politician and former [[United Nations]] official,",
+  "hatnote": "{{about|the former Douglass School|the current school in the same city|Frederick Douglass High School (Lexington, Kentucky)}}\n{{Use mdy dates|date=Jan",
+  "succession": "S-start}}\n{{Succession box\n | title  =[[File:Flag of the Royal National Lifeboat Institution.svg|25px]]&lt;br /&gt; RNLB ''Cecil Paine'' (ON 850)\n | y"
+ }
+}
