@@ -51,16 +51,25 @@ def infobox_block(text):
 
 
 def parse_pages(path):
-    with bz2.BZ2File(path) as f:
+    import io
+    if str(path).endswith(".xml"):
+        f = open(path, encoding="utf-8", errors="replace")
+        read = lambda: f.read(1 << 24)
+    else:
+        bh = bz2.BZ2File(path)
+        f = io.TextIOWrapper(bh, encoding="utf-8", errors="replace")
+        def read():
+            try:
+                return f.read(1 << 22)
+            except EOFError:
+                return None
+    with f:
         buf = ""
         while True:
-            try:
-                chunk = f.read(1 << 22)
-            except EOFError:
-                break
+            chunk = read()
             if not chunk:
                 break
-            buf += chunk.decode("utf-8", "replace")
+            buf += chunk
             while "</page>" in buf:
                 page, buf = buf.split("</page>", 1)
                 if "<page>" in page:
@@ -187,32 +196,42 @@ def record_from_page(page, type_vocab, rng):
 
 
 def main():
-    rng = random.Random(20261024)
-    ev_hashes = set()
-    for l in open("data/wiki_test.jsonl"):
-        ev_hashes.add(re.match(r"wiki-([0-9a-f]{12})", json.loads(l)["id"]).group(1))
-    # FORM-ROBUST exclusion (gate lesson 19:2x: wiki_test ids hash percent-encoded
-    # urls, our ids hash decoded XML titles -> naive set intersect missed 6x the
-    # overlap). Rebuild variant hashes from the source parquet + the gate's audit
-    # file so the full-corpus run excludes contaminated articles at ingest.
-    import urllib.parse
-    import pyarrow.parquet as pq
-    for r in pq.read_table("data/raw/wiki_shard85.parquet", columns=["url", "name"]).to_pylist():
-        t = urllib.parse.unquote((r.get("url") or "").split("/wiki/")[-1]).replace("_", " ") or r.get("name") or ""
-        for form in {t, t.replace(" ", "_")}:
-            if form:
-                ev_hashes.add(hashlib.md5(f"https://en.wikipedia.org/wiki/{form}".encode()).hexdigest()[:12])
-    g = Path("/tmp/opencode/wikiib_contaminated_hashes.json")
-    if g.exists():
-        ev_hashes |= set(json.loads(g.read_text()))
-    type_vocab = defaultdict(set)
-    seen, tr, ev = set(), [], []
-    stats = defaultdict(int)
-    for path in sys.argv[1:]:
-        for page in parse_pages(Path(path)):
+    import sys as _s
+    from pathlib import Path as P
+    sys.path.insert(0, str(P(__file__).parent))
+    import cache as C
+    def opt(name, default=None):
+        return _s.argv[_s.argv.index(name) + 1] if name in _s.argv else default
+    seed = int(opt("--seed", "20261024"))
+    out_dir = P(opt("--out-dir", "data/cache/wikiib"))
+    skip = {"--seed", "--out-dir"}
+    args = []
+    i = 1
+    while i < len(_s.argv):
+        a = _s.argv[i]
+        if a in skip:
+            i += 2; continue
+        if a.startswith("--"):
+            i += 1; continue
+        args.append(a); i += 1
+    out_dir.mkdir(parents=True, exist_ok=True)
+    converter_sha = C.sha_text(open(__file__).read())
+    # exclusion set: article-hash forms overlapping any eval surface (persisted)
+    excl_file = P("data/cache/exclusions/eval_article_hashes.json")
+    ev_hashes = set(json.loads(excl_file.read_text())) if excl_file.exists() else set()
+    for path in args:
+        src = P(path)
+        stem = src.name.replace(".xml.bz2", "").replace(".xml", "")
+        out = out_dir / f"{stem}.jsonl"
+        if C.is_current(out, converter_sha, seed, src):
+            print(f"[cache] SKIP {stem} (manifest current)")
+            continue
+        rng = random.Random(f"{seed}:{stem}")  # per-shard determinism
+        type_vocab = defaultdict(set)
+        seen, recs = set(), []
+        stats = defaultdict(int)
+        for page in parse_pages(src):
             stats["pages"] += 1
-            if len(tr) + len(ev) >= RECORD_CAP:
-                break
             r = record_from_page(page, type_vocab, rng)
             if not r:
                 stats["no_gold_or_skip"] += 1
@@ -222,32 +241,27 @@ def main():
                 stats["contaminated_or_dup"] += 1
                 continue
             seen.add(hh)
-            (ev if r.pop("_eval") else tr).append(r)
+            recs.append(r)
             stats["records"] += 1
-    bad = 0
-    for pool_ in (tr, ev):
-        for r in pool_:
+        bad = 0
+        for r in recs:
             for spec, a in zip(r["fields"].values(), r["answers"].values()):
                 if spec["type"] == "text" and a.get("span"):
-                    s, e = a["span"]
-                    bad += r["state"][s:e] != a["value"]
+                    s_, e_ = a["span"]
+                    bad += r["state"][s_:e_] != a["value"]
                 if spec["type"] == "list" and a.get("spans"):
-                    for v, (s, e) in zip(a["value"], a["spans"]):
-                        bad += r["state"][s:e] != v
-    assert bad == 0, f"{bad} span failures"
-    with open("data/wikiib_train.jsonl", "w") as h:
-        for r in tr: h.write(json.dumps(r) + "\n")
-    with open("data/wikiib_test.jsonl", "w") as h:
-        for r in ev: h.write(json.dumps(r) + "\n")
-    nl = sum(1 for r in tr for a in r["answers"].values() if a["value"] is None)
-    tt = sum(len(r["answers"]) for r in tr)
-    fam = defaultdict(int)
-    for r in tr:
-        for name in r["fields"]:
-            fam[name.split("_absent")[0]] += 1
-    print(f"stats: {dict(stats)}; infobox types: {len(type_vocab)}")
-    print(f"train {len(tr)} (null {nl}/{tt}={nl/tt:.2f}) / eval {len(ev)}; spans byte-exact")
-    print("top field families:", sorted(fam.items(), key=lambda kv: -kv[1])[:8])
+                    for v, (s_, e_) in zip(a["value"], a["spans"]):
+                        bad += r["state"][s_:e_] != v
+        assert bad == 0, f"{bad} span failures in {stem}"
+        tmp = out.with_suffix(".jsonl.tmp")
+        with tmp.open("w") as h:
+            for r in recs:
+                h.write(json.dumps(r) + "\n")
+        tmp.rename(out)
+        C.write_manifest(out, converter_sha, seed, [src], len(recs))
+        ev = sum(1 for r in recs if r.get("_eval"))
+        print(f"[cache] MINED {stem}: {len(recs)} records ({ev} flagged eval), "
+              f"types={len(type_vocab)}, pages={stats['pages']}")
 
 
 if __name__ == "__main__":

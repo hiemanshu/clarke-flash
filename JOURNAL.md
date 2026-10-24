@@ -1,3 +1,27 @@
+**19:38 — CACHE ARCHITECTURE (owner directive: consistent data stored once, re-seed free;
+and: DON'T remine until ALL shards down - one canonical pass over the full corpus).**
+Three layers implemented:
+L1 sources: data/raw (45GB bz2, size-verified) + data/raw/plain (decompress-once, 6-way
+   parallel bzip2 running now; each shard decompressed exactly once ever - this is cache,
+   not wasted work).
+L2 mined records: data/cache/wikiib/<shard>.jsonl + manifest{converter_sha,seed,src-size}.
+   Converter (adapt_infobox.py) rewired: per-shard determinism rng(seed:stem); manifest-
+   skip makes re-runs no-ops and new-shard adds O(new); span self-audit is a hard assert;
+   atomic tmp->rename. Exclusions moved /tmp -> data/cache/exclusions/eval_article_hashes.
+   json (5,683 hash forms; survives reboot).
+L3 assembly: scripts/assemble.py - STABLE ID-GATE (md5(salt:id)%100) selection + cap +
+   eval-flag split; output data/mixes/* + provenance.json listing every input/selection.
+   Re-seed = change salt/keep-pct, rebuild in seconds, records byte-identical where kept.
+TRIGGER armed (pid 2977304, /tmp/opencode/wiki_full_mine.log): waits for all 19 plain+xml
+present AND zero .part/.partwrite activity (60s double-check), then canonical 6-way mine
+across ~19 shards (est 60-90 min total), auto-assembles batch-3 wikiib view (salt b3,
+keep 10%, cap 20k, eval from _eval flags). expReal2 verdict lands mid-wait; if batch 3 is
+GO tonight, wikiib assembly exists BEFORE the run needs it.
+SMOKE caught a real bug (fixed + retested clean): flag VALUES (--seed 20261024) leaked into
+positional args -> FileNotFoundError AFTER manifest write (harmless but log-flooding).
+Smoke also validated extrapolation: 80MB text -> 769 recs => ~125k/shard, ~2.4M corpus -
+the 'millions' is real and now lands in ONE canonical pass exactly as owner planned.
+
 **19:35 — Gate results IN + infra stabilization (downloads/census). The wikiib story so far.**
 (1) CONTAMINATION GATE: title-form audit found **175 wiki_test articles inside wikiib_train**
 (not 28 - converter hashed decoded titles vs wiki_test's percent-encoded-url hashes; form-blind
