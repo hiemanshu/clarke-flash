@@ -1,3 +1,25 @@
+**18:00 — OWNER DIRECTIVE: "restart from scratch with the new data set" -> expReal2 launched.**
+Interpretation (stated): fresh full 2-epoch run over the merged mix — NOT the mid-schedule
+resume from checkpoint-1000 — so cuad_train (1,714), keyphrase (20) and acord_train (684)
+are seen evenly from step 0 under one clean cosine schedule. Init stays expMix-nospan-6852
+(the established stack base: proven binding, reranker/agg/fix5 on; a random-head restart
+would torch the day's progress and isn't what a stacking protocol means by fresh). The
+paused expReal-mixinit/checkpoint-1000 is kept as archived history, untouched.
+Chain (scripts/exp_real2.sh, /tmp copy identical): PRE-TRAIN attribution baseline (init head
+vs acord_test — zero ACORD/cuad exposure -> reports/expReal2-acordbase.json), then 7,658
+steps train, then battery: real / typed / acord_test / contractval / val3 / pm-real.
+Owner's bot.py test vacated the card at ~17:58 (9.7GB gone before launch — solo-tenant
+rule honored, no kill needed). Launch 17:59: baseline eval running, 100%/27.8GB confirmed.
+Pace note: merged mix is token-heavy (long CUAD + mid ACORD windows); if ~34 steps/min
+holds, train ends ~21:45, battery -> verdict ~22:30.
+Reads pre-registered: CUAD real_eval .097 -> ? (headline; both new corpora are real contract
+text so "does real data move CUAD" is the clean question); acord_test vs its own baseline
+(did the ACORD regime teach its domain; expert-graded hard-negative training's payoff);
+typed/CUAD-derived subset vs .200/.163 retention; contract_val vs .995 (does real data cost
+the synthetic binding?); val3 retention band. Decision tree after: big real gain -> scale
+(wiki tables next, longer schedules, real:real-ish mix); flat/mixed -> LoRA question with
+this whole table + the now-clean schedule artifact.
+
 **16:52 — Owner directive: fold ACORD into the paused expReal BEFORE resume (one run instead
 of two). Mix now 22,971 recs/epoch: train3 + typed + contract-synth 3k + REAL cuad 1,714 +
 keyphrase 20 + ACORD 684. Resume runs 2 FULL epochs from checkpoint-1000 (~8,658 steps,
