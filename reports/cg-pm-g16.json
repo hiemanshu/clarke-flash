@@ -1,0 +1,17 @@
+{
+  "checkpoint": "runs/expFinal/checkpoint-8778",
+  "data": "data/real_eval.jsonl",
+  "records": 72,
+  "postmortem": {
+    "cuad": {
+      "list-text": {
+        "scored": 89,
+        "unrankable": 895,
+        "p@1": 0.0,
+        "p@3": 0.011,
+        "p@5": 0.022,
+        "median_rank": 649
+      }
+    }
+  }
+}

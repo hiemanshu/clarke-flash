@@ -1,3 +1,19 @@
+**07:00 — CUAD diagnostic battery: the wall is QUERY SEMANTICS, not competition, not granularity.**
+(1) --field-groups 5/8/16 (serving-side passes over same state): p@5 stays .011-.022, median
+~600-750 -> 41-query competition REFUTED. null_ok DROPS .82->.42 when schema shrinks (null head
+uses full-schema context — do NOT serve CUAD grouped, free fact). (2) inside-clause membership:
+top-1 lands inside gold clause 2.1%, top-10 22.9%, median distance 814 tokens (~one document
+away) -> NOT a clause-granularity artifact either. The pointer genuinely cannot bind legal
+field names to clause text; frozen-base vocabulary/routing limit is the working theory.
+Baseline(41) on same 24 docs: exact .003 — 168-doc .023 was mostly keyphrase.
+IMPLICATION for the ladder: more epochs/more same-shape data/deeper decoder won't fix
+"field-name -> clause" binding. The two live levers: LoRA (adapts representations for legal
+binding — rung 4, now evidence-triggered) and shape-matched training data (long docs, big
+schemas, clause-grained spans — the data-shape answer to user's 'more data' question).
+Sequence: (a) span-reranker run (helps squad2/drop/table-text selection gaps — orthogonal to
+CUAD, already built+tested), (b) shape-matched synth generator (CPU), (c) LoRA probe on the
+next-best checkpoint if (a)+(b) plateau. GPU slot now open for (a).
+
 **06:45 — expFinal2 (+1ep extension, resume): synthetic keeps improving, real flat-to-up.
 NIGHT LOOP CLOSED, GPU idle.** typed text .169, number .085, list-text .136 (null_ok .871);
 val2 number **.859** (was .847), list-number .311 (partial recovery vs .295); CUAD exact .023
