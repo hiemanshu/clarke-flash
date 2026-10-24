@@ -1,3 +1,17 @@
+**21:40 — OWNER HANDOFF: unattended overnight. OPERATIONS.md created (compaction-proof).**
+Per owner: keep journaling + committing as I go; put the working rules where a context
+compaction cannot lose them. OPERATIONS.md (repo root) now holds: journal/commit
+discipline (fresh entry file, prepend-once, newest-first), no-push rule, evidence-over-
+optimism rule, ask-before-destructive rule, GPU/solo-tenant protocol, shell-kill
+discipline (5 self-kill incidents documented + the zsh word-split trap + xargs -r fix),
+data-hygiene rules (frozen eval surfaces, content-hash leak audits), unattended-operation
+principles, and the live-state block that each journaling step refreshes.
+Batch3 chain relaunched under harness-managed background (previous nohup instance was
+reaped when its shell exited — lesson: unattended runners go through the harness's
+background mode, not nohup). Chain pid 3695963, waiting census.
+Census at 10/19 (p13033641 just landed, 1.27M pages). expReal2 final stretch.
+Owner going to bed; morning deliverable = batch3 verdict + census table.
+
 **21:38 — UNATTENDED OVERNIGHT PLAN ARMED (owner to bed; 64GB RAM confirmed ample).**
 batch3_chain.sh (pid 3689224) sequence, all logged to /tmp/opencode/batch3.log:
  1. wait census 19/19 (max 100 min) -> aggregate_census.py into the log
