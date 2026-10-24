@@ -1,3 +1,19 @@
+**21:15 — COMMONS DUMP EXPLORED (owner: anything useful? mirrors OK).** Verdict:
+the wikibase/commonswiki dump (57GB json / 93GB ttl / 146GB nt) is MediaInfo RDF —
+post-extraction structured statements (P571 inception, P275 license, Q-item refs). NO prose
+state, NO spans -> zero training value for the pick-don't-compute API. Inspected via
+range-request slice, not downloaded.
+SIBLING FOUND: mediawiki_content_current/commonswiki/ (128 shards x ~390MB = ~50GB) = the
+actual File: wikitext incl. {{Information|description/author/date}} templates + rich
+category sets. Usable in principle (template-parameter binding), but REDUNDANT with the
+enwiki infobox regime already incoming (~2.4M records) and its domain matches NONE of our
+eval families (typed_test/real_eval are invoices/contracts/emails/etc). Multilingual
+descriptions would matter only for a generation task, not ours. DECISION: no download now;
+parked as optional batch-4 sample (2-3 shards) if media-file domain ever matters.
+Mirrors page confirmed available for future bulk pulls when we do want speed.
+Queue unchanged: enwiki fetch4b (owner handing downloads), decompress/census self-pacing,
+canonical mine trigger armed, expReal2 ~5800/7658.
+
 **19:38 — CACHE ARCHITECTURE (owner directive: consistent data stored once, re-seed free;
 and: DON'T remine until ALL shards down - one canonical pass over the full corpus).**
 Three layers implemented:
