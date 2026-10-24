@@ -1,0 +1,27 @@
+{
+  "checkpoint": "runs/expFinal/checkpoint-8778",
+  "data": "data/real_eval.jsonl",
+  "records": 24,
+  "metrics": {
+    "list-text": {
+      "n": 984,
+      "exact": 0.0025,
+      "located": 0.0025,
+      "null_correct": 0.8223,
+      "mean_confidence": 0.0,
+      "brier_null": 0.1829
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 984,
+        "exact": 0.0025,
+        "located": 0.0025,
+        "null_correct": 0.8223,
+        "mean_confidence": 0.0,
+        "brier_null": 0.1829
+      }
+    }
+  }
+}

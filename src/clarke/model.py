@@ -376,6 +376,7 @@ def save_head(head: JointExtractionHead, directory: Path) -> None:
         "dropout": 0.0,
         "rerank": bool(getattr(head, "rerank", False)),
         "query_pool": getattr(head, "query_pool", "mean"),
+        "span_rerank": bool(getattr(head, "span_rerank", False)),
     }
     (directory / "extraction_head_config.json").write_text(json.dumps(config, indent=2))
     save_file({k: v.detach().cpu().contiguous() for k, v in head.state_dict().items()},

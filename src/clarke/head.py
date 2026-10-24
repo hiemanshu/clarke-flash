@@ -128,6 +128,7 @@ class JointExtractionHead(nn.Module):
         dropout: float = 0.0,
         rerank: bool = False,
         query_pool: str = "mean",
+        span_rerank: bool = False,
     ):
         super().__init__()
         self.rerank = bool(rerank)
@@ -165,15 +166,25 @@ class JointExtractionHead(nn.Module):
         ])
         self.cand_value_proj = nn.Linear(4, width)
         self.op_head = nn.Linear(width, 5)
+        self.span_rerank = bool(span_rerank)
+
+        def pair_net(zero_last: bool = False):
+            net = nn.Sequential(
+                nn.Linear(4 * width, width), nn.GELU(), nn.Dropout(dropout),
+                nn.Linear(width, 1),
+            )
+            if zero_last:  # identity at init: reranker starts as the plain pointer
+                nn.init.zeros_(net[-1].weight)
+                nn.init.zeros_(net[-1].bias)
+            return net
+
         if self.rerank:
             # Tier B: cross-encoder style pair scorer for candidate selection
-            def pair_net():
-                return nn.Sequential(
-                    nn.Linear(4 * width, width), nn.GELU(), nn.Dropout(dropout),
-                    nn.Linear(width, 1),
-                )
             self.pair_a = pair_net()
             self.pair_b = pair_net()
+        if self.span_rerank:
+            # token-span selection: base pointer proposes top-K, pair net corrects
+            self.span_pair = pair_net(zero_last=True)
         if self.query_pool == "attn":
             # Tier A: learned attention pooling over the instruction span —
             # mean-pool washes out question structure ("after", "before",
@@ -243,6 +254,9 @@ class JointExtractionHead(nn.Module):
                 if spec.type == "text":
                     logits.start = (state_memory @ self.start_projection(field)) * scale
                     logits.end = (state_memory @ self.end_projection(field)) * scale
+                    if self.span_rerank:
+                        logits.start = self._rerank_spans(field, logits.start, state_memory)
+                        logits.end = self._rerank_spans(field, logits.end, state_memory)
                 elif spec.type == "list" and spec.items == "text":
                     slots = field.unsqueeze(0) + self.slot_embedding.weight
                     logits.start = (self.start_projection(slots) @ state_memory.T) * scale
@@ -280,6 +294,22 @@ class JointExtractionHead(nn.Module):
                 record_logits.append(logits)
             results.append(record_logits)
         return results
+
+    def _rerank_spans(self, field: torch.Tensor, base_scores: torch.Tensor,
+                      token_mem: torch.Tensor, k: int = 8) -> torch.Tensor:
+        """Two-stage span pointer: base dot-product proposes top-k tokens, the
+        pair net ADDS a learned correction (zero-init => identity at step 0).
+        Targets the measured gap: p@5 ~.6 vs p@1 ~.25 on real docs — gold is
+        retrieved by the pointer but not selected."""
+        kk = min(k, base_scores.shape[-1])
+        if kk < 2:
+            return base_scores
+        top = base_scores.detach().topk(kk, dim=-1).indices
+        cand = token_mem[top]
+        corr = self._pair_score(field, cand, self.span_pair)[0]
+        out = base_scores.clone()
+        out[top] = base_scores[top].detach() + corr
+        return out
 
     def _pair_score(self, query: torch.Tensor, emb: torch.Tensor, net: nn.Module) -> torch.Tensor:
         """Tier B reranker: MLP over [q; c; q*c; |q-c|] for every (query, candidate)
