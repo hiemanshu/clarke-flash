@@ -1,3 +1,15 @@
+**18:35 — WIKI RECON ADDENDUM: batch-3 data FULLY BUILT (not just planned).**
+data/wiki_train.jsonl: 40,000 records (of 148k converted from shards 0-2; capped by seeded
+sample, 27,923 articles); data/wiki_test.jsonl: 6,196 = ALL of shard85 (916 articles,
+FINAL disjointness verified True on shipped files; 4 cross-shard duplicate articles
+stripped from train pre-sample). typed_test prose-family leak check (744 squad2/drop/cuad/
+wiki/news records, 300-char normalized prefixes vs train blob): ZERO. Final stats: 5.6
+fields/rec, 36% nulls (the two honest-null families: absent column, absent row key).
+Shapes mirror the synthetic table regime -> agg-atoms engine transfers with zero code
+changes. Remaining batch-3 work: wiki_train into --train, wiki_test into the battery —
+two-line chain edit, gated on expReal2 verdict. Parquets (1.4 GB) stay on disk for more
+sampling if it earns its place.
+
 **18:20 — WIKI TABLES RECON (owner question while expReal2 cooks): data shape understood,
 converter built & validated (scripts/adapt_wiki.py), training shards downloading.**
 DATA SHAPE (live-audited on one 60MB shard, 4,604 articles): the 'tables' column is a
