@@ -1,3 +1,15 @@
+**22:02 — TWO-TIER MOBILE NOTIFICATIONS LIVE (owner design).**
+Layer 1 (buzz): ntfy https://notify.heems.dev/alerts — publish token stored ONLY in
+~/.config/clarke/notify.env (chmod 600, outside the repo; never committed). Anonymous
+publish proved 403, token required; curl -f added so HTTP errors are never counted as sent
+(the earlier 'ntfy=1' on a 403 was a lie). Layer 2 (detail): Signal note-to-self
+(signal-cli -a account send --note-to-self; sync-messages are silent by design, this is
+not). Test 22:02:27 ntfy=1 signal=1. Watcher mode mapping fixed (legacy urgency 'normal'
+would have matched no branch -> silent; now full/critical). Watcher v2 running; STATUS.md
+updates each minute at /tmp/opencode/STATUS.md.
+Pipeline at 22:02: expReal2 7,460/7,658 (final minutes; battery next, verdict ~22:45);
+census 17/19; batch3 chain queued behind census.
+
 **21:55 — SIGNAL CHANNEL SOLVED: sync-message vs --note-to-self.**
 Owner reported self-sends produced no phone notification. Root cause found in signal-cli's
 own help: sending to your own number AS A RECIPIENT creates a SYNC message, which Signal
