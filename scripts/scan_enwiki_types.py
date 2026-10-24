@@ -52,6 +52,9 @@ def main():
     if "--append" in sys.argv:
         append = Path(sys.argv[sys.argv.index("--append") + 1])
         args.remove(str(append))
+    if "--out" in sys.argv:
+        outp = Path(sys.argv[sys.argv.index("--out") + 1])
+        args = [a for a in args if a != str(outp)]
     out = []
     for path in args:
         n = 0
@@ -113,8 +116,10 @@ def main():
             with append.open("a") as h:
                 h.write(json.dumps(shard) + "\n")
     if not append:
-        Path("reports/enwiki_types.json").write_text(json.dumps(out, indent=1))
-        print(f"-> reports/enwiki_types.json ({len(out)} shards)")
+        dest = Path("reports/enwiki_types.json") if "--out" not in sys.argv else Path(sys.argv[sys.argv.index("--out") + 1])
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(json.dumps(out[-1] if "--out" in sys.argv and len(out) == 1 else out, indent=1))
+        print(f"-> {dest}")
 
 
 if __name__ == "__main__":

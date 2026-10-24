@@ -1,3 +1,28 @@
+**19:35 — Gate results IN + infra stabilization (downloads/census). The wikiib story so far.**
+(1) CONTAMINATION GATE: title-form audit found **175 wiki_test articles inside wikiib_train**
+(not 28 - converter hashed decoded titles vs wiki_test's percent-encoded-url hashes; form-blind
+intersect missed 6x). Purged 175 train + 30 double-holdout records (train 149,834 / eval 29,961
+now). PROSE LEAK CHECKS CLEAN: 0/744 typed_test prose prefixes, 0/168 real_eval prefixes vs the
+150k-record blob - squad2's old revisions vs 2026-10-01 dump, as hoped. adapt_infobox.py
+patched to compute form-variant exclusion hashes at ingest (parquet + gate file) so the full-
+corpus pass self-excludes. wikiib is now decision-grade except: full-corpus conversion + typed
+prose-family recheck at final assembly.
+(2) DOWNLOAD FLEET: v1 xargs design died silently on 2 curls (no low-speed guard; &&-mv meant
+orphan .parts never retried - owner caught it visually, GOOD catch). v2 supervisor starved
+itself (20kB/s floor across 8 streams + retry churn). v3 (pid 2901304): cap 5 streams,
+--retry 15 -C - range resume, 5kB/s floor over 180s, size-verified renames, corrupt-final
+sweep. 8/19 landed; ETA ~20:15.
+(3) CENSUS: serial driver replaced with 4-parallel runner (census_runner.sh, atomic
+.tmp->rename). 2 shards done: shard1 (614k pages) vs shard2 (1011k pages) coverages in
+reports/census/*.json - note redirects 42%->51%, tables 14.5%->9.4%: OLDER page-id ranges
+are more list-y/redirect-y; newer shards will differ again. Full 19-shard census ~35-40 min
+after fleet lands.
+(4) SHELL HYGIENE: 5th pkill/pgrep self-match incident (kill-loop + literal proc name in same
+command line is a landmine EVEN WITH BRACKETS if the literal appears elsewhere in the line).
+New rule adopted: kill-by-pid-only calls; never mix kill patterns with literals of the same
+name in one command. Applied above.
+Next: Rust-vs-parallel-Python verdict for corpus processing (owner question) -> in reply.
+
 **19:20 — DOWNLOAD FLEET INCIDENT (owner spotted p13033641 frozen at .part): dead-curl orphans.**
 Root cause: original driver = xargs -P3 with `curl && mv`; two curls died mid-transfer (no
 --speed-time/low-speed guards), so mv never ran AND the shards were already popped from the

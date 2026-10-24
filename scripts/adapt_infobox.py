@@ -191,6 +191,20 @@ def main():
     ev_hashes = set()
     for l in open("data/wiki_test.jsonl"):
         ev_hashes.add(re.match(r"wiki-([0-9a-f]{12})", json.loads(l)["id"]).group(1))
+    # FORM-ROBUST exclusion (gate lesson 19:2x: wiki_test ids hash percent-encoded
+    # urls, our ids hash decoded XML titles -> naive set intersect missed 6x the
+    # overlap). Rebuild variant hashes from the source parquet + the gate's audit
+    # file so the full-corpus run excludes contaminated articles at ingest.
+    import urllib.parse
+    import pyarrow.parquet as pq
+    for r in pq.read_table("data/raw/wiki_shard85.parquet", columns=["url", "name"]).to_pylist():
+        t = urllib.parse.unquote((r.get("url") or "").split("/wiki/")[-1]).replace("_", " ") or r.get("name") or ""
+        for form in {t, t.replace(" ", "_")}:
+            if form:
+                ev_hashes.add(hashlib.md5(f"https://en.wikipedia.org/wiki/{form}".encode()).hexdigest()[:12])
+    g = Path("/tmp/opencode/wikiib_contaminated_hashes.json")
+    if g.exists():
+        ev_hashes |= set(json.loads(g.read_text()))
     type_vocab = defaultdict(set)
     seen, tr, ev = set(), [], []
     stats = defaultdict(int)
