@@ -1,3 +1,19 @@
+**05:45 — expFinal (full stack: rerank+attn+scatter+agg-atoms+fix5-loss) = best model; the
+synthetic number wall CRUMBLES. Decode IndexError fixed (padded-bin argmax, eval-crash
+forensics). +1ep extension running (resume from 5852, ~06:45 done).**
+typed (400): text .133->.157->.**.169**, number .046->.068->.**.085**, list-text null_ok .914.
+real CUAD: exact .0109->.021->**.026**, null_ok ->**.847** (fix5 loss-half added .12 over
+decode-only). pm: drop number p@1 .189->**.248** (reranker finally moves top-1 once pool
+grew richer — agg atoms + fix5), squad2 p@1 .197->**.255**, p@5 .609.
+val2 numbers (with --agg-atoms): number exact .507->**.847** — TABLE domain .025->**.791**
+(solvable now 1.0), invoice number .839. list-number .387->.295 (mild regression, watch).
+Estimate APE .30 / forecast APE .11 (coverage ~.89/.79) — distribution heads healthy-ish.
+Remaining walls (honest, for the morning): table TEXT pointing .076 (region-name cells:
+solvable but unranked — reranker only covers candidates, not token spans!); squad2 .169;
+CUAD .026 (41-field query problem persists; p@5 there was .034 pre-stack — unmeasured post).
+Cumulative overnight: main4->expFinal text +27%, number +85%, CUAD-null 0->.85, table-number
++30x. Extension battery reports expFinal2-* land ~07:00.
+
 **03:40 — B2 verdict + decode attribution. expFinal (full stack) launched 03:31.**
 B2 (rerank+attn on train3, init expA1D, fix5-decode in eval): typed text .144->.157,
 number .056->.068 (reranker: p@3 .477->.505, med 3->2, p@1 .200->.196 — improves

@@ -168,7 +168,9 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits) -
             probs = probabilities[step].tolist()
             centers = spec.grid_centers()
             grid = centers[: -OVERFLOW_BINS]
-            index = int(probabilities[step][:-OVERFLOW_BINS].argmax())
+            # logits width is padded to MAX_GRID_BINS+2; only the spec's real
+            # bins may compete (argmax over padding caused an IndexError)
+            index = int(probabilities[step][:max(len(grid), 1)].argmax())
             median_info = spec.quantiles(probs)
             value = _snap(grid[index], spec)
             per_step.append({**median_info, "value": value,
