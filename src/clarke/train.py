@@ -66,6 +66,7 @@ class Trainer:
 
         self.optimizer = torch.optim.AdamW(self.head.parameters(), lr=args.lr, weight_decay=0.01)
         self.step = 0
+        self._diverge_hits = 0
         if args.resume:
             self._load_checkpoint(Path(args.resume))
 
@@ -197,6 +198,18 @@ class Trainer:
                 optimizer.step()
                 self.step += 1
 
+                # guard against design-level blowups (attempt-5 span divergence
+                # cooked for 80 min before the val numbers admitted it)
+                if args.diverge_stop and metrics["loss"] > args.diverge_stop:
+                    self._diverge_hits += 1
+                    if self._diverge_hits >= 2:
+                        directory = self.save_checkpoint()
+                        self.log(f"DIVERGE GUARD: step loss {metrics['loss']:.1f} > "
+                                 f"{args.diverge_stop} twice in a row; saved {directory}, stopping")
+                        return
+                else:
+                    self._diverge_hits = 0
+
                 if args.max_steps and self.step >= args.max_steps:
                     directory = self.save_checkpoint()
                     self.log(f"hit --max-steps {args.max_steps}; saved {directory}")
@@ -237,6 +250,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--grad-accum", dest="grad_accum", type=int, default=1,
                         help="accumulate N micro-batches (batch-size/N each) into one step")
+    parser.add_argument("--diverge-stop", dest="diverge_stop", type=float, default=0.0,
+                        help="abort run if step loss exceeds N twice in a row (0=off)")
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--warmup", type=int, default=500)

@@ -1,3 +1,26 @@
+**11:15 — attempt 5 SPAN DIVERGENCE: caught by val curves, root-caused, fixed, attempt 6 launched.**
+Symptom: val3 healthy through step 1000 (span 0.40 -> 0.64), then monotone blowup: 2.55/3.38/
+9.63/12.9/17.7 -> train span bucket exploding (18 -> 94 at step 4940). Differential with attempt 4
+(same span_rerank, old loop): identical healthy start -> the ACCUM LOOP IS INNOCENT; the
+span_rerank DESIGN diverged after ~1200 steps (attempt 4 died at 620 before reaching the window).
+Root cause: one shared pair net corrected BOTH start and end logits -> start CE wants first
+token high, end CE wants last token high, same (query,token) pairs -> contradictory gradients
+through one function; net oscillates, grows, buries gold. My design error, not the environment.
+Fix 1: START-ONLY correction (head.py; decode already conditions end on start; the measured
+selection gap is start-ranking). CPU-verified: identity at init exact; with correction active
+start moves 2.6, end changes only by 2e-7 = fp32 ulp (untouched). Fix 2: --diverge-stop N guard
+(trainer aborts + saves on N-exceeding losses twice consecutively; exp runs use 18) so future
+design blowups cost minutes, not 80 GPU-min — this was the second time (after the op-head bug
+era) that a sick run cooked visibly-in-loss terms for an hour; the guard makes the loop safer.
+Process cleanup: killed diverged trainer + chain + orphaned eval (was about to score
+checkpoint-5000 garbage; no bogus reports written). Attempt-5 run dir kept as
+runs/expSpan-a5-diverged.
+Attempt 6 launched 11:13 (start-only + accum 2 + diverge-guard 18). The truth point is
+val@1500-2500 (attempt 5's blowup window): expect span < 1 all through. Training done ~12:50,
+battery -> verdict ~13:10; expMix follows (~16:15 CUAD readout). If attempt 6 also diverges in
+the window despite start-only: span hypothesis is FALSE (not a bug) -> drop --span-rerank
+entirely, expMix runs in nospan mode, reranker-for-spans goes on the museum shelf with evidence.
+
 **09:52 — attempt 4 died at step 620 (09:46:12): expandable_segments mapping OOM — physical VRAM
 genuinely exhausted by a bs6 8k-token spike. Machine SURVIVED (solo-tenant fix worked as
 designed: process dies now, not the box).** Diagnosis: at bs6 the trainer needs more than the

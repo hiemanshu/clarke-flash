@@ -255,8 +255,13 @@ class JointExtractionHead(nn.Module):
                     logits.start = (state_memory @ self.start_projection(field)) * scale
                     logits.end = (state_memory @ self.end_projection(field)) * scale
                     if self.span_rerank:
+                        # START-ONLY (attempt-5 lesson): sharing one pair net for
+                        # start AND end correction puts contradictory gradients
+                        # (first-token vs last-token) through the same function —
+                        # val span blew 0.4 -> 19 by step 4000. End keeps the
+                        # plain trained pointer path; decode conditions end on
+                        # start anyway, so the selection gap lives here.
                         logits.start = self._rerank_spans(field, logits.start, state_memory)
-                        logits.end = self._rerank_spans(field, logits.end, state_memory)
                 elif spec.type == "list" and spec.items == "text":
                     slots = field.unsqueeze(0) + self.slot_embedding.weight
                     logits.start = (self.start_projection(slots) @ state_memory.T) * scale
