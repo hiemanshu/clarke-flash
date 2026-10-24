@@ -1,3 +1,29 @@
+**15:30 — expReal launched (user-approved: "start with cuad, pull in all the keyphrase and
+other training data"). Real-corpus mining done with leak audit — near-miss recorded.**
+Data build (scripts/mine_real.py, committed):
+- cuad_train.jsonl REBUILT from raw blob docs[0:470] (train region) via public.cuad_records:
+  1,797 windows -> **1,714 clean** after dropping 83 windows whose source contracts match the
+  46 typed-cuad-test records in typed_test (company-slug+date8 fuzzy match — typed-extraction's
+  CUAD split does NOT align with CUAD blob index boundary, so exact-id dedupe was insufficient;
+  the journal's "raw CUAD never trains" rule earned its keep — naive cuad_all training would
+  have CONTAMINATED the acceptance eval). Verified: 0 windows from the 40 eval titles, 0 from
+  typed_test sources.
+- cuad_all's 440-title coverage == docs[0:470] exactly (no missed headroom; earlier "30 docs
+  missing" was a title-collision artifact).
+- keyphrase_train.jsonl: validation.parquet only (test.parquet IS the 20 eval records),
+  re-namespaced keyphrase-val-N, 0 content overlap with eval. 20 records — token gesture the
+  user asked for; too small to read on its own.
+- MAUD: stays rejected (journal audit: 3% verbatim answers = choice-API task, not extraction).
+- Mix now: train3 + typed 9.5k (incl 61 cuad-derived) + contract synth 3k + REAL 1,714
+  (+20 keyphrase) = 22,287 recs/epoch; real-shape:contract-synth ≈ 1:1.7 (expMix's dilution was
+  61:3000). Init expMix-6852 (keeps binding mechanism + med-rank-71 pointing). 7,429 steps x2ep,
+  ETA train ~18:20, verdict ~18:50. Battery adds keyphrase readout (n=20, expect noise; don't
+  over-read).
+User unattended; offered their dataset LIST again in reply — anything with verbatim spans on
+real text joins the next batch. Decision tree post-expReal (pre-registered): real transfers ->
+scale real corpus further (more windows/spans per doc, relax max_spans 8, harder nulls);
+in-domain-only again -> LoRA question with this evidence.
+
 **15:10 — expMix VERDICT: pre-registered branch hit — in-domain contract learning PERFECT,
 real CUAD did NOT transfer (regressed). Plus: cuad_all.jsonl discovery (1,797 real records,
 never trained on). Escalating to user: real-corpus-mining (recommended) vs LoRA.**
