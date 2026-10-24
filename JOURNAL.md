@@ -1,3 +1,23 @@
+**16:52 — Owner directive: fold ACORD into the paused expReal BEFORE resume (one run instead
+of two). Mix now 22,971 recs/epoch: train3 + typed + contract-synth 3k + REAL cuad 1,714 +
+keyphrase 20 + ACORD 684. Resume runs 2 FULL epochs from checkpoint-1000 (~8,658 steps,
+trainer anneals + final-saves itself — cleaner than an external kill), then pre/post ACORD
+evals + full battery -> ~4h from launch. expAcord retired as standalone batch; wiki-tables
+and ExtractBench-parser are now the batch-3 candidates.**
+ATTRIBUTION LEDGER for this decision (what we do and don't learn):
+- "Does REAL data move CUAD?" stays clean: expMix (.097, synth-only regime) -> this run's
+  real-enriched mix is the step. Both new corpora are real contract text, so the headline
+  question is unconfounded even merged.
+- "CUAD-windows vs ACORD-windows, which mattered more?" becomes unseparable in one run.
+  Partial recovery: pre-train baseline (checkpoint-1000, zero ACORD exposure) vs post
+  battery on acord_test isolates the ACORD regime's own-domain gain; CUAD keeps its own
+  real_eval readout. Full separation would need the ablation I traded away (2 runs vs 1).
+- The final model is 2.27 epochs over the enlarged mix at lower end-lr than expMix's
+  endpoint (same 1e-4 peak, longer schedule) — so the comparison is "more real data AND
+  more training" vs expMix, not data alone. Stated up front so nobody over-reads .156.
+Cost accepted: attribution granularity. Benefit accepted by owner: ~3 GPU-hours and one
+full experiment cycle saved. GPU remains released to owner for testing until they say GO.
+
 **16:45 — OWNER PAUSE: expReal stopped for owner testing (5090 handed back).**
 State at stop: step 1,460/7,430 (epoch 0), last banked checkpoint-1000; ~13 min of
 unbanked steps lost (checkpoint cadence 1000 vs kill moment). Chain bash SIGKILLed
