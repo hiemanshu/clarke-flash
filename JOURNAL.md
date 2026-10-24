@@ -1,3 +1,32 @@
+**16:45 — OWNER PAUSE: expReal stopped for owner testing (5090 handed back).**
+State at stop: step 1,460/7,430 (epoch 0), last banked checkpoint-1000; ~13 min of
+unbanked steps lost (checkpoint cadence 1000 vs kill moment). Chain bash SIGKILLed
+BEFORE battery phase (expSpan-race lesson applied), trainer SIGTERMed, all workers
+gone; GPU verified 0% / 56 MiB. Notes: (1) pkill self-match trap fired AGAIN (the
+'from multiprocessing' alternation matched my own shell's cmdline) — bracket every
+alternative, not just the first. (2) Resume recipe: /tmp/opencode/exp_real_resume.sh =
+--resume checkpoint-1000, external stop at checkpoint-7000, full battery incl NEW
+acord_test baseline readout (first ACORD-domain eval of any checkpoint). Deviation to
+declare: resume's loader restarts epoch shuffles, so coverage by step 7,000 is ~2.27
+epochs of mix vs planned 2.0, and its cosine schedules to 8,430 (killed at 7,000 where
+lr<1% peak — tail shape moot). Acceptable for a continuation run; noted for the
+verdict read. Verdict clock after resume: ~3h05m train + ~25m battery.
+
+DATA CHANGES SUMMARY (owner question, as of this stop):
+expReal mix (stopped) = expMix mix + TWO new files: cuad_train.jsonl 1,714 REAL CUAD
+windows (raw CUAD_v1.json docs[0:470] via public.py converter; 83 windows dropped by
+leak audit: 6 exact-id eval dupes + 32 train-region contracts matching typed-cuad-test
+company+date — typed-extraction is CUAD-derived so whole-contract exclusion needed;
+verified 0 overlap vs real_eval AND typed_test) and keyphrase_train.jsonl 20 recs from
+validation.parquet (test.parquet IS the eval; 0 content overlap). Unchanged: train3,
+typed_train (9.5k, incl 61 CUAD-shaped now trainable since max_fields 48),
+contract_train 3k synth. Engine-side data plumbing changes already baked into mixes:
+max_fields cap, slash-date atom regex, agg-atoms train/eval parity. STAGED NOT TRAINED:
+ACORD 684 train windows (attorney queries, 4-star gold, 3-star expert hard decoys,
+312 honest nulls) + acord_test 228 holdout -> expAcord batch 2. REJECTED w/ evidence:
+MAUD, structuredlogs, extraction-examples; KEPT FOR EVAL: ExtractBench (PDF stage),
+keyphrase, typed_test 400-1612 confirmation slice untouched.
+
 **16:45 — Owner dataset list triaged; ACORD converted into the mix (batch 2 staged).**
 Owner handed 12 sources (6 HF + 4 Kaggle) with mandate: use what's useful for training,
 KEEP the bench-y ones for eval. Triage (all verdicts evidence-based):
