@@ -30,7 +30,9 @@ DISAMB = " (disambiguation)"
 
 
 def parse_pages(path):
-    with bz2.BZ2File(path) as f:
+    import io
+    opener = (lambda p: open(p, encoding="utf-8", errors="replace")) if str(path).endswith(".xml") else (lambda p: io.TextIOWrapper(bz2.BZ2File(p), encoding="utf-8", errors="replace"))
+    with opener(path) as f:
         buf = ""
         while True:
             try:
@@ -39,7 +41,7 @@ def parse_pages(path):
                 break
             if not chunk:
                 break
-            buf += chunk.decode("utf-8", "replace")
+            buf += chunk
             while "</page>" in buf:
                 page, buf = buf.split("</page>", 1)
                 if "<page>" in page:
