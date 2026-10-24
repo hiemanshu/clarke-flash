@@ -1,3 +1,14 @@
+**08:40 — machine crash 07:32 + recovery.** expSpan died at step 1540/5852 (mid epoch 0);
+checkpoint-1000 verified loads-strict; /tmp/opencode wiped (scripts + drop_test regenerated).
+RESTART decision: fresh restart over resume -- because max-steps does NOT retune the LR
+schedule (ends unannealed at ~1e-5: confound vs the fully annealed control chain), and a
+resume-to-cap saves only ~20 min vs a clean restart with identical exposure to controls.
+Old dir preserved as runs/expSpan-crashed (1.4GB, forensics; deletable anytime).
+Everything committed through 06b7cb2 survived (working tree was clean at crash time);
+all data files on home disk intact. Queue unchanged: expSpan battery ~10:55 verdict ->
+expMix (contract infusion) per rule -> CUAD readout ~13:45. Watch: tail -f
+runs/expSpan/train.jsonl, dashboard scripts/watch_training.sh (auto-discovers).
+
 **07:15 — Contract domain built (CUAD-shaped synth) + slash-date engine fix.**
 Diagnosis chain (journal 07:00): CUAD failure = header-semantics binding the training data
 never contains (every existing domain puts answers adjacent to cues). New `contract` domain:
