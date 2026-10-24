@@ -1,0 +1,75 @@
+{
+  "checkpoint": "runs/expMix-nospan/checkpoint-6852",
+  "data": "data/typed_test.jsonl",
+  "records": 400,
+  "metrics": {
+    "list-text": {
+      "n": 82,
+      "exact": 0.2,
+      "located": 0.2,
+      "null_correct": 0.9857,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0518
+    },
+    "number": {
+      "n": 1340,
+      "exact": 0.08,
+      "located": null,
+      "null_correct": 0.0,
+      "mean_confidence": 0.1205,
+      "brier_null": 0.0021,
+      "solvable_rate": 0.8145,
+      "exact_when_solvable": 0.0983
+    },
+    "text": {
+      "n": 2252,
+      "exact": 0.1625,
+      "located": 0.2146,
+      "null_correct": 0.8894,
+      "mean_confidence": 0.1585,
+      "brier_null": 0.0525
+    }
+  },
+  "by_domain": {
+    "typed-cuad": {
+      "list-text": {
+        "n": 82,
+        "exact": 0.2,
+        "located": 0.2,
+        "null_correct": 0.9857,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0518
+      }
+    },
+    "typed-drop": {
+      "number": {
+        "n": 1340,
+        "exact": 0.08,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.1205,
+        "brier_null": 0.0021,
+        "solvable_rate": 0.8145,
+        "exact_when_solvable": 0.0983
+      },
+      "text": {
+        "n": 344,
+        "exact": 0.1579,
+        "located": 0.193,
+        "null_correct": 0.0,
+        "mean_confidence": 0.1279,
+        "brier_null": 0.0034
+      }
+    },
+    "typed-squad2": {
+      "text": {
+        "n": 1908,
+        "exact": 0.1642,
+        "located": 0.2225,
+        "null_correct": 0.8894,
+        "mean_confidence": 0.1695,
+        "brier_null": 0.0614
+      }
+    }
+  }
+}

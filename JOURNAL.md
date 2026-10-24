@@ -1,3 +1,38 @@
+**15:10 — expMix VERDICT: pre-registered branch hit — in-domain contract learning PERFECT,
+real CUAD did NOT transfer (regressed). Plus: cuad_all.jsonl discovery (1,797 real records,
+never trained on). Escalating to user: real-corpus-mining (recommended) vs LoRA.**
+
+READ (init expFinal-8778 + 3,000 synthetic contract docs, 6,852 steps, clean run, guard
+never fired, val3 loss 4.40 best-ever):
+- contract_val (in-domain): text **.995**, number 1.000, list-text 1.000, date .983, null_ok
+  ~.99 across the board. Header-semantics binding is FULLY LEARNABLE by the current head —
+  the mechanism works. (Caveat: same generator train/val; measures capacity, not generalization.)
+- real_eval CUAD list-text: .156 -> **.097** — REGRESSION. n=6,068 fields = ~356 fewer exact
+  matches: statistically real, not noise. typed list-text .317->.200 same story; null_ok
+  improved (.865->.875 CUAD, .957->.986 typed). typed text .163/number .080: held.
+- val3 retention: text .902, number .876, date .964, list-number .361 — all fine.
+- pm-real: median rank 584 -> **71**, p@5 .011 -> .135 — pointing at the right REGION
+  improved 8x (rerank+agg+contract binding helped ranking!) but exact fell: the model binds
+  header->evidence correctly yet emits contract-shaped spans (short, header-adjacent) where
+  CUAD gold is long verbatim clause text. Shape mismatch, not a binding failure.
+INTERPRETATION: 3,000 synthetic docs outvoted the 61 real-shape docs ~50:1 and pulled span
+STYLE away from CUAD. Synthetic shapes teach the mechanism; they cannot teach real text.
+DISCOVERY (this forensic pass): data/cuad_all.jsonl = CUAD_v1.json (raw, on disk at
+data/raw/) converted via public.py:cuad_records() yesterday 16:47 — 1,797 real records from
+440 contracts, 41-field CUAD prompts, windowed 16k chars. NEVER entered any training mix
+(the 61 typed-cuad records came from a separate smaller earlier conversion; base names
+disjoint). Only 3 of 1,797 exact-id-overlap the 148 eval records -> drop those 3, leaving
+1,794 CLEAN real-shape records = 29x the 61 that produced the 6x jump.
+DECISION (user, per pre-registration): Option B real-corpus-mining is now nearly free —
+expReal = expMix stack + cuad_train(1,794) mixed with contract synth (real:contract
+~1:1.6 by count; ~+30% tokens/epoch, est 2.6-3.0h). Option A LoRA (rung 4) should stay
+evidence-gated BEHIND that: the CUAD wall is text-shape, and we've never once trained on
+real shape at scale. If expReal's transfer is strong -> LoRA may be unnecessary; if the
+real-shape curve flattens -> LoRA with evidence. expMix-6852 is the best init (binding
+mechanism intact, retention best-ever); expSpan-5852 (.156) is the CUAD fallback init.
+Staged: data/cuad_train.jsonl (1,794, eval-duplicates removed) + /tmp/opencode/exp_real.sh
+— NOT launched pending user's phase decision.
+
 **12:55 — expSpan verdict: span-rerank hypothesis FAILS on its own metric; the collateral
 fixes scored a real win. expMix (nospan, contract infusion) launched 12:53.**
 Controls expFinal. READ: squad2 text exact .169->.161, p@1 .255->.260 (noise);

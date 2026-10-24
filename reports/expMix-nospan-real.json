@@ -1,0 +1,37 @@
+{
+  "checkpoint": "runs/expMix-nospan/checkpoint-6852",
+  "data": "data/real_eval.jsonl",
+  "records": 168,
+  "metrics": {
+    "list-text": {
+      "n": 6088,
+      "exact": 0.0921,
+      "located": 0.0921,
+      "null_correct": 0.8746,
+      "mean_confidence": 0.0,
+      "brier_null": 0.1454
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 6068,
+        "exact": 0.0966,
+        "located": 0.0966,
+        "null_correct": 0.8746,
+        "mean_confidence": 0.0,
+        "brier_null": 0.1459
+      }
+    },
+    "keyphrase": {
+      "list-text": {
+        "n": 20,
+        "exact": 0.0255,
+        "located": 0.0255,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      }
+    }
+  }
+}
