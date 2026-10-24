@@ -1,3 +1,15 @@
+**06:45 — expFinal2 (+1ep extension, resume): synthetic keeps improving, real flat-to-up.
+NIGHT LOOP CLOSED, GPU idle.** typed text .169, number .085, list-text .136 (null_ok .871);
+val2 number **.859** (was .847), list-number .311 (partial recovery vs .295); CUAD exact .023
+(null_ok .837). Post-stack CUAD postmortem: see expFinal2-pm-real.json committed alongside.
+Trajectory summary for morning review: main4->expFinal2 = typed text 13.3->16.9 (+27%),
+number 4.6->8.5 (+85%), CUAD-null 0->.84, table number 2.5->79+. Best checkpoint:
+runs/expFinal/checkpoint-8778. OPEN for tomorrow: (1) list-number duplicate-atom confusion
+from agg pool (reranker scores min/max dupes of raw atoms; slot-context rerank design),
+(2) table TEXT .076 pointing (token-span reranker not built — pair nets only cover
+candidates), (3) CUAD p@1 post-stack (read pm-real), (4) the 80% bar on solvable subsets
+is NOT met on any real domain; decision needed: LoRA phase (rung 4) vs more data tiers.
+
 **05:45 — expFinal (full stack: rerank+attn+scatter+agg-atoms+fix5-loss) = best model; the
 synthetic number wall CRUMBLES. Decode IndexError fixed (padded-bin argmax, eval-crash
 forensics). +1ep extension running (resume from 5852, ~06:45 done).**
