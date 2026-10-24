@@ -243,6 +243,30 @@ def postmortem(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any
     return result
 
 
+def explode_field_groups(records: list[dict[str, Any]], size: int) -> list[dict[str, Any]]:
+    """Split each record into passes of <= size schema fields over the SAME state.
+
+    Diagnoses whether CUAD's pointing failure is 41-queries-competing through the
+    field decoder (vs long-document attention dilution): if grouped passes rank
+    the gold, the fix is serving-side (batch fields smaller), not retraining.
+    """
+    out: list[dict[str, Any]] = []
+    for rec in records:
+        names = list(rec["fields"])
+        if len(names) <= size:
+            out.append(rec)
+            continue
+        for i in range(0, len(names), size):
+            chunk = names[i:i + size]
+            sub = dict(rec)
+            sub["fields"] = {k: rec["fields"][k] for k in chunk}
+            answers = rec.get("answers") or {}
+            sub["answers"] = {k: (answers.get(k) or {"value": None}) for k in chunk}
+            sub["id"] = f"{rec['id']}#g{i // size}"
+            out.append(sub)
+    return out
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Evaluate a clarke-flash checkpoint")
     parser.add_argument("--backbone", default="Qwen/Qwen3.5-9B")
@@ -256,6 +280,8 @@ def main(argv: list[str] | None = None) -> None:
                         help="gold-rank diagnostics (p@1/3/5 by domain+kind) instead of scored eval")
     parser.add_argument("--agg-atoms", dest="agg_atoms", action="store_true",
                         help="virtual CSV column-aggregate atoms (must match training)")
+    parser.add_argument("--field-groups", dest="field_groups", type=int, default=0,
+                        help="serving-strategy diagnostic: evaluate in passes of N schema fields")
     args = parser.parse_args(argv)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -265,10 +291,13 @@ def main(argv: list[str] | None = None) -> None:
 
     dataset = RecordDataset([Path(args.data)])
     records = dataset.records[: args.limit]
+    if args.field_groups:
+        records = explode_field_groups(records, args.field_groups)
     if args.postmortem:
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "postmortem": postmortem(records, model, processor.tokenizer, device,
-                                           batch_size=args.batch_size, agg_atoms=args.agg_atoms)}
+                                           batch_size=args.batch_size, agg_atoms=args.agg_atoms,
+                                           max_records=len(records))}
     else:
         summary = evaluate(records, model, processor.tokenizer, device,
                            batch_size=args.batch_size, agg_atoms=args.agg_atoms)
