@@ -1,3 +1,13 @@
+**18:50 — Wiki volume/length audit (owner question): +174% records, +64% tokens.**
+Measured (250-record token samples per file): wiki = 40k recs @ med 160 tok / p95 857 tok —
+the SMALLEST family in the mix (train3-class); current mix 18.0M tok/epoch -> 29.5M with
+wiki. Table regime goes ~3% -> ~39% of real token mass. Batch-3 dial: prefer 1 full-epoch
+pass over shrinking the sample (wall-clock ~ tonight's run length, not 1.6x).
+OPERATIONAL FINDING re expReal2: acord p95 = 7,645 tokens = 93% of the 8,192 cap — some
+ACORD windows lose tail gold spans to truncation (located-metric accounts; no mid-run fix).
+If ACORD wins, the cheap next notch is splitting clause-windows or a wider cap. Logged for
+the verdict read.
+
 **18:35 — WIKI RECON ADDENDUM: batch-3 data FULLY BUILT (not just planned).**
 data/wiki_train.jsonl: 40,000 records (of 148k converted from shards 0-2; capped by seeded
 sample, 27,923 articles); data/wiki_test.jsonl: 6,196 = ALL of shard85 (916 articles,
