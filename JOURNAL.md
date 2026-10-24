@@ -1,3 +1,34 @@
+**12:55 — expSpan verdict: span-rerank hypothesis FAILS on its own metric; the collateral
+fixes scored a real win. expMix (nospan, contract infusion) launched 12:53.**
+Controls expFinal. READ: squad2 text exact .169->.161, p@1 .255->.260 (noise);
+drop text p@1 .263->.250. The start-only correction never moved top-1 selection ->
+Tier-B-for-text: museum shelf, with evidence. Mechanism note (why it likely failed):
+text tokens don't carry the value-features/identity signal that made candidate
+reranking work — [q;c;q*c;|q-c|] over (query, token) pairs may just be less
+informative than over (query, atom) pairs; recorded so a future attempt starts from
+here, not from hope.
+THE REAL HEADLINES (attribution: NOT the span net — list decode path never touched):
+(1) CUAD list-text exact .026 -> .156 (6.0x), null_ok .847 -> .865, typed list-text
+.100 -> .317: first-ever training inclusion of the 61 typed-cuad 41-field records
+(max_fields 32->48, journal 07:15 suspicion CONFIRMED at effect size — the CUAD
+regime was COLLATOR-starved, not just shape-starved).
+(2) val2 date .865 -> .964: slash-date regex fix behaved exactly as predicted.
+(3) val2 number .847 -> .887, list-text 1.000, duration 1.000 — retention solid with
+grad-accum; the 11:13->12:46 run was crash-free to step 5852 (guard armed, never fired).
+expMix nospan = rerank+attn+agg+fix5+grad-accum-2+guard-18, init expFinal-8778,
++contract_train(3000): THE CUAD experiment proper (contract docs teach header-
+semantics binding at scale; the 61-record inclusion effect showed regime presence
+matters 6x from ZERO contract data — with 3000, what's the ceiling?). Battery adds
+contract_val (in-domain) + pm-real. ETA: train ~15:00 (6852 steps @ ~64/min), verdict
+~15:45. Pre-registered reads: (a) contract_val text exact — does the model learn
+header binding in-domain at all; (b) real_eval CUAD .156 -> ?; (c) typed/cuad subset.
+If contract_val >> CUAD: binding learned but doesn't transfer -> real CUAD text
+granularity/vocab gap -> next lever is LoRA or real-corpus mining, and the morning's
+field-groups/inside-clause pair said which. If both jump: scale-the-shape wins,
+plan more contract varieties (multi-paragraph clauses, more null schemas).
+Note: expSpan-5852 kept as best CUAD checkpoint so far (runs/expSpan/checkpoint-5852)
+— if expMix somehow regresses CUAD, fallback init is available.
+
 **12:02 — ATTEMPT 6 CONFIRMED THE FIX: start-only span rerank sails through attempt-5's
 blowup window. val3 span: 0.38/0.47/0.48/0.42/0.42 at steps 500..2500 — attempt 5 read
 0.40/0.64/2.55/3.38/9.63 at the same checkpoints and expFinal sits at 0.38-0.41. Diverge

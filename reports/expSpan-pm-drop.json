@@ -1,0 +1,25 @@
+{
+  "checkpoint": "runs/expSpan/checkpoint-5852",
+  "data": "/tmp/opencode/drop_test.jsonl",
+  "records": 96,
+  "postmortem": {
+    "typed-drop": {
+      "number": {
+        "scored": 541,
+        "unrankable": 108,
+        "p@1": 0.272,
+        "p@3": 0.53,
+        "p@5": 0.686,
+        "median_rank": 2
+      },
+      "text": {
+        "scored": 160,
+        "unrankable": 0,
+        "p@1": 0.25,
+        "p@3": 0.531,
+        "p@5": 0.631,
+        "median_rank": 2
+      }
+    }
+  }
+}
