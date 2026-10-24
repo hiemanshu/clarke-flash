@@ -1,3 +1,24 @@
+**21:38 — UNATTENDED OVERNIGHT PLAN ARMED (owner to bed; 64GB RAM confirmed ample).**
+batch3_chain.sh (pid 3689224) sequence, all logged to /tmp/opencode/batch3.log:
+ 1. wait census 19/19 (max 100 min) -> aggregate_census.py into the log
+ 2. canonical mine: 4 proven families (infobox/shortdesc/categories/hatnotes), 6-way,
+    manifest-skips current entries, nice 12
+ 3. assemble wikiib view: STREAMING assemble.py (the old load-all would have needed
+    ~20GB+; owner confirmed 64GB total anyway), salted gate 4/1000 ~ 12k train recs,
+    eval gate 2/1000 ~ 1k recs
+ 4. wait for expReal2's WHOLE chain ("EXP REAL2 DONE" in expreal2.log + zero clarke
+    processes) - the battery writes reports one-by-one and holds the GPU, so waiting on
+    real.json alone would start training into a VRAM collision (caught pre-launch)
+ 5. PRE-REGISTERED init rule: expReal2-final if CUAD >= .097, else expSpan-5852 (best
+    CUAD .156) to protect the acceptance metric; expMix-6852 if reports missing
+ 6. train 1 epoch, 87.7k-record mix (base 23k + wiki 40k + hybrid 12.8k + wikiib ~12k),
+    bs6 accum2, diverge-stop 18. Est ~58M tokens ~ 7-8h.
+ 7. battery: real/typed/acord_test/wiki_test/wiki_hybrid_test/contract_val/val3/pm-real
+Morning deliverable: batch3 verdict (does web-scale real data move CUAD/typed?) +
+in-domain wiki reads + full 19-shard census table. RAM peaks fine. Disk 418G free.
+Next unattended opportunity: build+validate the in-prose wikitable parser (CPU) while
+batch3 trains -> batch 4 = batch3 ckpt + tables (pre-registered delta experiment).
+
 **21:15 — COMMONS DUMP EXPLORED (owner: anything useful? mirrors OK).** Verdict:
 the wikibase/commonswiki dump (57GB json / 93GB ttl / 146GB nt) is MediaInfo RDF —
 post-extraction structured statements (P571 inception, P275 license, Q-item refs). NO prose
