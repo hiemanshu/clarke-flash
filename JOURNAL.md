@@ -1,3 +1,15 @@
+**12:02 — ATTEMPT 6 CONFIRMED THE FIX: start-only span rerank sails through attempt-5's
+blowup window. val3 span: 0.38/0.47/0.48/0.42/0.42 at steps 500..2500 — attempt 5 read
+0.40/0.64/2.55/3.38/9.63 at the same checkpoints and expFinal sits at 0.38-0.41. Diverge
+guard silent (0 hits). cand bucket 0.96->0.76 descending normally. Run at step ~2920
+epoch 0, 8.7 rec/s (accum+guard cost nothing), ETA training ~12:50, battery verdict
+~13:10, then expMix per rule (span ON unless attempt-6 eval contradicts). The span
+hypothesis is now alive on its own merits: if the battery shows squad2 p@1 .26 -> ~.35+
+with span held, Tier-B-for-text graduates; if not, museum shelf with evidence, and
+expMix runs nospan.
+(journal hygiene note: the 11:15 entry got double-prepended by a reused entry file —
+deduped here; lesson: write a fresh entry file per journal append.)
+
 **11:15 — attempt 5 SPAN DIVERGENCE: caught by val curves, root-caused, fixed, attempt 6 launched.**
 Symptom: val3 healthy through step 1000 (span 0.40 -> 0.64), then monotone blowup: 2.55/3.38/
 9.63/12.9/17.7 -> train span bucket exploding (18 -> 94 at step 4940). Differential with attempt 4
