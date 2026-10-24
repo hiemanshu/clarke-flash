@@ -9,8 +9,8 @@ TITLE="${1:-Clarke}"; BODY="${2:-}"; URG="${3:-normal}"
 CFG="$HOME/.config/clarke/notify.env"
 [ -f "$CFG" ] && . "$CFG"
 sent=0
-if [ -n "${SIGNAL_TO:-}" ] && command -v signal-cli >/dev/null 2>&1; then
-  signal-cli -o "$HOME/.local/share/signal-cli" send -m "$TITLE: $BODY" "$SIGNAL_TO" >/dev/null 2>&1 && sent=1
+if [ -n "${SIGNAL_ACCOUNT:-}" ] && command -v signal-cli >/dev/null 2>&1; then
+  signal-cli -a "$SIGNAL_ACCOUNT" send --note-to-self -m "$TITLE: $BODY" >/dev/null 2>&1 && sent=1
 fi
 if [ "$sent" -eq 0 ] && [ -n "${NTFY_TOPIC:-}" ]; then
   curl -s --max-time 10 -H "Title: $TITLE" -H "Priority: ${NTFY_PRIORITY:-default}" \
