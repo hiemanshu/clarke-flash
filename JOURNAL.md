@@ -1,4 +1,19 @@
-**18:50 — Wiki volume/length audit (owner question): +174% records, +64% tokens.**
+**18:30 — Owner-added WikiTables-WithLinks.zip AUDITED, CONVERTED, FOLDED INTO batch-3.**
+HybridQA crawl (2021): 15,314 tables / 9,158 pages, [text,[hyperlinks]] cells, 100% parse.
+Net-new vs staged wiki pool: 9,062/9,158 pages (99%!). scripts/adapt_hybrid.py (committed):
+same field families as adapt_wiki (row lookup/row_count/sum/argmax + 2 honest nulls), pipe-
+rendered verbatim (crawler tokenization "Washington , D.C" harmless - spans are into OUR
+state). Output: data/wiki_hybrid_train.jsonl 12,763 recs (null .39, mean 547 tok, 7.0M
+tok/epoch) + data/wiki_hybrid_test.jsonl 2,512 (PAGE-level shuffled split). request_tok
+(hyperlink targets) NOT usable: answers not verbatim-in-state, wrong API shape - logged.
+AUDITS ZERO: span mismatches 0/15,275; hybrid∩wiki_test pages 0; wiki_test content leak
+into hybrid_train 0/6,196; typed_test prose 0/744; 5 overlap pages dropped at convert.
+BATCH-3 FINAL: mix 75,734 recs / 36.5M tok/epoch -> ONE epoch = ~tonight's full 2-epoch
+run wall-clock (validates the dial with measured numbers, not hope). Eval side now 8,708
+table holdout recs across TWO crawl eras (2021+2024) - style-diversity read: if scores
+match, the model learned table-reading, not one crawl's formatting.
+
+**18:26 — Wiki volume/length audit (owner question): +174% records, +64% tokens.**
 Measured (250-record token samples per file): wiki = 40k recs @ med 160 tok / p95 857 tok —
 the SMALLEST family in the mix (train3-class); current mix 18.0M tok/epoch -> 29.5M with
 wiki. Table regime goes ~3% -> ~39% of real token mass. Batch-3 dial: prefer 1 full-epoch
@@ -8,7 +23,7 @@ ACORD windows lose tail gold spans to truncation (located-metric accounts; no mi
 If ACORD wins, the cheap next notch is splitting clause-windows or a wider cap. Logged for
 the verdict read.
 
-**18:35 — WIKI RECON ADDENDUM: batch-3 data FULLY BUILT (not just planned).**
+**18:24 — WIKI RECON ADDENDUM: batch-3 data FULLY BUILT (not just planned).**
 data/wiki_train.jsonl: 40,000 records (of 148k converted from shards 0-2; capped by seeded
 sample, 27,923 articles); data/wiki_test.jsonl: 6,196 = ALL of shard85 (916 articles,
 FINAL disjointness verified True on shipped files; 4 cross-shard duplicate articles
