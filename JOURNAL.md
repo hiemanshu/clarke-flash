@@ -1,3 +1,16 @@
+**09:52 — attempt 4 died at step 620 (09:46:12): expandable_segments mapping OOM — physical VRAM
+genuinely exhausted by a bs6 8k-token spike. Machine SURVIVED (solo-tenant fix worked as
+designed: process dies now, not the box).** Diagnosis: at bs6 the trainer needs more than the
+card's ceiling on worst-case batches regardless of desktop. Environment levers exhausted ->
+structural fix implemented: --grad-accum (record-count-weighted micro-batch accumulation;
+micro 3 x2 == effective bs6 mathematically; controls keep steps_per_epoch=2926 and LR schedule
+identical; val loader stays bs6 (no_grad, low peak); accum=1 reproduces the old path exactly).
+GPU smoke: steps tick, 4 missing tensors on init-head = span_pair only ✓, checkpoint-4 saved,
+schedule math verified. Attempt 5 launched 09:52 with --grad-accum 2. Expect peak VRAM ~4-5GB
+lower; if a process still dies, that would surprise the math — next lever is micro 3x1
+(bs3 effective, documented deviation) rather than more knobs. Also note: attempt-4 train.jsonl
+preserved in runs/expSpan-crashed/ as train-attempt4.jsonl.
+
 **09:35 — crash autopsies COMPLETE + fix landed (user moved display to iGPU).**
 Reconstruction from persistent journals + last(1) boot table:
 - 07:32 & 08:40: TRAINING PROCESS died (allocator OOM, classic mode: fragmentation,

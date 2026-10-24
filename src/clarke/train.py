@@ -70,16 +70,21 @@ class Trainer:
             self._load_checkpoint(Path(args.resume))
 
         tokenizer = self.processor.tokenizer
+        accum = max(1, args.grad_accum)
+        self.accum = accum
+        self.micro_batch = max(1, args.batch_size // accum)
         self.train_loader = build_loader(RecordDataset([Path(p) for p in args.train]),
-                                         tokenizer, args.batch_size, True,
+                                         tokenizer, self.micro_batch, True,
                                          args.workers, args.max_length,
                                          agg_atoms=args.agg_atoms)
         self.val_loader = build_loader(RecordDataset([Path(args.val)]), tokenizer,
                                        args.batch_size, False, args.workers, args.max_length,
                                        agg_atoms=args.agg_atoms) \
             if args.val else None
-        # schedule spans from the RESUMED step, not from zero
-        self.total_steps = max(self.step + args.epochs * len(self.train_loader), 1)
+        # schedule spans from the RESUMED step, not from zero; the loader now
+        # yields MICRO batches, optimizer steps are one per ACCUM group
+        steps_per_epoch = max(1, -(-len(self.train_loader) // accum))
+        self.total_steps = max(self.step + args.epochs * steps_per_epoch, 1)
 
     # -- plumbing -----------------------------------------------------------
 
@@ -113,7 +118,7 @@ class Trainer:
 
     # -- steps ---------------------------------------------------------------
 
-    def training_step(self, batch: dict[str, Any]) -> dict[str, float]:
+    def training_step(self, batch: dict[str, Any], scale: float = 1.0) -> dict[str, float]:
         records = batch["records"]
         targets = batch["targets"]
         model_batch = {
@@ -125,7 +130,10 @@ class Trainer:
         report = self.head.compute_loss(outputs, records, targets)
         metrics = {key: float(value.detach() if torch.is_tensor(value) else value)
                    for key, value in report.items()}
-        report["loss"].backward()
+        # scale = this micro-batch's share of the accumulated group (record-
+        # weighted), so K accumulated backwards == one plain backward of the
+        # full effective batch, even with ragged final groups
+        (report["loss"] * scale).backward()
         return metrics
 
     @torch.no_grad()
@@ -153,23 +161,41 @@ class Trainer:
 
     def run(self) -> None:
         args = self.args
-        self.log(f"steps_per_epoch={len(self.train_loader)} epochs={args.epochs}")
+        accum = self.accum
+        steps_per_epoch = max(1, -(-len(self.train_loader) // accum))
+        self.log(f"steps_per_epoch={steps_per_epoch} epochs={args.epochs} "
+                 f"(effective_bs={args.batch_size} micro={self.micro_batch} accum={accum})")
         optimizer = self.optimizer
         window_start = time.time()
-        window_batches = 0
+        window_records = 0
         for epoch in range(args.epochs):
-            for batch in self.train_loader:
-                if batch is None:
-                    continue
+            iterator = iter(self.train_loader)
+            while True:
+                micro_batches: list[dict[str, Any]] = []
+                while len(micro_batches) < accum:
+                    try:
+                        batch = next(iterator)
+                    except StopIteration:
+                        break
+                    if batch is not None:
+                        micro_batches.append(batch)
+                if not micro_batches:
+                    break
+                n_recs = sum(len(b["records"]) for b in micro_batches)
                 lr = cosine_lr(self.step, self.total_steps, args.warmup, args.lr)
-                for group in optimizer.param_groups:
-                    group["lr"] = lr
+                for param_group in optimizer.param_groups:
+                    param_group["lr"] = lr
                 optimizer.zero_grad(set_to_none=True)
-                metrics = self.training_step(batch)
+                metrics: dict[str, float] = {}
+                for batch in micro_batches:
+                    scale = len(batch["records"]) / max(n_recs, 1)
+                    step_metrics = self.training_step(batch, scale=scale)
+                    for key, value in step_metrics.items():
+                        metrics[key] = metrics.get(key, 0.0) + value * scale
+                    window_records += len(batch["records"])
                 torch.nn.utils.clip_grad_norm_(self.head.parameters(), args.clip)
                 optimizer.step()
                 self.step += 1
-                window_batches += 1
 
                 if args.max_steps and self.step >= args.max_steps:
                     directory = self.save_checkpoint()
@@ -177,16 +203,17 @@ class Trainer:
                     return
                 if self.step % args.log_every == 0:
                     elapsed = time.time() - window_start
-                    records_per_second = window_batches * args.batch_size / max(elapsed, 1e-6)
+                    records_per_second = window_records / max(elapsed, 1e-6)
                     gpu_gb = torch.cuda.memory_allocated() / 2**30 if torch.cuda.is_available() else 0.0
                     self._write({"step": self.step, "epoch": epoch, "lr": round(lr, 7),
                                  "total": self.total_steps, "bs": args.batch_size,
+                                 "accum": accum,
                                  "gpu_gb": round(gpu_gb, 1), "recs_per_s": round(records_per_second, 2),
                                  **{key: round(value, 4) for key, value in metrics.items()}})
                     self.log(f"step {self.step}/{self.total_steps} loss={metrics['loss']:.3f} "
                              f"({records_per_second:.2f} rec/s, {gpu_gb:.1f} GB) "
                              f"-> {self.log_path}")
-                    window_start, window_batches = time.time(), 0
+                    window_start, window_records = time.time(), 0
 
                 if self.step % args.save_every == 0:
                     directory = self.save_checkpoint()
@@ -208,6 +235,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--val", default=None, help="validation JSONL path")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--grad-accum", dest="grad_accum", type=int, default=1,
+                        help="accumulate N micro-batches (batch-size/N each) into one step")
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--warmup", type=int, default=500)
