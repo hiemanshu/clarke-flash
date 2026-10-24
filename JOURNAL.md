@@ -1,3 +1,19 @@
+**19:20 — DOWNLOAD FLEET INCIDENT (owner spotted p13033641 frozen at .part): dead-curl orphans.**
+Root cause: original driver = xargs -P3 with `curl && mv`; two curls died mid-transfer (no
+--speed-time/low-speed guards), so mv never ran AND the shards were already popped from the
+queue -> zombies nobody retries. My first supervisor (v1) compounded it: on failed `-C -`
+resume it fell back to a fresh curl writing the SAME .part path -> truncated my best orphan
+(97% done, 2.5GB) to a 169-byte stub before I could kill v1. Lesson filed: resumable fetches
+must never fall back onto a big partial (guard added: fallback only if part < 1MB), and
+pkill patterns self-match unless bracketed - THIRD time this week; every pattern now [h]eal-style.
+v2 supervisor (pid 2879659): cap 6 concurrent healcurls, 90s-byte-stall detection (kills
+frozen workers incl. xargs survivors' shards), size-verified renames, corrupt-final sweep.
+3 xargs survivors kept running (2 completed since: 7/19 landed ~19:19; the two truncated
+orphans re-fetching from 169B). ETA: downloads done ~20:10 (~28GB left @ ~10-12 MB/s
+aggregate), census trails serially (alive, 2 shards done), infobox gate still churning
+(~900MB normalized blob - slower than expected; will report). Total incident cost: ~4GB
+bandwidth + ~15 min, zero correctness loss (size-verification everywhere).
+
 **18:55 — OWNER DIRECTIVE: download ALL enwiki shards + extract every human-curated type.
 Two CPU fleets launched (GPU untouched, expReal2 at ~100%):**
 (1) DOWNLOAD: 18 remaining shards (~45 GB) via 3-parallel nice'd curl, .part->rename atomic.
