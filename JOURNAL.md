@@ -1,3 +1,23 @@
+**07:15 — Contract domain built (CUAD-shaped synth) + slash-date engine fix.**
+Diagnosis chain (journal 07:00): CUAD failure = header-semantics binding the training data
+never contains (every existing domain puts answers adjacent to cues). New `contract` domain:
+5-8k char docs, 20-31 schema fields, ~38% null, paragraph-grained text gold below matching
+numbered headers, NEAR-MISS decoy sections ("Termination for Cause" vs requested
+"termination_for_convenience"), money/date/duration atoms per clause, list<text> addresses.
+Collator max_fields 32->48 (CUAD's 41-field records were silently skipped in training:
+only 61/9553 typed_train records — the CUAD slice itself was training-starved at the
+COLLATOR level, not just the shape level). Date engine: 2-digit slash dates (mm/dd/yy,
+1 style in 5) matched no DATE_RES regex -> date solvability ceiling was ~80% THIS whole
+time; fixed with (?!\d) guard against phantom prefix matches. Contract reachability:
+text/lists/number/duration 100%, date 98.2% (rest genuinely ambiguous).
+NOTE for interpreting expSpan battery: training (06:50) imported pre-slash-fix pools;
+its evals (post-fix) will see ~20% new date atoms -> expect small date-exact wobble,
+not regression. Next run pre-registered (fires when expSpan battery done ~08:50):
+expMix = +contract_train(3000) into the mix, 2ep, lr 1e-4, --rerank --query-pool attn
+--agg-atoms; --span-rerank INCLUDED iff expSpan improves typed text exact OR squad2/drop
+pm p@1 over expFinal (controls: expFinal-* reports); init = expSpan-best if span won,
+else expFinal-8778. CUAD list-text exact is the headline readout (was .023/.026).
+
 **07:00 — CUAD diagnostic battery: the wall is QUERY SEMANTICS, not competition, not granularity.**
 (1) --field-groups 5/8/16 (serving-side passes over same state): p@5 stays .011-.022, median
 ~600-750 -> 41-query competition REFUTED. null_ok DROPS .82->.42 when schema shrinks (null head

@@ -22,6 +22,7 @@ MONTH = (r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:ril)?|May|Jun(?:e)?|Ju
 DATE_RES = (
     re.compile(r"\d{4}-\d{2}-\d{2}"),
     re.compile(r"\d{1,2}/\d{1,2}/\d{4}"),
+    re.compile(r"\d{1,2}/\d{1,2}/\d{2}(?!\d)"),
     re.compile(rf"{MONTH}\.?\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+\d{{4}}"),
     re.compile(rf"\d{{1,2}}(?:st|nd|rd|th)?\s+{MONTH}\.?,?\s+\d{{4}}"),
 )

@@ -23,6 +23,8 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
+from .candidates import parse_date
+
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 FIRST_NAMES = ["Dana", "Priya", "Marcus", "Yusuf", "Elena", "Jonah", "Amara", "Tomas", "Ingrid",
                "Leo", "Maya", "Owen", "Sofia", "Raj", "Nina", "Felix", "Zara", "Hugo"]
@@ -517,6 +519,232 @@ def forecast_record(rng: random.Random, index: int) -> dict[str, Any]:
     return make_record(builder, fields, answers, "forecast", index, rng)
 
 
+# --- contract domain (CUAD-shaped) ----------------------------------------
+# Field names match section headers; answers sit below (sometimes several
+# paragraphs below) the matching header; NEAR-MISS decoy sections carry
+# similar titles but different content; ~40% of requested fields are absent;
+# documents are 5-12k chars with 20-40 schema fields. This is the data shape
+# every existing domain lacks: the binding task is header SEMANTICS, not
+# adjacency (journal 07:00 diagnosis).
+
+_P = "paragraph"; _M = "money"; _D = "date"; _U = "duration"; _L = "list-addr"
+
+CLAUSE_KINDS: dict[str, str] = {
+    "confidentiality_obligations": _P, "assignment_restriction": _P,
+    "audit_rights": _P, "warranty_disclaimer": _P, "indemnification_scope": _P,
+    "non_solicitation_terms": _P, "force_majeure_carveout": _P, "ip_ownership": _P,
+    "late_fee_amount": _M, "liquidated_damages_cap": _M,
+    "insurance_minimum_coverage": _M, "early_termination_fee": _M,
+    "renewal_date": _D, "notice_deadline": _D,
+    "cure_period": _U, "data_retention_period": _U,
+    "notice_addresses": _L,
+}
+
+DECOY_TITLES = ["Termination for Cause", "Confidentiality Exclusions",
+                "Assignment and Subcontracting", "Audit Committee Procedures",
+                "Limited Product Warranty", "Indemnification Procedures",
+                "Solicitation of Employees", "Payment Mechanics",
+                "Insurance Certificates", "Records Retention Notices",
+                "Cure of Minor Breaches", "Force Majeure Definitions"]
+
+_FILLERS = [
+    "Each party shall act reasonably and in good faith under this Section.",
+    "No waiver of any breach shall constitute a waiver of any subsequent breach.",
+    "The parties acknowledge that damages may be an inadequate remedy hereunder.",
+    "Any dispute arising under this Section shall follow the procedures in Article 14.",
+    "This Section survives termination of the Agreement to the extent necessary.",
+    "The exercise of rights hereunder is not exclusive of any other rights.",
+]
+
+_JURISDICTIONS = ["the State of Delaware", "New York", "the Commonwealth of Massachusetts",
+                  "the Province of Ontario", "England and Wales"]
+
+
+def _section_body(rng: random.Random, key: str, kind: str, base: date):
+    """Returns (full_section_text, answer_registration) where
+    answer_registration is (field_key, gold_text, kind) or None for pre-header
+    filler paragraphs (answer lands BELOW the header sometimes)."""
+    pre = [rng.choice(_FILLERS) for _ in range(rng.randint(0, 2))]
+    if kind == _P:
+        title = key.replace("_", " ").lower()
+        ans = (f"Neither party may transfer or exercise rights regarding the {title} "
+               f"without prior written consent of the other party, except that either "
+               f"party may disclose the {title} to its professional advisors bound by "
+               f"equivalent obligations, and any permitted transfer binds successors.")
+        body = " ".join(pre + [ans])
+        return body, (key, ans, _P)
+    if kind == _M:
+        amount = round(rng.uniform(500, 90_000), 2)
+        text = format_money(rng, amount)
+        noun = key.replace("_", " ")
+        body = " ".join(pre + [f"Except as stated elsewhere, {noun} is agreed as follows: "
+                               f"upon any qualifying event, a charge equal to {text} shall apply. "
+                               f"The parties note the schedule in Exhibit B "
+                               f"(reference {rng.randint(2015, 2025)}-{rng.randint(100, 999)})."])
+        return body, (key, text, _M)
+    if kind == _D:
+        d = base + timedelta(days=rng.randint(90, 900))
+        text = format_date(rng, d)
+        noun = key.replace("_", " ")
+        body = " ".join(pre + [f"The {noun} is fixed at {text}, unless extended in writing."])
+        return body, (key, text, _D)
+    if kind == _U:
+        unit = "days" if key == "cure_period" else "months"
+        n = rng.choice([10, 15, 30, 45, 60, 90]) if unit == "days" else rng.choice([6, 12, 24, 36])
+        noun = key.replace("_", " ")
+        body = " ".join(pre + [f"A party in breach shall have {n} {unit} to cure after written "
+                               f"notice, and the {noun} shall not be shortened without consent."])
+        return body, (key, f"{n} {unit}", _U)
+    if kind == _L:
+        addr = f"{rng.choice(COMPANIES)}, {rng.randint(100, 9999)} {rng.choice(['Industrial Way', 'Market Street', 'Harbor Blvd', 'Queen St W'])}"
+        body = f"Notices under this Agreement: {addr}."
+        return body, (key, addr, _L)
+    raise ValueError(kind)
+
+
+def contract(rng: random.Random, index: int) -> dict[str, Any]:
+    builder = Builder()
+    base = date(2026, rng.randint(1, 10), rng.randint(1, 27))
+    client = rng.choice(COMPANIES)
+    vendor = rng.choice([c for c in COMPANIES if c != client])
+    builder.plain(f"MASTER SERVICES AGREEMENT\n\n")
+    builder.value("contract_parties", f"between {client} and {vendor}")
+    builder.plain(" dated ")
+    builder.value("effective_date", format_date(rng, base))
+    builder.plain(".\n\n")
+
+    keys = rng.sample(list(CLAUSE_KINDS), k=rng.randint(7, 12))
+    present = [k for k in keys if CLAUSE_KINDS[k] != _L or rng.random() < 0.7]
+    rng.shuffle(present)
+    fields: dict[str, Any] = {}
+    answers: dict[str, Any] = {}
+    addr_items: list[str] = []
+
+    n = 0
+    for key in present:
+        kind = CLAUSE_KINDS[key]
+        n += 1
+        title_style = rng.choice(["title", "upper", "snake"])
+        title = key.replace("_", " ")
+        if title_style == "title":
+            title = title.title()
+        elif title_style == "upper":
+            title = title.upper()
+        else:
+            title = key.upper()
+        builder.plain(f"{n}. {title}\n")
+        body, (ans_key, ans_text, ans_kind) = _section_body(rng, key, kind, base)
+        if ans_kind == _L:
+            builder.plain(body)
+            builder.plain("\n\n")
+            addr_items.append(ans_text)
+            continue
+        # register answer span inside the body
+        pos = body.rfind(ans_text)
+        assert pos >= 0
+        head_part, tail = body[:pos], body[pos + len(ans_text):]
+        parts = (head_part, ans_text, tail)
+        for p_i, part in enumerate(parts):
+            if part:
+                if p_i == 1:
+                    builder.value(ans_key, part)
+                else:
+                    builder.plain(part)
+        builder.plain("\n\n")
+
+    # decoy sections with near-miss titles (no registered answers)
+    for dtitle in rng.sample(DECOY_TITLES, k=rng.randint(2, 5)):
+        n += 1
+        builder.plain(f"{n}. {dtitle}\n")
+        builder.plain(" ".join(rng.sample(_FILLERS, k=2) +
+                               [f"Fees under this Section accrue at {format_money(rng, round(rng.uniform(100, 5000), 2))} per event."]))
+        builder.plain("\n\n")
+
+    if "notice_addresses" in present and addr_items:
+        # repeat + extra addresses in the closing section -> list<text> gold
+        n += 1
+        builder.plain(f"{n}. Notices for Service of Process\n")
+        extra = (f"{rng.choice(COMPANIES)}, {rng.randint(100, 9999)} "
+                 f"{rng.choice(['Broadway', 'King Ave', 'Cann Street'])}")
+        items = (addr_items + [extra])[:3]
+        for slot, item in enumerate(items):
+            if slot:
+                builder.plain("\n")
+            builder.value("notice_addresses", item, item=True, index=slot)
+        builder.plain("\n\n")
+        answers["notice_addresses"] = {"value": list(items)}
+
+    # governing jurisdiction text (short span, deep in final article)
+    n += 1
+    builder.plain(f"{n}. Governing Law\nThis Agreement is governed by the laws of ")
+    builder.value("governing_law", rng.choice(_JURISDICTIONS))
+    builder.plain(", without regard to conflict-of-laws principles.\n")
+
+    state = builder.text()
+    # assemble fields/answers from registered spans
+    for key in present:
+        kind = CLAUSE_KINDS[key]
+        if key == "notice_addresses":
+            continue
+        t = {"paragraph": "text", "money": "number", "date": "date",
+             "duration": "duration"}[kind]
+        spec: dict[str, Any] = {"type": t, "instructions": _clause_instruction(rng, key)}
+        if kind == _M:
+            spec.update({"unit": "USD", "decimals": 2})
+        if kind == _U:
+            spec.update({"unit": "days" if key == "cure_period" else "months",
+                         "integer": True})
+        fields[key] = spec
+        if key in builder.spans:
+            s, e = builder.spans[key]
+            gold_val = state[s:e]
+            if kind == _M:
+                answers[key] = {"value": parse_money_text(gold_val), "span": [s, e]}
+            elif kind == _D:
+                answers[key] = {"value": parse_date(gold_val), "span": [s, e]}
+            elif kind == _U:
+                answers[key] = {"value": float(gold_val.split()[0]), "span": [s, e]}
+            else:
+                answers[key] = {"value": gold_val, "span": [s, e]}
+    fields["contract_parties"] = {"type": "text", "instructions": "the parties to this agreement"}
+    fields["effective_date"] = {"type": "date", "instructions": "date this agreement takes effect"}
+    fields["governing_law"] = {"type": "text", "instructions": "which law governs the agreement"}
+    for k in ("contract_parties", "effective_date", "governing_law"):
+        s, e = builder.spans[k]
+        answers[k] = {"value": state[s:e], "span": [s, e]}
+    answers["effective_date"]["value"] = base.isoformat()
+    if addr_items:
+        fields["notice_addresses"] = {"type": "list", "items": "text",
+                                      "instructions": "addresses for official notices"}
+    # absent fields: request things not in the document (~40% of schema)
+    pool = [k for k in CLAUSE_KINDS if k not in fields]
+    for key in rng.sample(pool, k=min(len(pool), rng.randint(8, 16))):
+        kind = CLAUSE_KINDS[key]
+        t = {"paragraph": "text", "money": "number", "date": "date",
+             "duration": "duration", "list-addr": "list"}[kind]
+        spec = {"type": t, "instructions": _clause_instruction(rng, key)}
+        if kind == "money":
+            spec.update({"unit": "USD", "decimals": 2})
+        if kind == "list-addr":
+            spec["items"] = "text"
+        fields[key] = spec
+        answers.setdefault(key, {"value": None})
+    return make_record(builder, fields, answers, "contract", index, rng)
+
+
+def parse_money_text(text: str) -> float | None:
+    try:
+        return float(text.replace("$", "").replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _clause_instruction(rng: random.Random, key: str) -> str:
+    noun = key.replace("_", " ")
+    return rng.choice([f"the clause text on {noun}", f"state the {noun} terms",
+                       f"what does the agreement say about {noun}", f"{noun}, if present"])
+
+
 DOMAINS = {
     "support": support_email,
     "invoice": invoice,
@@ -524,6 +752,7 @@ DOMAINS = {
     "table": table_record,
     "comps": comparables,
     "forecast": forecast_record,
+    "contract": contract,
 }
 
 CUE_RE = re.compile(r"^([A-Za-z][A-Za-z /\-]{2,30}): ?(.+)$")

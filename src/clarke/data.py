@@ -37,7 +37,7 @@ class RecordDataset(torch.utils.data.Dataset):
 class Collator:
     """Encode + build targets in workers; pad into model batches."""
 
-    def __init__(self, tokenizer: Any, max_length: int = 8192, max_fields: int = 32,
+    def __init__(self, tokenizer: Any, max_length: int = 8192, max_fields: int = 48,
                  agg_atoms: bool = False):
         self.tokenizer = tokenizer
         self.max_length = max_length
