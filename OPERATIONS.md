@@ -17,7 +17,10 @@ then PLAN.md.
    sample sizes; failed hypotheses are shelved openly, not quietly dropped.
 4. **Ask before destructive/risky actions** (deletes of user work, system
    packages, killing user processes, network sends). Downloads of public
-   datasets the owner pointed at are pre-authorized.
+   datasets the owner pointed at are pre-authorized. **NEW (2026-10-24 21:45):
+   no new binary/toolchain/package installs without an explicit owner go-ahead
+   AND source verification - a feasibility question is never permission; pip
+   libs inside the uv project are the only pre-authorised class.**
 5. **GPU discipline:** solo tenant, PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,
    commit before every GPU run, logs under /tmp/opencode/, ETA stated up front,
    gaming-pause protocol = stop at next checkpoint when owner asks.
