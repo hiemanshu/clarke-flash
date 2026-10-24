@@ -1,3 +1,25 @@
+**18:55 — OWNER DIRECTIVE: download ALL enwiki shards + extract every human-curated type.
+Two CPU fleets launched (GPU untouched, expReal2 at ~100%):**
+(1) DOWNLOAD: 18 remaining shards (~45 GB) via 3-parallel nice'd curl, .part->rename atomic.
+    Started 18:47; shard1 (2.7 GB) already local. Watch: /tmp/opencode/enwiki_dl.log;
+    sentinel /tmp/opencode/enwiki_all_done; ETA ~2h at observed ~8 MB/s aggregate.
+(2) CENSUS: scripts/scan_enwiki_types.py — full inventory of human-curated data types per
+    shard: infobox(+types), shortdesc, categories, hatnotes, wikitables, cites, images, math,
+    IPA, life-date templates, succession, flags, sections, bullets, redirects, disambigs.
+    Driver waits for each shard as it lands, appends reports/enwiki_census.jsonl.
+    Watch: tail -f /tmp/opencode/enwiki_census.log. ETA: finishes ~40-60 min after last shard.
+(3) CONVERTER v2 (scripts/adapt_infobox.py) extended beyond infobox: short_description
+    (present->text span, ABSENT on 57% pages -> NATIVE null), categories (list<text> of
+    curated classifications), hatnotes, infobox params + cross-type nulls from global vocab
+    pool (CUAD-shaped mostly-null mixed schema). Field-budget overflow fixed (negative-slice
+    bug). Testing on shard1 now; FULL-corpus run (cap 180k recs, eval 1/6 by url-hash) after
+    all shards land. Leak gates per protocol: wiki_test url-hash drop, typed_test prose
+    prefix scan (0/744 on shard1 - BUT prose states raise squad2-overlap risk: MUST re-run
+    at final assembly; 2026-10-01 dump vs old squad2 revisions may byte-match - drop hits).
+Decision framing for the owner once census reports: candidate regimes to pick =
+infobox-binding / shortdesc / categories-list / wikitables-in-prose / succession boxes /
+date templates; census coverage x sample quality decides.
+
 **18:30 — Owner-added WikiTables-WithLinks.zip AUDITED, CONVERTED, FOLDED INTO batch-3.**
 HybridQA crawl (2021): 15,314 tables / 9,158 pages, [text,[hyperlinks]] cells, 100% parse.
 Net-new vs staged wiki pool: 9,062/9,158 pages (99%!). scripts/adapt_hybrid.py (committed):
