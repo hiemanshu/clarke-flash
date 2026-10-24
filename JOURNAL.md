@@ -1,3 +1,42 @@
+**18:20 — WIKI TABLES RECON (owner question while expReal2 cooks): data shape understood,
+converter built & validated (scripts/adapt_wiki.py), training shards downloading.**
+DATA SHAPE (live-audited on one 60MB shard, 4,604 articles): the 'tables' column is a
+JSON string of PRE-PARSED tables — identifiers ("transmissions.regular_table1"), header
+ROWS (multi-row headers common: 977/9,772), rows of {"value": cell} (only other key seen:
+nested_table x143 -> skip). Verbatim cell strings => deterministic pipe-rendered state
+with byte-exact spans, same trick as synth table_record but REAL data. Shard85 yielded
+14,464 tables -> 9,772 usable -> 6,196 records (4,859 train-shard + 1,337 eval-shard by
+URL hash). Scale read: 86 shards / 37.1 GB total — one full shard (~371MB) ≈ 30k+ records;
+we need ~3, not millions.
+RECORD FAMILIES (mirrors the synthetic table regime + two things it lacked):
+- row lookups (text+span): "value in COL for the row with KEYCOL equal to KEYVAL" — the
+  table-text .076 target; duplicate cell values make position-binding necessary (real
+  near-misses for free)
+- row_count (number integer), sum of clean numeric column (agg-atoms path), argmax cell
+  (text span)
+- HONEST NULLS x2/record: query for a provably-absent column + absent row key -> the
+  not-present regime for tables (train null rate .37)
+VALIDATION DONE: self-audit all spans byte-exact (assert in converter); encoder smoke
+390-518 tokens/record (cheap!); 0/1,612 typed_test 300-char prefixes found in shard85
+wiki text — squad2-in-tables risk looks nil, will re-run the check at full-corpus scale
+and exclude any matching article. Multi-row headers merged per column w/ uniqueness
+suffix; rows capped at 24; fake null-columns chosen from names proven absent per table.
+WHAT'S LEFT ("what would we need to do" — answer: converter done, then):
+1. 3 full shards downloading NOW in background (data/raw/wiki_shard0/1/2.parquet, nice'd,
+   GPU untouched; wiki_dl_done sentinel).
+2. Convert shards 0-2 -> data/wiki_train.jsonl (~50-90k records, cap/stratify if huge:
+   sample <= ~40k, keep domain spread), shard85 -> data/wiki_test.jsonl HOLDOUT (shard-
+   disjoint articles = cleanest split we've ever had).
+3. Battery + chain next batch: add wiki_test eval to every chain script; mix gains
+   wiki_train. Expected step-time effect: records are SMALL (390-518 enc) -> near-free
+   tokens despite big counts.
+4. Bonus read: typed_test families already include an 'extractbench' family — LocalLLaMA's
+   set ships some extractbench-derived records; real ExtractBench PDFs remain eval-stage
+   (parser needed) per plan.
+NOT LAUNCHED into training yet — wiki joins the mix at batch 3, after expReal2's verdict
+(~22:30) decides whether merged-real-data worked; if it did, wiki tables are the obvious
+continuation (same "real shape at scale" bet, next weakest regime).
+
 **18:00 — OWNER DIRECTIVE: "restart from scratch with the new data set" -> expReal2 launched.**
 Interpretation (stated): fresh full 2-epoch run over the merged mix — NOT the mid-schedule
 resume from checkpoint-1000 — so cuad_train (1,714), keyphrase (20) and acord_train (684)
