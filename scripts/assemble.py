@@ -44,6 +44,7 @@ def main():
         args.eval_out.parent.mkdir(parents=True, exist_ok=True)
         fe = args.eval_out.with_suffix(args.eval_out.suffix + ".tmp").open("w")
 
+    ev_written = 0
     if args.cache_dir:
         for f in sorted(args.cache_dir.glob("*.jsonl")):
             read = kept = ev = 0
@@ -55,13 +56,14 @@ def main():
                         ev += 1
                         if fe and C.id_selected(r["id"], args.salt + "-e", args.gate_mod, 2):
                             fe.write(json.dumps(r) + "\n")
+                            ev_written += 1
                         continue
                     if C.id_selected(r["id"], args.salt, args.gate_mod, args.gate_keep):
                         fo.write(json.dumps(r) + "\n")
                         kept += 1
             prov["included"].append({"file": str(f), "read": read,
-                                     "selected": kept, "eval": ev, "from_cache": True})
-            prov["eval"] += ev
+                                     "selected": kept, "eval_flagged": ev, "from_cache": True})
+        prov["eval"] = ev_written
         prov["train"] = sum(x["selected"] for x in prov["included"] if x.get("from_cache"))
 
     for f in args.include:

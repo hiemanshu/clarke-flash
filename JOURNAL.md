@@ -1,3 +1,22 @@
+**07:30 — 4B SCALING PROBE PRE-REGISTERED + assembly accounting bug fixed.**
+ASSEMBLY BUG (owner asked): the "945,912 eval records" in the batch3 log was a REPORTING
+bug - prov["eval"] summed every eval-FLAGGED record read, not the gated ones written. The
+file itself was always correct: data/mixes/wikiib_eval.jsonl = **1,942 records (13.5MB)**.
+assemble.py now counts written records (ev_written) and reports eval_flagged per file
+separately; rebuilt to a temp path to verify: 18,551 train / 1,942 eval, consistent.
+4B PROBE (owner directive: after this run, train Qwen3.5-4B and compare; "more GPU" =
+single card with more VRAM/speed). Pre-registered: exp4b_chain.sh waits for BATCH3 DONE,
+then trains **Qwen/Qwen3.5-4B** (cached locally; hidden 2560, 32 layers) on the IDENTICAL
+mix files, 1 epoch, bs6/accum2, lr 1e-4, same surgery flags, FRESH head (2560 != 4096 so
+no warm start possible), run-dir runs/batch3-4b, same 8-eval battery -> reports/batch3-4b-*.
+summarize.py gains compare() -> side-by-side Signal message.
+DECISION RULE (before numbers exist): 4B within a few points of 9B => backbone capacity is
+NOT the bottleneck; scale data/context instead. 4B lags badly => capacity is the lever and a
+bigger single-GPU (more VRAM) + bigger backbone is justified. Caveat recorded: 9B had
+~2.5 runs of warm-up history; 4B starts cold -> a near-tie is a STRONG 4B result.
+Also noted: HF cache already holds 2B/4B/9B and unsloth 27B-4bit - a 27B 4-bit probe is
+possible on this card later; per-FLOP value ranking stands: data > context length > LoRA > size.
+
 **06:45-07:05 — OVERNIGHT FAILURE POSTMORTEM (owner caught it at 06:43: GPU idle all night).**
 WHAT HAPPENED: batch3 chain did start at 22:15 and mined correctly for 8.5 hours - but only
 2 of 19 shards finished. GPU sat idle. Owner's read was right: not unattended-shippable.
