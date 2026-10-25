@@ -1,3 +1,16 @@
+**07:45 — Batch3 running (owner: let it run; notify if needed/something happens).**
+Watcher v5 closes three notification gaps found by inspection:
+1. FALSE ALARM FIX: after both runs legitimately finish there are no clarke processes and
+   the phase string stops changing -> the 45-min stall guard would have fired 'pipeline not
+   progressing' at ~00:30. Now suppressed when BATCH3 DONE + 4B DONE are both present.
+2. 4B DEATH HOOK: exp4b.log 'starting 4B' without TRAINED/DONE and no clarke process ->
+   critical alert with log tail (previously a 4B crash was invisible to the watcher).
+3. 4B TRAINED milestone -> normal notification, battery follows.
+Owner preference re-confirmed: ntfy = short ping, Signal = full detail (summarize.py bodies).
+Current ETA (measured 22 steps/min, heavier steps): batch3 train ~19:10, verdict ~19:45,
+then 4B probe ~3h -> ~23:00. Owner opted to let the pre-registered mix run rather than
+restart leaner.
+
 **07:30 — 4B SCALING PROBE PRE-REGISTERED + assembly accounting bug fixed.**
 ASSEMBLY BUG (owner asked): the "945,912 eval records" in the batch3 log was a REPORTING
 bug - prov["eval"] summed every eval-FLAGGED record read, not the gated ones written. The
