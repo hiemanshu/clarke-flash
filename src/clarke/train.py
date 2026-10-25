@@ -98,7 +98,7 @@ class Trainer:
 
     def save_checkpoint(self) -> Path:
         directory = self.run_dir / f"checkpoint-{self.step}"
-        save_head(self.head, directory)
+        save_head(self.head, directory, backbone=self.args.backbone)
         torch.save({"optimizer": self.optimizer.state_dict(), "step": self.step,
                     "args": vars(self.args)}, directory / "train_state.pt")
         keep = sorted(self.run_dir.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))

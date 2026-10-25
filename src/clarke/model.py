@@ -364,12 +364,14 @@ def load_head(directory: Path, device: str = "cuda", dtype=torch.bfloat16,
     from safetensors.torch import load_file
 
     config = json.loads((directory / "extraction_head_config.json").read_text())
+    config.pop("backbone", None)  # provenance only, not a head constructor arg
     head = JointExtractionHead(**config)
     head.load_state_dict(load_file(directory / "extraction_head.safetensors"), strict=strict)
     return head.to(device=device, dtype=dtype).eval()
 
 
-def save_head(head: JointExtractionHead, directory: Path) -> None:
+def save_head(head: JointExtractionHead, directory: Path,
+              backbone: str | None = None) -> None:
     from safetensors.torch import save_file
 
     directory.mkdir(parents=True, exist_ok=True)
@@ -385,6 +387,9 @@ def save_head(head: JointExtractionHead, directory: Path) -> None:
         "query_pool": getattr(head, "query_pool", "mean"),
         "span_rerank": bool(getattr(head, "span_rerank", False)),
     }
+    if backbone:
+        config["backbone"] = backbone  # so eval/reload use the RIGHT backbone
+    
     (directory / "extraction_head_config.json").write_text(json.dumps(config, indent=2))
     save_file({k: v.detach().cpu().contiguous() for k, v in head.state_dict().items()},
               directory / "extraction_head.safetensors")

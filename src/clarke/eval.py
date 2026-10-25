@@ -268,7 +268,9 @@ def explode_field_groups(records: list[dict[str, Any]], size: int) -> list[dict[
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Evaluate a clarke-flash checkpoint")
-    parser.add_argument("--backbone", default="Qwen/Qwen3.5-9B")
+    parser.add_argument("--backbone", default=None,
+                        help="backbone id; defaults to the one recorded in the head config, "
+                             "else Qwen/Qwen3.5-9B")
     parser.add_argument("--head", required=True, help="checkpoint dir with extraction_head.safetensors")
     parser.add_argument("--data", required=True, help="records JSONL to evaluate")
     parser.add_argument("--limit", type=int, default=256)
@@ -284,8 +286,16 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    backbone, processor = load_backbone(args.backbone, device=str(device))
-    head = load_head(Path(args.head), device=str(device), dtype=torch.float32)
+    _head_dir = Path(args.head)
+    _cfg = {}
+    try:
+        _cfg = json.loads((_head_dir / "extraction_head_config.json").read_text())
+    except Exception:
+        pass
+    backbone_id = args.backbone or _cfg.get("backbone") or "Qwen/Qwen3.5-9B"
+    print(f"[eval] head={_head_dir} backbone={backbone_id}", flush=True)
+    backbone, processor = load_backbone(backbone_id, device=str(device))
+    head = load_head(_head_dir, device=str(device), dtype=torch.float32)
     model = ClarkeModel(backbone, head).eval()
 
     dataset = RecordDataset([Path(args.data)])

@@ -1,3 +1,19 @@
+**17:50 — 4B training DONE (15,715 steps, 17:47); battery hit two infra bugs, fixed, rerun.**
+BUG 1: the 4B battery crashed instantly (7 evals, 2 min): clarke-eval defaults to
+Qwen3.5-9B and the 4B head (hidden 2560) was fed 4096-dim states -> RuntimeError in
+layer_norm. FIX (code, not just script): heads now record their backbone
+(extraction_head_config.json "backbone") at save_checkpoint; eval resolves backbone from
+args > head config > 9B default, and load_head pops the provenance key before constructing.
+Patched the already-saved 4B checkpoint config (provenance only).
+BUG 2: relaunched battery OOMed at 30GB (freed 40MB, alloc 595MB) because the script did not
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True (all chain scripts do; this ad-hoc
+one didn't). FIX: exported; relaunched.
+COMPARE BATTERY (running): both heads x [real, typed, acordtest, wikitable(6196), wikihybrid,
+contractval, val3, pm-real] on identical files + the missing in-domain reads:
+batch3 wikiib_eval (prose/meta, 1942) and the structured-wiki eval that originally crashed
+(now valid thanks to the position-keyed answer fix). Ends with an automatic Signal+ntfy
+comparison table.
+
 **13:36 — BATCH 3 VERDICT: wiki data did NOT move the acceptance metrics. Null-to-negative.**
 Training 15,715 steps, 94,285-record mix (wiki 74% of tokens), init expReal2-7658.
 READ vs expReal2 (control):
