@@ -55,8 +55,7 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
         batch_records = encoded_records[start:start + batch_size]
         batch = collate_records(batch_records, tokenizer.pad_token_id, device)
         answers = model.answer(batch)
-        for record in batch_records:
-            record_answers = answers[record.record_id]
+        for record, record_answers in zip(batch_records, answers):
             for name, encoded in zip(record_answers, record.fields):
                 spec = encoded.spec
                 gold = record.answers.get(name) or {}

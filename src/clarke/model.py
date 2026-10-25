@@ -51,16 +51,23 @@ class ClarkeModel(torch.nn.Module):
             )
         return self.head(outputs.last_hidden_state, batch["attention_mask"], batch["records"])
 
-    def answer(self, batch: dict[str, Any]) -> dict[str, Any]:
-        """One forward pass -> {field: typed answer} for every record in the batch."""
+    def answer(self, batch: dict[str, Any]) -> list[dict[str, Any]]:
+        """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
+
+        Keyed by POSITION, not record_id: eval files can legitimately contain several
+        views of the same document (e.g. wiki tables sampled with different field
+        sets), so duplicate ids must not collapse answers onto the last one - that
+        silently mis-paired fields (and crashed the wiki eval with a float in a
+        text slot; 2026-10-25).
+        """
         logits = self.forward(batch)
-        answers = {}
+        out = []
         for record, record_logits in zip(batch["records"], logits):
-            answers[record.record_id] = {
+            out.append({
                 encoded.name: decode_answer(encoded.spec, record, field_logits)
                 for encoded, field_logits in zip(record.fields, record_logits)
-            }
-        return answers
+            })
+        return out
 
 
 def _probability(mass: torch.Tensor) -> float:
