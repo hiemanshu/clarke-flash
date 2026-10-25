@@ -295,6 +295,10 @@ def main(argv: list[str] | None = None) -> None:
     backbone_id = args.backbone or _cfg.get("backbone") or "Qwen/Qwen3.5-9B"
     print(f"[eval] head={_head_dir} backbone={backbone_id}", flush=True)
     backbone, processor = load_backbone(backbone_id, device=str(device))
+    if (_head_dir / "lora").exists():
+        from peft import PeftModel
+        backbone = PeftModel.from_pretrained(backbone, _head_dir / "lora")
+        print("[eval] loaded LoRA adapters", flush=True)
     head = load_head(_head_dir, device=str(device), dtype=torch.float32)
     model = ClarkeModel(backbone, head).eval()
 

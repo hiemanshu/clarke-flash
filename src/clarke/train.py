@@ -46,6 +46,21 @@ class Trainer:
         self.hidden_size = int(config.hidden_size)
         for parameter in self.backbone.parameters():
             parameter.requires_grad_(False)
+        self.lora = int(getattr(args, "lora_r", 0)) > 0
+        if self.lora:
+            from peft import LoraConfig, get_peft_model
+            lcfg = LoraConfig(
+                r=args.lora_r, lora_alpha=args.lora_alpha, lora_dropout=args.lora_dropout,
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                                "up_proj", "down_proj"],
+                bias="none", task_type="FEATURE_EXTRACTION")
+            self.backbone = get_peft_model(self.backbone, lcfg)
+            if getattr(args, "lora_grad_checkpoint", True):
+                self.backbone.gradient_checkpointing_enable()
+            trainable = sum(p.numel() for p in self.backbone.parameters() if p.requires_grad)
+            self.log(f"lora r={args.lora_r} alpha={args.lora_alpha} "
+                     f"trainable_backbone={trainable/1e6:.1f}M "
+                     f"grad_ckpt={getattr(args, 'lora_grad_checkpoint', True)}")
 
         self.head = JointExtractionHead(
             hidden_size=self.hidden_size, width=args.width,
@@ -64,7 +79,10 @@ class Trainer:
         self.log(json.dumps({"event": "loaded", "hidden_size": self.hidden_size,
                              "head_params": sum(p.numel() for p in self.head.parameters())}))
 
-        self.optimizer = torch.optim.AdamW(self.head.parameters(), lr=args.lr, weight_decay=0.01)
+        params = list(self.head.parameters())
+        if self.lora:
+            params += [p for p in self.backbone.parameters() if p.requires_grad]
+        self.optimizer = torch.optim.AdamW(params, lr=args.lr, weight_decay=0.01)
         self.step = 0
         self._diverge_hits = 0
         if args.resume:
@@ -99,6 +117,8 @@ class Trainer:
     def save_checkpoint(self) -> Path:
         directory = self.run_dir / f"checkpoint-{self.step}"
         save_head(self.head, directory, backbone=self.args.backbone)
+        if self.lora:
+            self.backbone.save_pretrained(directory / "lora")
         torch.save({"optimizer": self.optimizer.state_dict(), "step": self.step,
                     "args": vars(self.args)}, directory / "train_state.pt")
         keep = sorted(self.run_dir.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
@@ -257,6 +277,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--warmup", type=int, default=500)
     parser.add_argument("--clip", type=float, default=1.0)
     parser.add_argument("--max-length", type=int, default=8192)
+    parser.add_argument("--lora-r", dest="lora_r", type=int, default=0,
+                        help="LoRA rank (0 = frozen backbone, head-only training)")
+    parser.add_argument("--lora-alpha", dest="lora_alpha", type=int, default=32)
+    parser.add_argument("--lora-dropout", dest="lora_dropout", type=float, default=0.05)
+    parser.add_argument("--no-lora-grad-checkpoint", dest="lora_grad_checkpoint",
+                        action="store_false", help="disable gradient checkpointing with LoRA")
     parser.add_argument("--width", type=int, default=1024)
     parser.add_argument("--routing-layers", dest="routing_layers", type=int, default=2)
     parser.add_argument("--layers", type=int, default=4)

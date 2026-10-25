@@ -32,6 +32,7 @@ class ClarkeModel(torch.nn.Module):
         super().__init__()
         self.language_model = language_model
         self.head = head
+        self._backbone_trainable = None
 
     def forward(self, batch: dict[str, Any]) -> list[list[FieldLogits]]:
         base_model = (
@@ -42,7 +43,13 @@ class ClarkeModel(torch.nn.Module):
         text_model = base_model.model
         if hasattr(text_model, "language_model"):
             text_model = text_model.language_model
-        with torch.no_grad():
+        # Frozen backbone -> no_grad (fast, minimal memory). If adapters (LoRA)
+        # are trainable, gradients MUST flow through the backbone.
+        if self._backbone_trainable is None:
+            self._backbone_trainable = any(p.requires_grad
+                                           for p in self.language_model.parameters())
+        ctx = torch.enable_grad() if self._backbone_trainable else torch.no_grad()
+        with ctx:
             outputs = text_model(
                 input_ids=batch["input_ids"],
                 attention_mask=batch["attention_mask"],
