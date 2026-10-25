@@ -1,3 +1,24 @@
+**02:50 — expDense VERDICT: dense data works. CUAD .381 -> .400 (new best).**
+Read (init expReal2-7658, 2 epochs, CUAD 8k-window views 1,714->3,207 + ACORD 684->1,368):
+CUAD exact **.4004** (+.0198), null_ok .9869, pm p@1 .169 (was .157), **p@5 .404** (was .382),
+median rank 8; typed text .1835 (+.003), number .0882 (+.004), list-text .8167 (-.023, n=82);
+ACORD .0369 (-.011 - the one regression; denser windows did not help its own eval);
+contract .9990, val3 text .8975, number .8867 (+.011), date .9635. Verdict: the DENSITY
+lever works; the ACORD dip is the only counter-signal and is worth one more look later.
+BUG FOUND (root cause of the eval OOMs): eval loaded backbones with requires_grad=True
+(nothing freezes them) -> ClarkeModel.forward saw "trainable" and called torch.enable_grad(),
+overriding eval's no_grad and building a full 9B backward graph (+11GB, 30.6GB OOM). Fixed:
+eval freezes the backbone explicitly + postmortem uses inference_mode; the earlier
+inference_mode patch had masked it only for the scored path. pm now works again.
+LoRA BLOCKED on this box (told owner via Signal): Qwen3.5 falls back to the reference
+linear-attention kernel; forward-only fits, backward OOMs at ~30.6GB even on 4B. Needs the
+CUDA toolkit (system package, owner's sudo) to build flash-linear-attention/causal-conv1d;
+bonus would be 1.3-2x on every run. Not attempted without permission.
+NEXT: expDense2 launched 02:55 - CUAD re-windowed to 4k chars (6,199 records) + ACORD 48
+windows/query (2,736), 2 epochs from expDense-8384, ~9,836 steps. Tests whether the density
+trend continues. Note: data/acord_train_dense.jsonl now holds the 48-window version (the
+24-window one expDense used was overwritten - noted for provenance).
+
 **21:55 — UNATTENDED PLAN SET: expDense (running) -> expLoRA (queued, smoke-gated).**
 expDense: init expReal2-7658, 2 epochs on train3+typed+contract+cuad_8k(3,207)+
 acord_dense(1,368)+keyphrase = 25,152 recs/epoch, 8,384 steps. Started 21:48.

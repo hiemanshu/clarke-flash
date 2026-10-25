@@ -51,10 +51,15 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
         except ValueError:
             continue
 
+    torch.cuda.empty_cache()
     for start in range(0, len(encoded_records), batch_size):
         batch_records = encoded_records[start:start + batch_size]
         batch = collate_records(batch_records, tokenizer.pad_token_id, device)
-        answers = model.answer(batch)
+        with torch.inference_mode():
+            answers = model.answer(batch)
+        torch.cuda.empty_cache()  # varying-length long docs + per-field NxN pointer
+        # matrices fragment the allocator fast; releasing per batch costs ~nothing
+        # next to a 19GB model and prevents the 30GB OOM seen at 02:46
         for record, record_answers in zip(batch_records, answers):
             for name, encoded in zip(record_answers, record.fields):
                 spec = encoded.spec
@@ -169,7 +174,7 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
     return {"overall": overall, "by_domain": by_domain}
 
 
-@torch.no_grad()
+@torch.inference_mode()
 def postmortem(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                device: torch.device, batch_size: int = 4, max_records: int = 96,
                agg_atoms: bool = False) -> dict:
@@ -299,6 +304,11 @@ def main(argv: list[str] | None = None) -> None:
         from peft import PeftModel
         backbone = PeftModel.from_pretrained(backbone, _head_dir / "lora")
         print("[eval] loaded LoRA adapters", flush=True)
+    # Freeze explicitly: loaded backbones default to requires_grad=True, and
+    # ClarkeModel.forward would then enable_grad (overriding eval's no_grad) and
+    # build a full 9B backward graph - the 30.6GB OOM at 02:46 today.
+    for p in backbone.parameters():
+        p.requires_grad_(False)
     head = load_head(_head_dir, device=str(device), dtype=torch.float32)
     model = ClarkeModel(backbone, head).eval()
 

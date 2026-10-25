@@ -13,10 +13,11 @@ from clarke.head import JointExtractionHead
 from clarke.model import ClarkeModel, load_backbone, load_head
 
 DEVICE = "cuda"
+BACKBONE = sys.argv[1] if len(sys.argv) > 1 else "Qwen/Qwen3.5-9B"
 
 
 def main() -> int:
-    backbone, processor = load_backbone("Qwen/Qwen3.5-9B", device=DEVICE)
+    backbone, processor = load_backbone(BACKBONE, device=DEVICE)
     for p in backbone.parameters():
         p.requires_grad_(False)
     from peft import LoraConfig, get_peft_model
@@ -26,18 +27,21 @@ def main() -> int:
                      bias="none", task_type="FEATURE_EXTRACTION")
     backbone = get_peft_model(backbone, cfg)
     backbone.gradient_checkpointing_enable()
+    backbone.enable_input_require_grads()   # required for grad-checkpointing + frozen base
+    backbone.config.use_cache = False
     trainable = [p for p in backbone.parameters() if p.requires_grad]
     print(f"[smoke] trainable adapter tensors: {len(trainable)}, "
           f"params: {sum(p.numel() for p in trainable)/1e6:.1f}M", flush=True)
 
-    head = JointExtractionHead(hidden_size=4096, width=1024, routing_layers=2,
+    _cfg = getattr(backbone.config, "text_config", backbone.config)
+    head = JointExtractionHead(hidden_size=int(_cfg.hidden_size), width=1024, routing_layers=2,
                                layers=4, heads=16, feedforward=4096,
                                rerank=True, query_pool="attn").to(DEVICE, dtype=torch.float32)
     model = ClarkeModel(backbone, head).eval()
     model._backbone_trainable = None
 
     tok = processor.tokenizer
-    recs = [json.loads(l) for l in open("data/cuad_train_8k.jsonl")][:2]
+    recs = [json.loads(l) for l in open("data/cuad_train_8k.jsonl")][:1]
     enc = [encode_record(tok, r, max_length=8192) for r in recs]
     batch = collate_records(enc, tok.pad_token_id, DEVICE)
 
