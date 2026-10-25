@@ -1,3 +1,11 @@
+**07:36 — watch_training.sh ETA fix (owner: ETA kept being replaced by '…' dots).**
+Cause: ETA used the FRAME-to-frame step delta, but the trainer logs every ~20 steps (~40s)
+while the TUI redraws ~1/s -> almost every frame saw zero step change, rate became 0/empty
+and the eta cell fell back to the '…' placeholder (only flickering to a real value on the
+rare frames where a step landed). Fix: only advance the rate reference point when STEP
+actually changes, and cache LAST_RATE so every frame shows a real ETA; reset on run switch.
+Smoke: syntax OK; math check 22 steps/min -> 11h31m for the remaining 15,215 steps.
+
 **07:45 — Batch3 running (owner: let it run; notify if needed/something happens).**
 Watcher v5 closes three notification gaps found by inspection:
 1. FALSE ALARM FIX: after both runs legitimately finish there are no clarke processes and

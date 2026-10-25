@@ -167,7 +167,7 @@ rule() { push "${D}$(printf '─%.0s' $(seq 1 $W))${R}${K}"; }
 emit() { push "$*$K"; }
 pad_to() { local -n _r=OUT; while (( ${#_r[@]} < $1 )); do _r+=("$K"); done; }
 
-PREV_STEP=-1; PREV_T=""
+PREV_STEP=-1; PREV_T=""; LAST_RATE=""
 
 draw() {
   local run STEP="" TOTAL="" EPOCH="" LOSS="" LR="" RPS="" GB="" COMPS=""
@@ -201,12 +201,24 @@ draw() {
       esac
     done <<< "$state_str" || true
 
-    local now=$(date +%s%N) rate=""
-    if [[ -n "$STEP" ]] && (( PREV_STEP >= 0 )) && (( STEP > PREV_STEP )) && [[ -n "$PREV_T" ]]; then
-      rate=$(awk -v s="$STEP" -v p="$PREV_STEP" -v n="$now" -v t="$PREV_T" \
-             'BEGIN{printf "%.2f", (s-p)/((n-t)/1e9)}')
+    # Rate must be measured between STEP CHANGES, not between frames: the trainer
+    # logs every ~20 steps (~40s) while the UI redraws ~1/s, so frame-delta rate is
+    # 0 almost always and the ETA collapsed to the '…' placeholder. Only advance the
+    # reference point when the step moves, and reuse the last known rate otherwise.
+    local now=$(date +%s%N)
+    if [[ -n "$STEP" ]]; then
+      if (( PREV_STEP < 0 )) || (( STEP < PREV_STEP )); then
+        # baseline: first frame, or a run switch/reset - no rate yet
+        PREV_STEP="$STEP"; PREV_T="$now"; LAST_RATE=""
+      elif (( STEP > PREV_STEP )) && [[ -n "$PREV_T" ]]; then
+        LAST_RATE=$(awk -v s="$STEP" -v p="$PREV_STEP" -v n="$now" -v t="$PREV_T" \
+               'BEGIN{printf "%.2f", (s-p)/((n-t)/1e9)}')
+        PREV_STEP="$STEP"; PREV_T="$now"
+      fi
+    else
+      PREV_STEP=-1; PREV_T=""; LAST_RATE=""
     fi
-    if [[ -n "$STEP" ]]; then PREV_STEP="$STEP"; PREV_T="$now"; else PREV_STEP=-1; fi
+    local rate="$LAST_RATE"
 
     if (( active )); then
       emit "$(lab run)${B}${run}${R}  ${GR}ACTIVE${R}${K}"
