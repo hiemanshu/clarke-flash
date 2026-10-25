@@ -1,3 +1,27 @@
+**13:36 — BATCH 3 VERDICT: wiki data did NOT move the acceptance metrics. Null-to-negative.**
+Training 15,715 steps, 94,285-record mix (wiki 74% of tokens), init expReal2-7658.
+READ vs expReal2 (control):
+- CUAD .3749 vs .381 (flat, -0.006) | null_ok .9907 vs .9893 | pm med rank 8 (same),
+  p@5 .348 vs .382 (-.034)
+- typed text .1712 vs .181 (-.010) | number .0725 vs .085 (-.013) | list-text **.6400 vs
+  .840 (-.20, the one real erosion)**
+- ACORD .0345 vs .048 (-.014)
+- contract_val text .9917 vs .997 | list .9943 vs 1.000 (slight)
+- val3 text .8962 vs .902 | number .8880 vs .876 (UP) | date .9635 flat | list-text .9701
+  vs .986
+- keyphrase .0000 vs .064 (n=20, noise-prone but a drop)
+- IN-DOMAIN: wiki hybrid table holdout text .1683 / number .0285 -> the table regime barely
+  learned in 1 epoch. Structured-wiki eval CRASHED (eval.py 'float' has no .strip() on a text
+  field decoded as number -> fixed str(); rerun pending). wikiib prose/meta in-domain eval was
+  NOT in the battery (gap) -> to run.
+INTERPRETATION: at this scale/epoch/recipe the wiki corpus (40k structured + 12.8k hybrid +
+18.5k prose/meta) neither helps nor catastrophically hurts; small consistent erosion, with
+typed list-text the only notable regression. The pre-registered branch for 'wiki in-domain
+low' = converter/sampling problem -> inspect failures before any further scaling. Do NOT
+scale wiki data as-is.
+4B SCALING PROBE started 13:34 (same mix, fresh head, hidden 2560, 113.6M head params);
+first read on whether capacity is the lever. Also: eval.py fix committed.
+
 **07:36 — watch_training.sh ETA fix (owner: ETA kept being replaced by '…' dots).**
 Cause: ETA used the FRAME-to-frame step delta, but the trainer logs every ~20 steps (~40s)
 while the TUI redraws ~1/s -> almost every frame saw zero step change, rate became 0/empty

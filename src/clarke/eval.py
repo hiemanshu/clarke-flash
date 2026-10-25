@@ -99,7 +99,7 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                         overlap = max(0, min(span[1], gspan[1]) - max(span[0], gspan[0]))
                         union = max(span[1], gspan[1]) - min(span[0], gspan[0]) or 1
                         bucket["located"] += int(overlap / union >= 0.5)
-                        bucket["exact"] += int((value or "").strip() == str(gold["value"]).strip())
+                        bucket["exact"] += int(str(value or "").strip() == str(gold["value"]).strip())
                     elif spec.type == "list" and spec.items == "text":
                         gold_set = {str(v).strip() for v in gold["value"]}
                         got_set = {str(v).strip() for v in (got.get("value") or [])}
