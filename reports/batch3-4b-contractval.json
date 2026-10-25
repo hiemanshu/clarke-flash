@@ -1,0 +1,103 @@
+{
+  "checkpoint": "runs/batch3-4b/checkpoint-15715",
+  "data": "data/contract_val.jsonl",
+  "records": 300,
+  "metrics": {
+    "date": {
+      "n": 895,
+      "exact": 0.9832,
+      "located": null,
+      "null_correct": 0.9764,
+      "mean_confidence": 0.9439,
+      "brier_null": 0.0077,
+      "solvable_rate": 0.9832,
+      "exact_when_solvable": 1.0
+    },
+    "duration": {
+      "n": 598,
+      "exact": 1.0,
+      "located": null,
+      "null_correct": 1.0,
+      "mean_confidence": 0.9282,
+      "brier_null": 0.0,
+      "solvable_rate": 1.0,
+      "exact_when_solvable": 1.0
+    },
+    "list-text": {
+      "n": 296,
+      "exact": 1.0,
+      "located": 1.0,
+      "null_correct": 1.0,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0
+    },
+    "number": {
+      "n": 1193,
+      "exact": 1.0,
+      "located": null,
+      "null_correct": 1.0,
+      "mean_confidence": 0.8911,
+      "brier_null": 0.0,
+      "solvable_rate": 1.0,
+      "exact_when_solvable": 1.0
+    },
+    "text": {
+      "n": 2990,
+      "exact": 0.9985,
+      "located": 0.9985,
+      "null_correct": 0.9981,
+      "mean_confidence": 0.9357,
+      "brier_null": 0.0006
+    }
+  },
+  "by_domain": {
+    "contract": {
+      "date": {
+        "n": 895,
+        "exact": 0.9832,
+        "located": null,
+        "null_correct": 0.9764,
+        "mean_confidence": 0.9439,
+        "brier_null": 0.0077,
+        "solvable_rate": 0.9832,
+        "exact_when_solvable": 1.0
+      },
+      "duration": {
+        "n": 598,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 1.0,
+        "mean_confidence": 0.9282,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "list-text": {
+        "n": 296,
+        "exact": 1.0,
+        "located": 1.0,
+        "null_correct": 1.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      },
+      "number": {
+        "n": 1193,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 1.0,
+        "mean_confidence": 0.8911,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "text": {
+        "n": 2990,
+        "exact": 0.9985,
+        "located": 0.9985,
+        "null_correct": 0.9981,
+        "mean_confidence": 0.9357,
+        "brier_null": 0.0006
+      }
+    }
+  }
+}

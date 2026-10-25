@@ -1,0 +1,27 @@
+{
+  "checkpoint": "runs/batch3-4b/checkpoint-15715",
+  "data": "data/acord_test.jsonl",
+  "records": 228,
+  "metrics": {
+    "list-text": {
+      "n": 228,
+      "exact": 0.0361,
+      "located": 0.0361,
+      "null_correct": 0.7241,
+      "mean_confidence": 0.0,
+      "brier_null": 0.2638
+    }
+  },
+  "by_domain": {
+    "acord": {
+      "list-text": {
+        "n": 228,
+        "exact": 0.0361,
+        "located": 0.0361,
+        "null_correct": 0.7241,
+        "mean_confidence": 0.0,
+        "brier_null": 0.2638
+      }
+    }
+  }
+}

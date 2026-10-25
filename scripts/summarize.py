@@ -102,7 +102,8 @@ def compare(a: str = "batch3", b: str = "batch3-4b") -> str:
                 or {})
         typed = _m(f"{prefix}-typed.json", "metrics", default={}) or {}
         acord = _m(f"{prefix}-acordtest.json", "metrics", "list-text", default={}) or {}
-        wiki = _m(f"{prefix}-wikitable.json", "metrics", "list-text", default={}) or {}
+        wt = _m(f"{prefix}-wikitable.json", "metrics", default={}) or {}
+        wiki = wt.get("text") or wt.get("list-text") or {}
         pm = _m(f"{prefix}-pm-real.json", "postmortem", "cuad", "list-text", default={}) or {}
         cv = _m(f"{prefix}-contractval.json", "metrics", "text", default={}) or {}
         v3 = _m(f"{prefix}-val3.json", "metrics", default={}) or {}

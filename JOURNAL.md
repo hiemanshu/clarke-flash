@@ -1,3 +1,33 @@
+**18:50 — 9B vs 4B SCALING RESULT: capacity is NOT the lever. Near-tie.**
+Both: same 94,285-record mix, 1 epoch, 15,715 steps, identical eval files. 4B = fresh head
+(hidden 2560, 113.6M head params) vs 9B warm-started from expReal2-7658 (a handicap for 4B).
+                   9B      4B     delta
+CUAD exact        .375    .365    -0.010
+CUAD null_ok      .991    .985    -0.006
+pm med rank         8       9      +1
+pm p@5            .348    .382    +0.034  (4B better)
+typed text        .171    .188    +0.017  (4B better)
+typed number      .072    .058    -0.014
+typed list-text   .640    .515    -0.125  (n=82, noisy)
+ACORD             .035    .036    +0.001
+contract text     .992    .999    +0.007  (4B better)
+val3 text         .896    .899    +0.003
+val3 number       .888    .845    -0.043
+val3 date         .964    .964     0.000
+wiki tables text  .260    .334    +0.074  (4B better; number .088 vs .096)
+Speed: 4B 15,715 steps in ~4.2h vs 9B ~6.0h (1.4x faster, 10.2GB vs 19.3GB VRAM).
+NEW IN-DOMAIN READ (9B, wikiib prose/meta, first time): text **.6256**, list-text **.4890**,
+null_ok .996 -> the wiki prose/meta regime DID learn its own domain; it simply did not
+transfer to the acceptance metrics (CUAD/typed unchanged vs expReal2).
+PRE-REGISTERED DECISION RULE FIRED: 4B within a few points of 9B => backbone capacity is NOT
+the bottleneck. More GPU should buy (1) longer context (8k->16k/32k: ACORD p95 is 7,645
+tokens, truncation is eating gold), (2) bigger data mixes, (3) LoRA if adapting features is
+wanted - NOT a bigger frozen backbone.
+Caveat: 4B had a fresh head while 9B carried 2.5 runs of warm-up history, so a tie is if
+anything a point IN FAVOUR of 4B. 2B is cached if we want a third point on the curve.
+Also fixed: eval now resolves backbone from head config (e7e759b); wiki eval text/number keys
+handled in summarize.compare(); battery needs expandable_segments (documented).
+
 **17:50 — 4B training DONE (15,715 steps, 17:47); battery hit two infra bugs, fixed, rerun.**
 BUG 1: the 4B battery crashed instantly (7 evals, 2 min): clarke-eval defaults to
 Qwen3.5-9B and the 4B head (hidden 2560) was fed 4096-dim states -> RuntimeError in
