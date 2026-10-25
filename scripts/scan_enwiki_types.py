@@ -41,9 +41,9 @@ def parse_pages(path):
                 break
             if not chunk:
                 break
-            buf += chunk
-            while "</page>" in buf:
-                page, buf = buf.split("</page>", 1)
+            parts = (buf + chunk).split("</page>")
+            buf = parts.pop()
+            for page in parts:
                 if "<page>" in page:
                     yield page.split("<page>", 1)[1]
 

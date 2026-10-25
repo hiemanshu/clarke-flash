@@ -69,9 +69,11 @@ def parse_pages(path):
             chunk = read()
             if not chunk:
                 break
-            buf += chunk
-            while "</page>" in buf:
-                page, buf = buf.split("</page>", 1)
+            # split ONCE per chunk (C-speed); the old per-page split copied the
+            # whole 4-16MB buffer for every page (~70TB of memcpy over the corpus)
+            parts = (buf + chunk).split("</page>")
+            buf = parts.pop()
+            for page in parts:
                 if "<page>" in page:
                     yield page.split("<page>", 1)[1]
 

@@ -1,3 +1,24 @@
+**06:45-07:05 — OVERNIGHT FAILURE POSTMORTEM (owner caught it at 06:43: GPU idle all night).**
+WHAT HAPPENED: batch3 chain did start at 22:15 and mined correctly for 8.5 hours - but only
+2 of 19 shards finished. GPU sat idle. Owner's read was right: not unattended-shippable.
+ROOT CAUSE (mine, in code): adapt_infobox/scan parse_pages split the buffer with
+`buf.split("</page>", 1)` PER PAGE, copying the whole 4-16MB buffer every time. Profile on a
+30MB slice: 86.4 of 88.7 seconds inside str.split = ~70TB of memcpy across the corpus.
+FIX: one split per 4MB chunk (`parts = (buf+chunk).split("</page>"); buf = parts.pop()`).
+Measured: same 30MB slice 88.7s -> 0.39s (227x), ~21k pages/s/core. Second-order cost found
+while watching: records accumulate per shard and are written at the end (~2GB RSS/shard
+growing), so full-corpus mine is ~20 min wall at 6-way rather than minutes - acceptable,
+noted for a future streaming-write pass.
+PROCESS FAILURE (the worse one): the watcher had NO progress-based alert - it only fired on
+defined milestones, so a phase that stands still for 8 hours stayed silent. Added STALL
+GUARD: batch3.log phase unchanged >45 min AND no clarke process -> critical notification.
+Removed the slow mining + chain, re-mined from scratch (converter hash changed => cache
+correctly invalidated; the 2 stale entries will be overwritten).
+Honest score for the night: expReal2's verdict WAS delivered on time (CUAD .381, notification
+22:17). The batch-3 failure was a code-pathology + missing-stall-alarm, not a chain that
+didn't run. Fixed both.
+NEW ETA: mine ~07:20, assemble ~07:25, train 1 epoch ~6.5-7h -> battery -> verdict ~15:00.
+
 **22:18 — expReal2 VERDICT: REAL DATA IS THE LEVER. CUAD .097 -> .381 (3.9x).**
 Controls: expFinal .026 / expMix .097 / expSpan .156 (best before tonight).
 READ (init expMix-6852, 2 epochs, mix = synth stack + REAL cuad 1,714 + keyphrase 20 +
