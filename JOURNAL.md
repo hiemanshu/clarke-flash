@@ -1,3 +1,21 @@
+**21:55 — UNATTENDED PLAN SET: expDense (running) -> expLoRA (queued, smoke-gated).**
+expDense: init expReal2-7658, 2 epochs on train3+typed+contract+cuad_8k(3,207)+
+acord_dense(1,368)+keyphrase = 25,152 recs/epoch, 8,384 steps. Started 21:48.
+ETA train ~01:20, verdict ~01:50. NOTIFY: compare batch3-4b vs expDense (wrong baseline
+pair but fine as a sanity frame; the true control is expReal2 - .381 CUAD - which I'll read
+manually).
+expLoRA (queued, waits for DENSE DONE): SMOKE TEST first (scripts/lora_smoke.py verifies
+adapter grads + peak VRAM; aborts with a critical notification if broken), then LoRA r=16
+alpha=32 on the same dense mix, init-head from expDense, 2 epochs, battery + compare notify.
+Implementation notes (why it took 3 code changes): ClarkeModel.forward wrapped the backbone
+in torch.no_grad() -> adapters would never get gradients; LoRA backward needs activation
+memory -> gradient checkpointing enabled; optimizer/checkpoint/eval had to include adapter
+params (save_pretrained into checkpoint/lora, PeftModel.from_pretrained in eval).
+DEPENDENCIES: peft 0.21.2 installed (owner-approved python libs). Deferred until GPU free:
+flash-linear-attention + causal-conv1d (the transformers warnings say Qwen3.5 falls back to
+reference kernels; potential 1.3-2x across ALL runs) - install, 20-step speed A/B, roll back
+if broken. pypdf for ExtractBench text extraction whenever that eval is wanted.
+
 **19:05 — PATH CHOSEN (owner: pick a path, keep testing unattended). expDense LAUNCHED.**
 Evidence-driven path: capacity is not the lever (4B ≈ 9B), context is not the constraint
 (only ~2-5% of ACORD exceeds 8k; CUAD 3.3k, wikiib 1.8k), peft was missing for LoRA -> so the
