@@ -1,3 +1,21 @@
+**19:05 — PATH CHOSEN (owner: pick a path, keep testing unattended). expDense LAUNCHED.**
+Evidence-driven path: capacity is not the lever (4B ≈ 9B), context is not the constraint
+(only ~2-5% of ACORD exceeds 8k; CUAD 3.3k, wikiib 1.8k), peft was missing for LoRA -> so the
+lever is DATA, specifically the corpora that moved CUAD .097->.381.
+DENSE DATA BUILT (leak-audited): CUAD re-windowed at 8k chars -> 3,207 clean records (vs 1,714
+at 16k; 136 eval-region windows dropped, 0 eval-title/typed-test leaks verified); ACORD at 24
+windows/query -> 1,368 (vs 684; contamination audit unchanged, eval holdout untouched at 228).
+scripts/mine_real.py now takes --window/--out (audit assertion added); adapt_acord.py takes
+--windows. expDense chain: init expReal2-7658, 2 epochs, train3+typed+contract+dense-cuad+
+dense-acord+keyphrase (~25.1k recs/epoch, 8,383 steps), battery = real/typed/acord/contractval/
+val3/pm-real, auto-notify.
+OWNER AUTHORISED PIP INSTALLS: installed **peft 0.21.2** (LoRA, rung 4). Still to evaluate:
+flash-linear-attention + causal-conv1d (the transformers warnings say Qwen3.5 is falling back
+to slow reference kernels; could be a 1.3-2x speedup on every run) - install + 20-step speed
+smoke test + rollback if broken, to be done when the GPU is free.
+NEXT (built during expDense): LoRA support in train/eval (adapters on q/k/v/o+mlp, optimiser
+includes them, checkpoints save/load adapters), then a LoRA probe on the same dense mix.
+
 **18:50 — 9B vs 4B SCALING RESULT: capacity is NOT the lever. Near-tie.**
 Both: same 94,285-record mix, 1 epoch, 15,715 steps, identical eval files. 4B = fresh head
 (hidden 2560, 113.6M head params) vs 9B warm-started from expReal2-7658 (a handicap for 4B).

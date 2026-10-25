@@ -1,6 +1,9 @@
 """Rebuild clean real-corpus training data (leak-audited per journal rules)."""
-import json, re, pathlib
+import json, re, pathlib, sys
 from clarke import public
+
+WINDOW = int(sys.argv[sys.argv.index("--window") + 1]) if "--window" in sys.argv else 16000
+OUT = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else "data/cuad_train.jsonl"
 
 blob = json.load(open("data/raw/CUAD_v1.json"))
 docs = blob["data"]
@@ -32,7 +35,8 @@ tt_cuad = [r["id"] for r in tt if "cuad" in r["id"]]
 tt_tok = [typed_tokens(i) for i in tt_cuad]
 
 # --- build windowed records over the FULL train region (docs 0..470) ---
-recs = public.cuad_records(pathlib.Path("data/raw/CUAD_v1.json"), doc_start=0, doc_end=470)
+recs = public.cuad_records(pathlib.Path("data/raw/CUAD_v1.json"), doc_start=0, doc_end=470,
+                           window_chars=WINDOW)
 clean, drop_eval, drop_tt = [], 0, 0
 doc_leaks = set()
 for d in docs[:470]:
@@ -49,13 +53,18 @@ for r in recs:
         clean.append(r)
 print(f"windowed {len(recs)} from docs[0:470] -> clean {len(clean)} (dropped {drop_eval} eval-region windows,"
       f" {len(doc_leaks)} train-region docs leak into typed_test)")
-with open("data/cuad_train.jsonl", "w") as h:
+with open(OUT, "w") as h:
     for r in clean: h.write(json.dumps(r) + "\n")
 
-# sanity: zero overlap vs BOTH eval sets by title tokens
-for name, pool in (("real_eval", ev_titles), ("typed_test", {norm(r['id']) for r in tt_cuad})):
-    inter = [r["id"] for r in clean if r["id"].rsplit("-",1)[0].removeprefix("cuad-") in pool]
-    print(f"cuad_train ∩ {name}: {len(inter)} exact-title collisions")
+# sanity: zero overlap vs BOTH eval sets (titles + typed_test doc tokens)
+bad_eval = [r for r in clean
+            if r["id"].rsplit("-", 1)[0].removeprefix("cuad-") in ev_titles]
+bad_tt = [r for r in clean
+          if any((lambda dc, dd: dc and dc == nc and dd & nd)(
+                     *doc_tokens(r["id"].rsplit("-", 1)[0].removeprefix("cuad-")))
+                 for nc, nd in tt_tok)]
+print(f"VERIFY eval-title windows: {len(bad_eval)}  typed-test-source windows: {len(bad_tt)}")
+assert not bad_eval and not bad_tt, "leak audit failed"
 
 # --- keyphrase: validation parquet only (test parquet IS the eval), namespaced ---
 kp = public.keyphrase_records(pathlib.Path("data/raw/keyphrase-validation.parquet"))

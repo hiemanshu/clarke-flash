@@ -11,12 +11,12 @@ disjoint at query level. Clauses overlapping any local eval surface
 
 usage (from repo root): uv run python scripts/adapt_acord.py
 """
-import json, re
+import json, re, sys
 from pathlib import Path
 
 BASE = Path("data/raw/acord_extract/ACORD Dataset & ReadMe (external)")
 N_SLOTS = 14
-WINDOWS_PER_QUERY_TRAIN = 12
+WINDOWS_PER_QUERY_TRAIN = int(sys.argv[sys.argv.index("--windows") + 1]) if "--windows" in sys.argv else 12
 WINDOWS_PER_QUERY_EVAL = 4  # deterministic decoy samples -> stable eval
 import random
 
@@ -141,7 +141,7 @@ def main() -> None:
                       if r["answers"][next(iter(r["answers"]))]["value"] is not None)
     print(f"[acord] train: {n_tr} windows ({gold_fields} answerable, {nulls} null) | "
           f"eval: {n_te} windows (HOLDOUT, never train on this)")
-    with open("data/acord_train.jsonl", "w") as h:
+    with open(("data/acord_train_dense.jsonl" if len(sys.argv) > 1 else "data/acord_train.jsonl"), "w") as h:
         for r in train_recs: h.write(json.dumps(r) + "\n")
     with open("data/acord_test.jsonl", "w") as h:
         for r in eval_recs: h.write(json.dumps(r) + "\n")
