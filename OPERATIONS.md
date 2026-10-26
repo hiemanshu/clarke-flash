@@ -4,6 +4,12 @@ This file survives context compaction. If you are an agent resuming with a
 compacted context, READ THIS FIRST, then JOURNAL.md (newest entries at top),
 then PLAN.md.
 
+## Artifacts
+
+`reports/` is gitignored — eval JSONs are regenerable from `runs/*/checkpoint-*` + data, so they
+stay on disk only. Therefore **every result must be journaled with its number, run dir and report
+path**; a figure that lives only in `reports/` is not durable.
+
 ## Monitoring
 
 `./scripts/watch_training.sh` — TTY: ncurses dashboard for the CURRENT run only (progress,

@@ -1,3 +1,13 @@
+**15:45 — reports/ is gitignored (owner request). Consequence: the journal is now the only
+durable record of results.**
+114 tracked eval JSONs were dropped from the index (files untouched on disk) and `reports/` is
+added to .gitignore. Rationale: they are regenerable - every number is re-derivable from
+runs/*/checkpoint-* plus the data files - so tracking them only bought churn.
+The rule this imposes, effective now: EVERY result that matters must be written into this
+journal with (a) the number, (b) the run dir / checkpoint, and (c) the report path it came from,
+because that path is no longer version-controlled. A number that exists only in reports/*.json
+now dies with the machine.
+
 **15:40 — BACKBONE SWEEP RESULT 1/7: Qwen3.5-0.8B does NOT replace the 2B.**
 (runs/bb-qwen08/checkpoint-8384, 2 epochs, bench_v1, fresh head, 67->40 min)
                      2B ref   2B repl   0.8B      delta vs 2B
