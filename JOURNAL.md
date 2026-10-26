@@ -1,3 +1,31 @@
+**17:28 — BACKBONE SWEEP RESULT 3/7: Hy-MT2-1.8B fails the copy-alignment hypothesis.**
+(runs/bb-hymt2/checkpoint-8384, 2 epochs, bench_v1, fresh head, 85 min, 5.0 GB)
+Full metric set, all four arms so far:
+  arm            eval     exact   tokF1  contains  null_ok  answered  exact@all
+  2B (ref)       real168  .4070   .5541   .6859    .9853    380/593   .2608
+  2B (ref)       doc40    .4407   .5731   .6790    .9720    322/498   .2850
+  Qwen0.8B       real168  .3914   .5391   .6851    .9880    353/593   .2330
+  Qwen0.8B       doc40    .4409   .5639   .6875    .9825    275/498   .2435
+  LFM2.5-230M    real168  .3220   .4642   .6021    .9843    294/593   .1596
+  LFM2.5-230M    doc40    .3343   .4725   .6063    .9615    243/498   .1631
+  Hy-MT2-1.8B    real168  .3259   .4947   .6647    .9874    337/593   .1852
+  Hy-MT2-1.8B    doc40    .3761   .5407   .6674    .9615    259/498   .1956
+THE HYPOTHESIS WAS: translation training rewards faithful copying/alignment, so an MT-tuned
+backbone might be unusually good at span extraction. It is not. At 2.04B params it scores .3259
+short-context - statistically the same as the 0.23B LFM (.3220) and .081 BELOW the 2B - despite
+answering more fields than the 230M (337 vs 294). Its contains (.6647/.6674) is close to the 2B
+(.6859/.6790), so the model finds roughly the right text; it just fails to convert that into
+exact spans. Reading: MT post-training produces representation that are locally plausible for
+copying but not field-conditioned - "where is this clause" is answered, "which exact tokens are
+the answer to THIS question" is not.
+Side effect worth noting: it also has the lowest doc-level answered rate of any >=1B arm
+(259/498), so the MT tuning appears to suppress extraction-specific recall too.
+CONSEQUENCE: the "different objective is the answer" branch of the sweep is closed. Remaining
+live branches are recipe recency/diversity (MiniCPM5), architecture (Gemma sliding window),
+capacity within one recipe (LFM 0.23->1.2->2.6B) and Mistral's recipe at 3.85B.
+QUEUE: v1->v3 switch fired at the boundary as designed; v2 briefly started gemma_e2b (17:28) and
+was killed during weight load (no GPU work lost). v3 running minicpm5 since 17:28.
+
 **16:20 — SWEEP DESIGN LOCKED (owner decisions). Recorded here because the queue has been
 edited four times and the reasoning only existed in chat.**
 FINAL ARM LIST AND ORDER (bb_sweep_v3.sh, runs sequentially, no early stop):
