@@ -1,3 +1,25 @@
+**12:58 — The backbone's native context is 256k, and the hybrid stack makes it affordable.
+My earlier "16k context is not urgent / long context is expensive" framing was wrong twice.**
+Checked the real configs instead of assuming:
+  Qwen3.5-2B / 4B / 9B: max_position_embeddings = 262,144, NO rope_scaling needed (native).
+  All three are hybrid: only every 4th layer is full attention (2B = 18 linear + 6 full;
+  4B/9B = 24 linear + 8 full), GQA 2/4 KV heads.
+So long-context compute is ~1/4 quadratic, not fully quadratic - my "5-10x slower at 64k"
+guess was pessimistic. Memory for head-only is also fine: the frozen backbone already runs
+under torch.no_grad (model.py), so no activations are retained; at 256k the kept hidden
+states are 256k x 2048 x 2B = ~1.05 GB on the 2B, and pointer logits are 41 x 256k = ~42 MB.
+THE CAP IS OURS, NOT THE MODEL'S:
+  clarke-train --max-length default 8192 (train.py:292)
+  encoding.py max_length default 8192, which truncates state to ~8k - fixed schema (~2.4k)
+    = ~5.6k tokens, i.e. only ~26k chars of a 300k-char contract
+  clarke-eval has no max-length flag at all, so it inherits 8192.
+Revised plan (cheap first): (1) measure 2B forward at 32k/64k/128k/256k - peak VRAM and
+latency; (2) run the existing head zero-shot at 64k on the 74k-token Goosehead contract and
+compare with today's window-merge, to see whether a head trained at <=8k generalises to
+positions it never saw; (3) only if that fails, train at 32k windows (data rebuild from CUAD
+is minutes since the miner exists). This also unlocks a fair DOCUMENT-level comparison against
+models that read the whole contract - which is the comparison that actually matters.
+
 **12:50 — CUAD accounting corrected: 510 contracts total, 470 train / 40 eval, and my
 "41 documents" was wrong (it is 40). Also found an id-collision bug.**
 Source of truth: data/raw/CUAD_v1.json = 510 contracts, 6,702 answered questions (32% of the
