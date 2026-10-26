@@ -1,3 +1,21 @@
+**12:00 — 20-record head-to-head armed against the 4B arm (owner request).**
+Goal: our own checkpoints scored on the EXACT 20 CUAD records the external baselines used,
+so the comparison stops being directional. Alignment verified offline: the first 20 records
+of data/real_eval.jsonl with state+fields are byte-identical in id and order to
+reports/external/clairic.preds.jsonl (ID-ALIGN OK).
+Mechanics (/tmp/opencode/h2h_chain.sh, log /tmp/opencode/h2h.log):
+1. wait for "SCALE DONE" in scale.log (4B arm, ~step 4,500/8,384 at 11:56);
+2. immediately reserve the GPU with a dummy process whose argv matches clarke-(train|eval) -
+   seed2_chain and bench9b_chain both gate on that pattern, so they wait instead of starting
+   a 2B training run mid-eval. Self-capped at 30 min so a crash here can never wedge the queue;
+3. re-check the id alignment in-script and ABORT rather than spend GPU if it ever drifts;
+4. eval 4B and 2B (latest checkpoints) with --limit 20 --batch-size 1 --agg-atoms into
+   reports/head2head/{4b,2b}.json;
+5. release the hold, then print+notify the combined table via scripts/compare_external.py.
+Comparability: same records, same schema, same 64k cap; exact/null_correct come from the same
+metric definitions in both scorers (tok_f1/contains are external-only and shown as dashes for
+our rows). This closes the honest caveat in the earlier entry without re-running anything paid.
+
 **13:25 — External baselines closed for now (owner: stop, budget). Final table.**
 20 CUAD records / 62 gold fields, Cloudflare AI Gateway, identical schema+cap for all:
   model            exact   tokF1  contains  answered  null_ok  grounded
