@@ -1,3 +1,22 @@
+**12:40 — Full contract lengths measured (corrects an earlier claim of mine).**
+Reconstructed doc length from window offsets in real_eval (41 CUAD docs):
+  windows/doc: p10=1, median=2, p90=9, max=20 (distribution: 8 docs single-window,
+  15 two, 5 three, 4 four, then 5/8x3/9/11x2/19/20)
+  full-contract size (4.6 chars/token measured): median 28.9k chars ~ 6.3k tokens,
+  p90 120k chars ~ 26k tokens, max 300.8k chars ~ 65.4k tokens
+  (that max is the Goosehead franchise agreement - the doc behind 19 of the 20 records
+  in the external-baseline slice, which is exactly why that slice was unrepresentative)
+Other corpora: ACORD test median 9.4k chars (~2k tok), max 40.6k (~8.8k tok);
+contract_val median 3.9k chars (~0.9k tok).
+CORRECTION to the 12:00 entry: I wrote that 16k context "only matters for genuinely long
+documents". True per eval window (3.5k tokens), but the contracts themselves are long: the
+median contract is ~6.3k tokens, i.e. it only just fits one 8k window, and the p90 needs
+~9 windows. So the open question is not eval context but full-contract extraction: either
+window-and-merge, or one pass at 64k (the Cloudflare recipe), which costs pointer logits
+over 64k tokens. Windowing already covers everything today, but calling the 64k item dead
+was wrong - it is the difference between "per-window answers" and "answer about the
+document".
+
 **12:32 — 2B scored on the 20-record slice; the slice itself is the finding.**
 Ran `clarke-eval --head runs/scale-2b/checkpoint-8384 --limit 20` alongside the 4B training
 (17.2 GB free, eval needs ~7 GB, no OOM, ~3 min). Result on the same 20 records the external
