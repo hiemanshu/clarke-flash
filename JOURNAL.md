@@ -1,3 +1,44 @@
+**17:40 — Reviewed docs/data-landscape.md against today's measurements. It re-ranks, and the
+two biggest levers turned out not to be datasets at all.**
+The memo is accurate on facts and honest about its own corrections. Where it is wrong is
+PRIORITY: it ranks MultiHiertt+HiTab (aggregation) as step 1 because `computed` is the
+unsupervised head. But doc40 is pure list<text> clause extraction, so aggregation cannot move it.
+Our measured failure on 498 gold fields (scripts/doc_diagnose.py, 2B, 65k):
+  correct+reported 24.9% | correct-but-rejected 0.4% | wrong span 43.2% | true miss 31.5%
+  gold multi-item 40.0% of fields, model emits multi-item 13.9%
+So the gap is COVERAGE and MULTI-SPAN, not arithmetic. Aggregation belongs below anything that
+adds repeated records.
+THREE FINDINGS THAT OUTRANK ANY NEW CORPUS (all measured just now):
+1. doc_train_470 IS ALREADY BUILT AND UNUSED: 470 full contracts, median 7,149 tokens,
+   38.8% multi-item gold - exactly the distribution doc40 punishes. ~25 min on the 2B. Fixes the
+   train/serve gap (we train on ~390-token windows, evaluate on 65k documents).
+2. THE CONVERTER SILENTLY TRUNCATES MULTI-ANSWER FIELDS: public.cuad_records uses max_spans=8,
+   but CUAD has up to 55 distinct answers per QA. Train: 108 QAs (1.7%) exceed 8; held-out: 11
+   QAs (2.2%) exceed 8. doc_eval_40 gold is truncated identically, so those fields are scored on
+   a subset and the head can never learn 9+. LIST_SLOTS=8 is defensible; the truncation being
+   SILENT is not - log and decide it.
+3. SPAN_MAX_TOKENS=256 MAKES 1.9% OF GOLD UNREACHABLE: gold span lengths are median 38 tokens,
+   p90 107, p99 281, max 647. The decoder cannot emit a span longer than 256 tokens, so those
+   fields are guaranteed misses by construction. Raising to 512 is nearly free.
+DATASETS, RE-RANKED (license, effort, what it attacks):
+  1 CORD (1,000 receipts, 30 classes, line items) - CC BY 4.0, S - multi-slot list; SROIE
+    adapter is the template; the only cheap source of repeated records
+  2 Kleister-NDA (~540 NDAs, text+annotations, DECOY KEYS) - no SPDX tag (terms read), S-M -
+    long-doc coverage + free null supervision in a genre CUAD does not cover
+  3 DocILE (100k synthetic invoices, labels by construction, line items) - access request, M-L -
+    the only large multi-item corpus; ships words+boxes so no PDF tooling needed
+  4 VAREX (1,777 docs, 1,771 schemas, text_flow) - CDLA, S - eval-only schema generalisation;
+    values are synthetic, so it tests unseen-schema, not realism
+  5 SEC XBRL pilot - public domain, L - numeric/date recall at scale; does not help clause spans
+  6 ExtractBench(+Pro) - Apache, M - BLOCKED on a PDF library (owner ask, OPERATIONS 4)
+  -  MultiHiertt/HiTab - MIT / none - below all of the above; different surface
+DELIBERATELY NOT ACTED ON: memo's licensing question remains open (typed-extraction + DROP are
+CC-BY-SA-4.0 and already in the mix - that is an owner decision, not a data task), and no new
+package has been installed for PDFs.
+PLAN: (a) free fixes first - SPAN_MAX_TOKENS 256->512, make max_spans truncation explicit/logged,
+run doc_train_470 on the 2B when the GPU frees; (b) then CORD as the first acquisition; (c) then
+Kleister-NDA after a terms read; (d) DocILE paperwork only if CORD moves multi-item recall.
+
 **17:28 — BACKBONE SWEEP RESULT 3/7: Hy-MT2-1.8B fails the copy-alignment hypothesis.**
 (runs/bb-hymt2/checkpoint-8384, 2 epochs, bench_v1, fresh head, 85 min, 5.0 GB)
 Full metric set, all four arms so far:
