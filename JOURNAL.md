@@ -1,3 +1,29 @@
+**19:54 — BACKBONE SWEEP RESULT 5/7: LFM2.5-1.2B — the Liquid curve climbs, but a null-discipline
+regression appears.**
+(runs/bb-lfm12/checkpoint-8384, 2 epochs, bench_v1, fresh head, 46 min, 3.9 GB, 17.5 rec/s)
+  arm            eval     exact   tokF1  contains  null_ok  answered  exact@all
+  2B (ref)       real168  .4070   .5541   .6859    .9853    380/593   .2608
+  2B (ref)       doc40    .4407   .5731   .6790    .9720    322/498   .2850
+  LFM2.5-230M    real168  .3220   .4642   .6021    .9843    294/593   .1596
+  LFM2.5-230M    doc40    .3343   .4725   .6063    .9615    243/498   .1631
+  LFM2.5-1.2B    real168  .3847   .5180   .6521    .9829    n/a       .2120*
+  LFM2.5-1.2B    doc40    .4118   .5515   .6756    .9501    275/498   .2274
+(*real168 answered from the report; exact@all .2120 computed there)
+WITHIN-FAMILY SCALING (the actual point of this arm): 230M -> 1.2B (5x params) buys
+  real168 exact +.0627, doc40 exact +.0775, doc40 answered 243 -> 275, exact@all .1631 -> .2274.
+That is a steep, clean scaling curve - much steeper than Qwen's above 1B - so LFM2.5-2.6B is a
+genuine candidate rather than a formality; extrapolating the same marginal gain lands it near
+.42-.43 doc40 exact, i.e. at or above the incumbent.
+THE WARNING SIGN: null_ok at doc40 drops to .9501, the lowest of any arm so far (2B .9720,
+CPM5 .9711, Hy-MT2 .9615, 230M .9615). Combined with contains .6756 (close to the 2B's .6790)
+and only 275 answered, the picture is a model that fills more fields than it should on long
+documents - more aggressive extraction, slightly worse refusal. If 2.6B keeps climbing in exact
+while continuing to fall in null_ok, that trade is the thing to price, not the exact score alone:
+coverage is our binding constraint, but null discipline is our differentiator against the
+frontier models (clairic .2546, gpt .8945 on the 20-record comparison).
+Cost: 17.5 rec/s at 3.9 GB - cheaper per record than Qwen 2B (14.2 at 5.8 GB), so if 2.6B reaches
+parity this family wins on serving economics.
+
 **19:08 — BACKBONE SWEEP RESULT 4/7: MiniCPM5-2B reaches parity with the 2B, and its 131k
 context is REAL.**
 (runs/bb-minicpm5/checkpoint-8384, 2 epochs, bench_v1, fresh head, 99 min, 6.4 GB, 8.7 rec/s)
