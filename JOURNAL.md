@@ -1,3 +1,25 @@
+**13:25 — External baselines closed for now (owner: stop, budget). Final table.**
+20 CUAD records / 62 gold fields, Cloudflare AI Gateway, identical schema+cap for all:
+  model            exact   tokF1  contains  answered  null_ok  grounded
+  opus-5.5         .3396   .6179   .7432        53     .917     .830
+  gemini-4-argon   .2750   .6608   .7934        53     .934     .641
+  gpt-6.1-sol      .1727   .6286   .7759        54     .895     .759
+  clairic          .0047   .2365   .9528        60     .255     .867
+Not valid: deepseek (403, Workers Free plan), minimax (failed pass on disk; fixes landed
+afterwards but the rerun was stopped), qwen (every call exceeded the 180s read timeout).
+reports/external/README.md states which files are valid, what each metric means, and that
+our own .428 is on the full 148-record set (directional only, not a head-to-head).
+Interpretation, held loosely at n=20: frontier chat models buy exact-span accuracy (17-34%)
+by ANSWERING LESS (53-54 of 62 fields), while Clairic answers almost everything (60) with 95%
+of content inside the gold text but .005 exact - a span-granularity gap, not comprehension.
+Our 2B sits at .428 exact with null_ok .989, i.e. it already beats both axes that matter for
+a schema extractor: exact spans AND refusing absent fields. Also worth noting opus-5.5
+grounded .830 vs gemini .641 - Gemini paraphrases more even when it is right.
+Cost discipline lesson: two models failed 20/20 with an identical error while a third burned
+retries into a timeout. A 2-record preflight per model would have cost ~6 calls instead of
+~85. Add `--preflight` (stop a model after N consecutive identical failures) before any
+future multi-model spend.
+
 **13:10 — First real external signal (20 CUAD records, 62 gold fields). Budget watch.**
 Owner flagged that ~20% of the testing budget is gone, so testing is now batched: no more
 exploratory single calls, verify from saved predictions only.
