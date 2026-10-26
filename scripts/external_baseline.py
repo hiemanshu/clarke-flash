@@ -1,44 +1,34 @@
-"""External-model baseline on our eval files, scored with our own metric logic.
+"""External baselines on our eval files, ALL routed through Cloudflare AI Gateway.
 
-Two access paths:
+Transport (single REST surface, per Cloudflare docs):
+  chat models (OpenAI / Anthropic / Google / Workers AI chat):
+      POST https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions
+      headers: Authorization: Bearer $CLOUDFLARE_API_TOKEN
+               cf-aig-gateway-id: <gateway>
+      body: {"model": "openai/gpt-6-luna" | "anthropic/claude-opus-5-5" | "@cf/..."}
+  Clairic (non-chat, native schema):
+      POST https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/@cf/cloudflare/clairic
+      body: {"state": ..., "fields": {...}}   (+ cf-aig-gateway-id for gateway logging)
 
-1) Cloudflare AI Gateway (preferred for chat models) - one OpenAI-compatible endpoint:
-     https://gateway.ai.cloudflare.com/v1/{account}/{gateway}/compat/chat/completions
-   header: cf-aig-authorization: Bearer <CF_AIG_TOKEN>
-   model:  "{provider}/{model}"  e.g. openai/gpt-6-luna, anthropic/claude-opus-5-5
-   Provider keys either stored in the gateway (BYOK) or passed as Authorization.
+Models are declared in a JSON file (see configs/external_models.json):
+  {"models": [
+    {"label": "clairic", "kind": "clairic", "model": "@cf/cloudflare/clairic"},
+    {"label": "gpt",     "kind": "chat",    "model": "openai/gpt-6-luna"},
+    {"label": "opus",    "kind": "chat",    "model": "anthropic/claude-opus-5-5"}
+  ]}
 
-2) Direct provider APIs (fallback / for Clairic):
-   - Workers AI run endpoint for @cf/cloudflare/clairic (native state+fields schema!)
-   - OpenAI /v1/chat/completions
-   - Anthropic /v1/messages
-
-Clairic takes our schema DIRECTLY (state + typed fields -> typed answers), so it is the
-only true 1:1 comparison. Chat models get a JSON contract and we locate their strings in
-the state ourselves (never trust model-supplied offsets).
-
-Environment (never written to disk here):
-  CF_AIG_TOKEN, CLOUDFLARE_ACCOUNT_ID        (gateway; CLOUDFLARE_API_TOKEN for direct WA)
-  OPENAI_API_KEY / ANTHROPIC_API_KEY         (or rely on gateway-stored BYOK keys)
+Env (all optional except the first two):
+  CLOUDFLARE_ACCOUNT_ID      required
+  CLOUDFLARE_API_TOKEN       required (auth for the REST endpoints)
+  CLOUDFLARE_GATEWAY         gateway id (default: "default")
+  CF_AIG_TOKEN               only if the gateway itself enforces auth (cf-aig-authorization)
+  OPENAI_API_KEY / ANTHROPIC_API_KEY / ...  only if NOT using stored BYOK keys
 
 Usage:
-  # Clairic through Workers AI (direct)
-  uv run python scripts/external_baseline.py --provider cloudflare \
-      --model @cf/cloudflare/clairic --data data/real_eval.jsonl --limit 148 \
-      --out reports/external-clairic.json
-
-  # GPT through AI Gateway
-  uv run python scripts/external_baseline.py --provider openai --model gpt-6-luna \
-      --gateway my-gateway --data data/real_eval.jsonl --limit 148 \
-      --out reports/external-gpt.json
-
-  # Opus through AI Gateway
-  uv run python scripts/external_baseline.py --provider anthropic --model claude-opus-5-5 \
-      --gateway my-gateway --data data/real_eval.jsonl --limit 148 \
-      --out reports/external-opus.json
-
-  # validate payload + endpoint without spending money
-  ... --dry-run --limit 1
+  uv run python scripts/external_baseline.py --models-file configs/external_models.json \
+      --data data/real_eval.jsonl --limit 20 --out-dir reports/external
+  uv run python scripts/external_baseline.py --model openai/gpt-6-luna --kind chat \
+      --limit 5 --dry-run
 """
 from __future__ import annotations
 
@@ -53,10 +43,6 @@ from pathlib import Path
 
 
 def load_dotenv(path: str = ".env") -> None:
-    """Load KEY=VALUE lines from .env without overriding exported variables.
-
-    Dependency-free on purpose; .env is gitignored, .env.example documents it.
-    """
     p = Path(path)
     if not p.exists():
         return
@@ -73,44 +59,7 @@ def load_dotenv(path: str = ".env") -> None:
 load_dotenv()
 
 
-# ---------------------------------------------------------------- schema mapping
-
-_TOK = None
-
-
-def _tokenizer(name: str):
-    """Lazy tokenizer for exact context accounting (Qwen family = Clairic's backbone)."""
-    global _TOK
-    if _TOK is None:
-        from transformers import AutoTokenizer
-        _TOK = AutoTokenizer.from_pretrained(name)
-    return _TOK
-
-
-def cap_state(state: str, max_tokens: int, tokenizer_name: str) -> tuple[str, int, int]:
-    """Trim `state` to at most max_tokens (exact token count, not chars).
-
-    Returns (state, before, after). We never rely on the provider's silent
-    truncation: the comparison must be on identical, explicitly-reported input.
-    """
-    if max_tokens <= 0:
-        return state, 0, 0
-    try:
-        tok = _tokenizer(tokenizer_name)
-        ids = tok(state, add_special_tokens=False)["input_ids"]
-        before = len(ids)
-        if before <= max_tokens:
-            return state, before, before
-        kept = tok.decode(ids[:max_tokens], skip_special_tokens=True)
-        return kept, before, max_tokens
-    except Exception:
-        # fallback: conservative legal-text ratio (~2.5 chars/token)
-        before = int(len(state) / 2.5)
-        if before <= max_tokens:
-            return state, before, before
-        keep_chars = int(max_tokens * 2.5)
-        return state[:keep_chars], before, max_tokens
-
+# ---------------------------------------------------------------- schema / prompt
 
 def fields_for_record(record: dict) -> dict:
     out = {}
@@ -127,12 +76,38 @@ def fields_for_record(record: dict) -> dict:
 def json_instruction(fields: dict) -> str:
     spec = json.dumps({n: {k: v for k, v in f.items() if k in ("type", "items", "instructions")}
                        for n, f in fields.items()}, indent=1)
-    return (
-        "Extract the requested fields from the STATE below. Reply with a single JSON object "
-        "mapping each field name to either an array of EXACT substrings copied verbatim from the "
-        "state, or null when the field is not present. Do not paraphrase; do not add prose "
-        "outside the JSON.\n\nFIELDS:\n" + spec
-    )
+    return ("Extract the requested fields from the STATE below. Reply with a single JSON object "
+            "mapping each field name to an array of EXACT substrings copied verbatim from the "
+            "state, or null when the field is not present. Do not paraphrase; no prose outside "
+            "the JSON.\n\nFIELDS:\n" + spec)
+
+
+_TOK = None
+
+
+def _tokenizer(name: str):
+    global _TOK
+    if _TOK is None:
+        from transformers import AutoTokenizer
+        _TOK = AutoTokenizer.from_pretrained(name)
+    return _TOK
+
+
+def cap_state(state: str, max_tokens: int, tokenizer_name: str):
+    """Explicit context cap with exact token accounting (never provider-side)."""
+    if max_tokens <= 0:
+        return state, 0, 0
+    try:
+        tok = _tokenizer(tokenizer_name)
+        ids = tok(state, add_special_tokens=False)["input_ids"]
+        if len(ids) <= max_tokens:
+            return state, len(ids), len(ids)
+        return tok.decode(ids[:max_tokens], skip_special_tokens=True), len(ids), max_tokens
+    except Exception:
+        before = int(len(state) / 2.5)
+        if before <= max_tokens:
+            return state, before, before
+        return state[: int(max_tokens * 2.5)], before, max_tokens
 
 
 # ---------------------------------------------------------------- HTTP
@@ -157,51 +132,50 @@ def extract_json_block(text: str) -> dict:
         return {}
 
 
-# ---------------------------------------------------------------- provider calls
-
-def call_cloudflare(record, fields, model, sleep_s, base=None):
+def _cf_headers() -> dict:
     token = os.environ.get("CLOUDFLARE_API_TOKEN")
-    acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
-    if not acct or (not token and not base):
-        raise SystemExit("set CLOUDFLARE_ACCOUNT_ID (and CLOUDFLARE_API_TOKEN for direct Workers AI)")
-    url = (base or f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run") .rstrip("/")
-    url = f"{url}/{model}"
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    resp = _post_json(url, headers, {"state": record["state"], "fields": fields})
+    if not token:
+        raise SystemExit("set CLOUDFLARE_API_TOKEN")
+    gw = os.environ.get("CLOUDFLARE_GATEWAY", "default")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+               "cf-aig-gateway-id": gw}
+    aig = os.environ.get("CF_AIG_TOKEN")
+    if aig:
+        headers["cf-aig-authorization"] = f"Bearer {aig}"
+    return headers
+
+
+def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000):
+    acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or sys.exit("set CLOUDFLARE_ACCOUNT_ID")
+    url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions"
+    body = {"model": model,
+            "messages": [{"role": "system", "content": json_instruction(fields)},
+                         {"role": "user", "content": "STATE:\n" + record["state"]}],
+            "max_tokens": max_tokens, "temperature": 0}
+    resp = _post_json(url, _cf_headers(), body)
+    time.sleep(sleep_s)
+    if "choices" not in resp:
+        raise RuntimeError(f"unexpected response: {json.dumps(resp)[:400]}")
+    return extract_json_block(resp["choices"][0]["message"]["content"])
+
+
+def call_cf_clairic(record, fields, model, sleep_s):
+    acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or sys.exit("set CLOUDFLARE_ACCOUNT_ID")
+    url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/{model}"
+    payload = {"state": record["state"], "fields": fields}
+    headers = _cf_headers()
+    try:
+        resp = _post_json(url, headers, payload)
+    except RuntimeError:
+        # /ai/run is not documented to accept gateway routing; fall back to a
+        # direct call rather than losing the baseline entirely.
+        headers.pop("cf-aig-gateway-id", None)
+        resp = _post_json(url, headers, payload)
     time.sleep(sleep_s)
     if not resp.get("success", True):
         raise RuntimeError(f"cloudflare error: {json.dumps(resp)[:400]}")
     ans = resp.get("result", {}).get("answers", resp.get("answers", {}))
     return {k: (v.get("value") if isinstance(v, dict) else v) for k, v in ans.items()}
-
-
-def call_chat_compat(url, headers, model, record, fields, sleep_s, max_tokens=2000):
-    body = {"model": model,
-            "messages": [{"role": "system", "content": json_instruction(fields)},
-                         {"role": "user", "content": "STATE:\n" + record["state"]}],
-            "max_tokens": max_tokens, "temperature": 0}
-    resp = _post_json(url, headers, body)
-    time.sleep(sleep_s)
-    text = resp["choices"][0]["message"]["content"]
-    return extract_json_block(text)
-
-
-def call_anthropic_direct(record, fields, model, sleep_s):
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        raise SystemExit("set ANTHROPIC_API_KEY (or use --gateway)")
-    base = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
-    body = {"model": model, "max_tokens": 2000,
-            "system": json_instruction(fields),
-            "messages": [{"role": "user", "content": "STATE:\n" + record["state"]}],
-            "temperature": 0}
-    resp = _post_json(base + "/messages",
-                      {"x-api-key": key, "anthropic-version": "2023-06-01",
-                       "Content-Type": "application/json"}, body)
-    time.sleep(sleep_s)
-    return extract_json_block("".join(b.get("text", "") for b in resp.get("content", [])))
 
 
 # ---------------------------------------------------------------- scoring (mirrors eval.py)
@@ -228,9 +202,8 @@ def locate(state: str, value: str):
     return [i, i + len(value)] if i >= 0 else None
 
 
-def score(records, preds, model_label, data):
+def score(records, preds, label, data):
     from collections import defaultdict
-
     agg = defaultdict(lambda: {"n": 0, "answered": 0, "exact": 0.0,
                                "null_correct": 0, "null_n": 0, "grounded": 0})
     for rec, pred in zip(records, preds):
@@ -253,119 +226,38 @@ def score(records, preds, model_label, data):
             if not pset:
                 continue
             b["answered"] += 1
-            union = len(gset | pset) or 1
-            b["exact"] += len(gset & pset) / union
+            b["exact"] += len(gset & pset) / (len(gset | pset) or 1)
             b["grounded"] += int(all(locate(rec["state"], v) for v in pset))
     metrics, by_domain = {}, {}
     for (dom, kind), b in agg.items():
-        entry = {"n": b["n"],
-                 "exact": round(b["exact"] / max(b["answered"], 1), 4),
-                 "answered": b["answered"],
-                 "null_correct": round(b["null_correct"] / max(b["null_n"], 1), 4),
-                 "grounded_rate": round(b["grounded"] / max(b["answered"], 1), 4)}
-        by_domain.setdefault(dom, {})[kind] = entry
+        by_domain.setdefault(dom, {})[kind] = {
+            "n": b["n"], "exact": round(b["exact"] / max(b["answered"], 1), 4),
+            "answered": b["answered"],
+            "null_correct": round(b["null_correct"] / max(b["null_n"], 1), 4),
+            "grounded_rate": round(b["grounded"] / max(b["answered"], 1), 4)}
         m = metrics.setdefault(kind, {"n": 0, "exact_sum": 0.0, "answered": 0,
                                       "null_correct": 0, "null_n": 0, "grounded": 0})
         m["n"] += b["n"]; m["exact_sum"] += b["exact"]; m["answered"] += b["answered"]
         m["null_correct"] += b["null_correct"]; m["null_n"] += b["null_n"]
         m["grounded"] += b["grounded"]
-    overall = {kind: {"n": m["n"],
-                      "exact": round(m["exact_sum"] / max(m["answered"], 1), 4),
-                      "answered": m["answered"],
-                      "null_correct": round(m["null_correct"] / max(m["null_n"], 1), 4),
-                      "grounded_rate": round(m["grounded"] / max(m["answered"], 1), 4)}
-               for kind, m in metrics.items()}
-    return {"model": model_label, "data": data, "records": len(records),
+    overall = {k: {"n": m["n"], "exact": round(m["exact_sum"] / max(m["answered"], 1), 4),
+                   "answered": m["answered"],
+                   "null_correct": round(m["null_correct"] / max(m["null_n"], 1), 4),
+                   "grounded_rate": round(m["grounded"] / max(m["answered"], 1), 4)}
+               for k, m in metrics.items()}
+    return {"model": label, "data": data, "records": len(records),
             "metrics": overall, "by_domain": by_domain}
 
 
 # ---------------------------------------------------------------- main
 
-def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--provider", choices=["cloudflare", "openai", "anthropic"], required=True)
-    ap.add_argument("--model", required=True)
-    ap.add_argument("--gateway", default=None,
-                    help="Cloudflare AI Gateway name; routes openai/anthropic through "
-                         "/compat/chat/completions (needs CF_AIG_TOKEN)")
-    ap.add_argument("--cloudflare-base", default=None,
-                    help="override base for Workers AI run calls (e.g. a gateway workers-ai path)")
-    ap.add_argument("--data", default="data/real_eval.jsonl")
-    ap.add_argument("--limit", type=int, default=20)
-    ap.add_argument("--sleep", type=float, default=0.5)
-    ap.add_argument("--out", default=None)
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--retries", type=int, default=2)
-    ap.add_argument("--max-context-tokens", dest="max_context_tokens", type=int, default=64000,
-                    help="hard cap on state tokens sent to any provider (default 64000; "
-                         "0 = no limit). Never leave truncation to the provider.")
-    ap.add_argument("--tokenizer", default="Qwen/Qwen3.5-9B",
-                    help="tokenizer used only for exact context accounting")
-    args = ap.parse_args(argv)
-
-    records = [json.loads(l) for l in open(args.data)][: args.limit]
-    records = [r for r in records if r.get("state") and r.get("fields")]
-    truncations = []
-    for idx, r in enumerate(records):
-        capped, before, after = cap_state(r["state"], args.max_context_tokens, args.tokenizer)
-        if after < before:
-            truncations.append({"id": r.get("id"), "tokens_before": before,
-                                "tokens_after": after})
-            records[idx] = {**r, "state": capped}
-    if truncations:
-        print(f"[external] NOTE truncated {len(truncations)} records to "
-              f"{args.max_context_tokens} tokens", flush=True)
-
-    # resolve endpoint + model string
-    if args.provider == "cloudflare":
-        label = f"external:workers-ai:{args.model}"
-        def one(rec, fields):
-            return call_cloudflare(rec, fields, args.model, args.sleep, args.cloudflare_base)
-    else:
-        if args.gateway:
-            acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
-            aig = os.environ.get("CF_AIG_TOKEN")
-            if not acct or not aig:
-                raise SystemExit("set CLOUDFLARE_ACCOUNT_ID and CF_AIG_TOKEN for --gateway")
-            url = (f"https://gateway.ai.cloudflare.com/v1/{acct}/{args.gateway}"
-                   f"/compat/chat/completions")
-            model = args.model if "/" in args.model else f"{args.provider}/{args.model}"
-            headers = {"cf-aig-authorization": f"Bearer {aig}",
-                       "Content-Type": "application/json"}
-            pkey = os.environ.get("OPENAI_API_KEY" if args.provider == "openai"
-                                  else "ANTHROPIC_API_KEY")
-            if pkey:
-                headers["Authorization"] = f"Bearer {pkey}"
-            label = f"external:gateway:{args.gateway}:{model}"
-            def one(rec, fields):
-                return call_chat_compat(url, headers, model, rec, fields, args.sleep)
-        elif args.provider == "openai":
-            key = os.environ.get("OPENAI_API_KEY")
-            if not key:
-                raise SystemExit("set OPENAI_API_KEY (or use --gateway)")
-            base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-            url = base + "/chat/completions"
-            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-            label = f"external:openai:{args.model}"
-            def one(rec, fields):
-                return call_chat_compat(url, headers, args.model, rec, fields, args.sleep)
-        else:
-            label = f"external:anthropic:{args.model}"
-            def one(rec, fields):
-                return call_anthropic_direct(rec, fields, args.model, args.sleep)
-
-    print(f"[external] {label} on {len(records)} records from {args.data}", flush=True)
-
-    if args.dry_run:
-        r = records[0]
-        fields = fields_for_record(r)
-        print(json.dumps({"endpoint_label": label,
-                          "state_chars": len(r["state"]),
-                          "n_fields": len(fields),
-                          "first_fields": list(fields)[:5],
-                          "json_instruction_head": json_instruction(fields)[:300]}, indent=1))
-        return 0
-
+def run_model(spec, records, args):
+    label = f"external:{args.gateway}:{spec['model']}"
+    def one(rec, fields):
+        if spec.get("kind", "chat") == "clairic":
+            return call_cf_clairic(rec, fields, spec["model"], args.sleep)
+        return call_cf_chat(rec, fields, spec["model"], args.sleep)
+    print(f"[external] {label} ({spec.get('kind','chat')}) on {len(records)} records", flush=True)
     preds = []
     for i, rec in enumerate(records):
         fields = fields_for_record(rec)
@@ -382,16 +274,63 @@ def main(argv=None):
         preds.append(pred if isinstance(pred, dict) else {})
         if (i + 1) % 10 == 0:
             print(f"  {i + 1}/{len(records)}", flush=True)
-
     report = score(records, preds, label, args.data)
     report["max_context_tokens"] = args.max_context_tokens
-    report["truncated_records"] = len(truncations)
+    report["truncated_records"] = args.truncated
     body = json.dumps(report, indent=2)
-    print(body)
-    if args.out:
-        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.out).write_text(body)
-        print(f"-> {args.out}")
+    out = Path(args.out_dir) / f"{spec.get('label') or spec['model'].replace('/', '-').replace('@', '')}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(body)
+    print(f"-> {out}", flush=True)
+    return report
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--models-file", default=None,
+                    help="JSON list of {label, kind: chat|clairic, model}")
+    ap.add_argument("--model", default=None)
+    ap.add_argument("--kind", default="chat", choices=["chat", "clairic"])
+    ap.add_argument("--label", default=None)
+    ap.add_argument("--data", default="data/real_eval.jsonl")
+    ap.add_argument("--limit", type=int, default=20)
+    ap.add_argument("--sleep", type=float, default=0.5)
+    ap.add_argument("--out-dir", default="reports/external")
+    ap.add_argument("--max-context-tokens", dest="max_context_tokens", type=int, default=64000)
+    ap.add_argument("--tokenizer", default="Qwen/Qwen3.5-9B")
+    ap.add_argument("--retries", type=int, default=2)
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args(argv)
+    args.gateway = os.environ.get("CLOUDFLARE_GATEWAY", "default")
+
+    if args.models_file:
+        specs = json.loads(Path(args.models_file).read_text())["models"]
+    elif args.model:
+        specs = [{"label": args.label, "kind": args.kind, "model": args.model}]
+    else:
+        raise SystemExit("pass --models-file or --model")
+
+    records = [json.loads(l) for l in open(args.data)][: args.limit]
+    records = [r for r in records if r.get("state") and r.get("fields")]
+    trunc = 0
+    for idx, r in enumerate(records):
+        capped, before, after = cap_state(r["state"], args.max_context_tokens, args.tokenizer)
+        if after < before:
+            trunc += 1
+            records[idx] = {**r, "state": capped}
+    args.truncated = trunc
+
+    if args.dry_run:
+        print(json.dumps({"gateway": args.gateway,
+                          "data": args.data,
+                          "records": len(records),
+                          "max_context_tokens": args.max_context_tokens,
+                          "truncated_records": trunc,
+                          "models": specs}, indent=1))
+        return 0
+
+    for spec in specs:
+        run_model(spec, records, args)
     return 0
 
 

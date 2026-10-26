@@ -1,0 +1,30 @@
+{
+  "_note": "Models the external baseline will call, all routed through Cloudflare AI Gateway. Verify exact model IDs in the Cloudflare dashboard (Workers AI catalog / AI Gateway providers) - provider naming changes over time. 'kind' selects the transport: 'clairic' = native state+fields schema (non-chat), 'chat' = OpenAI-compatible messages.",
+  "models": [
+    {
+      "label": "clairic",
+      "kind": "clairic",
+      "model": "@cf/cloudflare/clairic"
+    },
+    {
+      "label": "gpt",
+      "kind": "chat",
+      "model": "openai/gpt-6-luna"
+    },
+    {
+      "label": "opus",
+      "kind": "chat",
+      "model": "anthropic/claude-opus-5-5"
+    },
+    {
+      "label": "gemini",
+      "kind": "chat",
+      "model": "google-ai-studio/gemini-2.5-flash"
+    },
+    {
+      "label": "workers-llama",
+      "kind": "chat",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+    }
+  ]
+}

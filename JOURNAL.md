@@ -1,3 +1,27 @@
+**12:05 — External baseline simplified to Cloudflare-AI-Gateway-only + declarative model list.**
+Transport decisions:
+- ALL models now go through one Cloudflare surface. Chat models (OpenAI / Anthropic /
+  Google / Workers AI chat) use the REST endpoint
+  POST https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions
+  with `cf-aig-gateway-id: <gateway>` (Cloudflare's current documented path; the older
+  /compat/chat/completions prefix is deprecated for single-model calls).
+- Clairic keeps the native non-chat schema call (state + typed fields) on
+  /ai/run/@cf/cloudflare/clairic. That path is NOT documented to accept gateway routing,
+  so the script tries with the header and transparently retries without it (we would rather
+  lose gateway logging than lose the 1:1 comparison).
+- Added a response sanity check on chat calls (an error envelope no longer surfaces as a
+  bare KeyError).
+Config surface:
+- configs/external_models.json is now the single place that defines WHICH models are called:
+  {label, kind: chat|clairic, model}. Batch mode `--models-file` loops them and writes
+  reports/external/<label>.json, so adding a model is a config edit, not a code edit.
+  Seeded with clairic, openai/gpt-6-luna, anthropic/claude-opus-5-5,
+  google-ai-studio/gemini-2.5-flash, @cf/meta/llama-3.3-70b-instruct-fp8-fast (IDs must be
+  re-verified in the dashboard; provider naming drifts).
+- .env.example reduced to the gateway-minimal set: CLOUDFLARE_ACCOUNT_ID,
+  CLOUDFLARE_API_TOKEN, CLOUDFLARE_GATEWAY; CF_AIG_TOKEN only if the gateway enforces auth;
+  provider keys only if not using stored BYOK. Batch dry-run verified with no keys present.
+
 **11:50 — External baseline now caps context at 64k tokens (explicit, never provider-side).**
 scripts/external_baseline.py gains --max-context-tokens (default 64000) with EXACT token
 accounting via the Qwen tokenizer (same family as Clairic's backbone), fallback to a
