@@ -1,3 +1,14 @@
+**09:45 — MATCHED SCALING RUN (owner: stop 1-epoch 2B, do 2 epochs; compare vs 4B 2 epochs).**
+Killed the 1-epoch 2B chain and its waiting 4B child; old runs/exp2b kept (partial history).
+New chain (scale_chain.sh): 2B head-only 2 epochs -> battery -> 4B head-only 2 epochs ->
+battery, SAME dense mix (cuad_train_8k + 8-slot ACORD), max-length 8192, fresh heads,
+lr 1e-4, 8,384 steps each. 9B reference = expDense2 (same data, 2 epochs, .4097).
+ETA: 2B ~10:50 + battery ~11:00 (notifies with a 2B-vs-9B compare); 4B ~14:30 + battery
+~15:00 (final 2B/4B/9B table + critical notify). Owner is awake and will decide after.
+Also queued knowledge for later: the LoRA arm was dropped from this chain so the A/B is
+pure capacity; adapter work can be re-queued on 4B (fits at ~2.5k tokens) or 9B (needs a
+bigger card) once the owner chooses.
+
 **09:40 — 2B A/B running; owner descoped the 3090 (single-GPU path continues).**
 Watcher v6 adds two 2B hooks: arm-1 (head-only) notification as soon as
 reports/exp2b-real.json lands (~10:15) and the full A/B comparison when the LoRA arm's
