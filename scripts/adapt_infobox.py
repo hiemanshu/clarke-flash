@@ -21,6 +21,11 @@ MAX_STATE = 6000
 MAX_FIELDS = 16
 NULL_TARGET = 0.40
 EVAL_HASH_MOD = 6
+# global parameter vocabulary for null sampling: maintained incrementally so the
+# per-record cost is O(null_budget), not O(vocab) (the old set().union+sorted per
+# record was O(n^2) across a shard - 2.7 MB/s on a full shard vs 77 MB/s on slices)
+_PARAM_POOL: list[str] = []
+_PARAM_SET: set[str] = set()
 RECORD_CAP = 180_000
 
 IB_START = re.compile(r"\{\{\s*[Ii]nfo[Bb]ox\s+([^\s|]{1,40})")
@@ -118,6 +123,10 @@ def record_from_page(page, type_vocab, rng):
             pos += len(line) + 1
         if ib_type:
             type_vocab[ib_type].update(present.keys())
+        for _k in present:
+            if _k not in _PARAM_SET:
+                _PARAM_SET.add(_k)
+                _PARAM_POOL.append(_k)
 
     answered = [(k, v) for k, v in present.items() if v]
 
@@ -163,11 +172,17 @@ def record_from_page(page, type_vocab, rng):
         return None
     n_kept = min(len(answered), MAX_FIELDS - len(extras) - len(empty_nulls) - 1)
     answered = answered[:n_kept]
-    pool = set().union(*type_vocab.values()) if type_vocab else set()
-    cand = sorted(pool - set(present.keys()) - {"short description"})
     null_budget = max(1, min(MAX_FIELDS - n_kept - len(extras) - len(empty_nulls),
                              int((n_kept + len(extras)) * NULL_TARGET / (1 - NULL_TARGET))))
-    nulls = (rng.sample(cand, min(null_budget, len(cand))) if cand else []) + empty_nulls
+    cand: list[str] = []
+    n_pool = len(_PARAM_POOL)
+    attempts = 0
+    while len(cand) < null_budget and n_pool and attempts < null_budget * 8 + 16:
+        attempts += 1
+        p = _PARAM_POOL[rng.randrange(n_pool)]
+        if p not in present and p not in cand:
+            cand.append(p)
+    nulls = cand + empty_nulls
 
     fields, answers, used = {}, {}, set()
     def add(base, spec, ans):
@@ -229,6 +244,7 @@ def main():
             print(f"[cache] SKIP {stem} (manifest current)")
             continue
         rng = random.Random(f"{seed}:{stem}")  # per-shard determinism
+        _PARAM_POOL.clear(); _PARAM_SET.clear()
         type_vocab = defaultdict(set)
         seen, recs = set(), []
         stats = defaultdict(int)
