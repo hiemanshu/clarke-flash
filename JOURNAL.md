@@ -1,3 +1,30 @@
+**00:06 — BACKBONE SWEEP RESULT 8/8: Ministral-3-Base (3.85B) is the best per-answer extractor of
+any arm, at short context AND at 65k, and still loses on exact@all.**
+(runs/bb-ministral/checkpoint-8380, 2 epochs, bench_v1, fresh head, 74 min, 8.9 GB)
+  arm            eval     exact   tokF1  contains  null_ok  answered  exact@all
+  2B (ref)       real168  .4070   .5541   .6859    .9853    380/593   .2608
+  2B (ref)       doc40    .4407   .5731   .6790    .9720    322/498   .2850
+  Ministral-Base real168  .4442   .5649   .6735    .9867    314/593   .2352
+  Ministral-Base doc40    .4582   .5789   .6764    .9650    301/498   .2769
+  (with the span tie-break eps .25 its doc40 exact stays .4582 - no change, unlike every other
+   arm; its boundaries were already tight, which fits its low contains)
+READ: .4442 short-context is the highest exact of ANY arm in the sweep - +.0372 over the
+incumbent, ~11 sigma given our +-0.0033 noise - and .4582 doc-level is second only to Qwen 4B's
+.4710. So Mistral's recipe genuinely produces the sharpest spans. But it answers 301/498 (60%)
+versus the 2B's 322 (65%), so exact@all .2769 < .2850. Same story as granite and 4B: better
+precision, less reach.
+NOTABLE NULL PROFILE: null_ok .9650 at doc level - lower than the 2B (.9720) - while exact is
+higher. So it is not simply conservative: it fills slightly more absent fields AND gets more of
+its answers exactly right. That combination is new (granite was precise+conservative, LFM was
+aggressive+imprecise).
+SWEEP SUMMARY so far (doc40 exact@all): 2B .2850 | ministral .2769 | granite .2450 | lfm12 .2274
+| hymt2 .1956 | lfm230 .1631 | minicpm5 .2804 | qwen08 .2435. NO arm beats the incumbent on the
+combined metric; the closest is MiniCPM5 (.2804, inside noise) and Ministral (.2769, better
+precision but less coverage). Which means: backbone selection has not produced a winner, and the
+remaining levers are the ones we queued - 65k training, head capacity, and coverage/prior.
+REMAINING: lfm26 (running, will use eps .25 by default), gemma-4-12B (preflight), and the
+Gemma-E2B doc40 re-run at cap .85 that OOM'd earlier.
+
 **23:45 — Does the span tie-break change the external comparison? It changes the COMPARISON, not
 their scores.**
 External results are produced by scripts/external_baseline.py, which locates the model's returned
