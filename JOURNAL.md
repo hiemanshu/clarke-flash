@@ -1,3 +1,29 @@
+**00:15 — Comparability correction: the 4B doc40 number was from a DIFFERENT decoder version, so
+comparing it to current arms was invalid. Re-ran it.**
+Owner challenged "second only to Qwen 4B's .4710". Correct to challenge: that report was produced
+before the span tie-break existed, at a 0.58 VRAM cap alongside another run. Re-ran 4B doc40 with
+the current decoder (eps .25, cap .60):
+  config                  exact   tokF1  contains  null_ok  answered  exact@all
+  4B eps0 (old code)      .4710   .5885   .7068    .9877    296/498   .2800
+  4B eps.25 (current)     .4749   .5823   .6901    .9877    296/498   .2823
+So 4B gains +.0039 exact from the tie-break (smaller than most arms - its boundaries were already
+reasonably tight, contains drops .707->.690) and lands at .2823 exact@all.
+CORRECTED SWEEP TABLE (all current decoder, eps .25, doc40 @65k):
+  2B           exact .4535  exact@all .2932  answered 322   <- best combined
+  MiniCPM5 2B  exact .4434  exact@all .2929  answered 329   (inside noise of the 2B)
+  4B           exact .4749  exact@all .2823  answered 296   <- best per-answer
+  Ministral    exact .4582  exact@all .2769  answered 301
+  granite 3.7B exact .4545  exact@all .2537  answered 278
+  Qwen 0.8B    exact .4592  exact@all .2536  answered 275
+  LFM 1.2B     exact .4182  exact@all .2309  answered 275
+  Hy-MT2       exact .3946  exact@all .2052  answered 259
+  LFM 230M     exact .3594  exact@all .1754  answered 243
+RANKING UNCHANGED: 4B is the best per-answer extractor, the 2B still wins on the combined metric,
+and no arm beats it. But the numbers now come from one decoder, which they did not before.
+DISCIPLINE RULE: never quote a number produced under a superseded decoder against a current one.
+The decoder changed four times today (T x T -> window, null/slot thresholds, pointer temp, span
+tie-break); any pre-change report must be re-generated before it enters a comparison table.
+
 **00:06 — BACKBONE SWEEP RESULT 8/8: Ministral-3-Base (3.85B) is the best per-answer extractor of
 any arm, at short context AND at 65k, and still loses on exact@all.**
 (runs/bb-ministral/checkpoint-8380, 2 epochs, bench_v1, fresh head, 74 min, 8.9 GB)
