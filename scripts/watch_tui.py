@@ -59,7 +59,8 @@ def _scan_run(path: Path) -> dict:
     key = (str(path), os.path.getmtime(path))
     if key in _CACHE:
         return _CACHE[key]
-    last_train, prev_train, last_val, best_val, best_step = None, None, None, None, None
+    last_train, prev_train = None, None
+    last_val, prev_val, best_val, best_step = None, None, None, None
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             for line in fh:
@@ -71,7 +72,7 @@ def _scan_run(path: Path) -> dict:
                 except json.JSONDecodeError:
                     continue
                 if row.get("val"):
-                    last_val = row
+                    prev_val, last_val = last_val, row
                     if isinstance(row.get("loss"), (int, float)):
                         if best_val is None or row["loss"] < best_val:
                             best_val, best_step = row["loss"], row.get("step")
@@ -83,7 +84,7 @@ def _scan_run(path: Path) -> dict:
                    for p in glob.glob(str(path.parent / "checkpoint-*"))
                    if p.rsplit("checkpoint-", 1)[-1].isdigit())
     info = {"train": last_train, "prev_train": prev_train, "val": last_val,
-            "best_val": best_val,
+            "prev_val": prev_val, "best_val": best_val,
             "best_step": best_step, "ckpts": ckpts}
     _CACHE[key] = info
     return info
@@ -115,6 +116,9 @@ def current_run() -> dict | None:
             "comps": {k: train[k] for k in COMPS if isinstance(train.get(k), (int, float))},
             "best_val": info.get("best_val"),
             "best_step": info.get("best_step"),
+            "val": (info.get("val") or {}).get("loss"),
+            "val_step": (info.get("val") or {}).get("step"),
+            "val_prev": (info.get("prev_val") or {}).get("loss"),
             "ckpts": info.get("ckpts") or [],
             "mtime": os.path.getmtime(p),
             "active": any("clarke-train" in c and (str(run_dir) in c or run_dir.name in c)
@@ -515,22 +519,68 @@ class Dash:
         y += low_h
 
         # ── RUN DETAIL ───────────────────────────────────────────────────
-        det_h = 5
-        if run and self.box(win, y, 0, det_h, w, "RUN DETAIL"):
-            comps = "   ".join(f"{k} {v:.3f}" for k, v in run["comps"].items())
-            self.put(win, y + 1, 2, comps or "no component losses in the latest row")
-            val = ("—" if run["best_val"] is None
-                   else f"best val {run['best_val']:.3f} @ {run['best_step']}")
-            n_ck = len(run["ckpts"])
-            ck = f"ckpts {n_ck}" + (f" (latest {run['ckpts'][-1]})" if n_ck else "")
-            self.put(win, y + 2, 2,
-                     f"{val}   {ck}   gpu {run['gpu_gb']:.1f} GB   "
-                     f"bs {run['bs']}×{run['accum']}")
-            stale = now - run["mtime"]
-            self.put(win, y + 3, 2, f"last log {ago(stale)}",
-                     curses.color_pair(C_BAD if stale > 180 else
-                                       (C_WARN if stale > 90 else C_GOOD)))
-        y += det_h
+        # Terminology mirrors ClarkeHead.compute_loss exactly: the total is the SUM of
+        # per-head means (each head normalised by its own count), so every head carries
+        # equal weight regardless of how many fields exercise it.
+        legend = [
+            ("null", "p_null BCE: is this field absent?", "field"),
+            ("span", "start/end pointer CE over state tokens", "pointer"),
+            ("present", "list-slot presence BCE", "list"),
+            ("cand", "candidate-atom CE (numbers/dates/times)", "atom"),
+            ("op", "5-way arithmetic operator CE", "scalar"),
+            ("dist", "estimate-bin CE, neighbour smoothing", "horizon"),
+        ]
+        avail = h - y - 1
+        if run and avail >= 15:
+            det_h = 11
+            if self.box(win, y, 0, det_h, w, "RUN DETAIL"):
+                self.put(win, y + 1, 2, f"{'term':<9}{'value':>7}  {'per':<9}what it is",
+                         curses.color_pair(C_DIM) | curses.A_BOLD)
+                for i, (key, what, per) in enumerate(legend):
+                    val = run["comps"].get(key)
+                    attr = curses.color_pair(C_GOOD) if val is None else 0
+                    self.put(win, y + 2 + i, 2, f"{key:<9}")
+                    self.put(win, y + 2 + i, 11,
+                             f"{'—' if val is None else f'{val:7.3f}'}", attr or 0)
+                    self.put(win, y + 2 + i, 20, f"{per:<9}", curses.color_pair(C_DIM))
+                    self.put(win, y + 2 + i, 30, what if val is not None
+                             else f"{what}  (no gradient this row)", curses.color_pair(C_DIM))
+                y2 = y + 8
+                val_txt = "—" if run["val"] is None else f"{run['val']:.3f}"
+                arr = ""
+                if isinstance(run["val"], (int, float)) and isinstance(run["val_prev"], (int, float)):
+                    d = run["val"] - run["val_prev"]
+                    arr = " ↓" if d < -0.005 else (" ↑" if d > 0.005 else " ·")
+                best = ("—" if run["best_val"] is None
+                        else f"{run['best_val']:.3f} @ {run['best_step']}")
+                n_ck = len(run["ckpts"])
+                ck = f"ckpts {n_ck}" + (f" (latest {run['ckpts'][-1]})" if n_ck else "")
+                self.put(win, y2, 2, "val", curses.color_pair(C_DIM))
+                self.put(win, y2, 6, f"{val_txt}{arr}",
+                         curses.color_pair(C_GOOD if arr.startswith(" ↓") else
+                                           (C_WARN if arr.startswith(" ↑") else C_ACCENT)))
+                self.put(win, y2, 18, f"best {best}    {ck}", curses.color_pair(C_DIM))
+                stale = now - run["mtime"]
+                self.put(win, y2 + 1, 2, "now", curses.color_pair(C_DIM))
+                self.put(win, y2 + 1, 6,
+                         f"gpu {run['gpu_gb']:.1f} GB   bs {run['bs']}×{run['accum']}   "
+                         f"step {run['step']:,}/{run['total']:,}   ",
+                         curses.color_pair(C_DIM))
+                self.put(win, y2 + 1, 6 + 46, f"last log {ago(stale)}",
+                         curses.color_pair(C_BAD if stale > 180 else
+                                           (C_WARN if stale > 90 else C_GOOD)))
+            y += det_h
+        elif run:
+            det_h = 4
+            if self.box(win, y, 0, det_h, w, "RUN DETAIL"):
+                comps = "   ".join(f"{k} {v:.3f}" for k, v in run["comps"].items())
+                self.put(win, y + 1, 2, comps or "no component losses in the latest row")
+                val = ("—" if run["best_val"] is None
+                       else f"best val {run['best_val']:.3f} @ {run['best_step']}")
+                self.put(win, y + 2, 2,
+                         f"{val}   ckpts {len(run['ckpts'])}   gpu {run['gpu_gb']:.1f} GB   "
+                         f"last log {ago(now - run['mtime'])}")
+            y += det_h
 
         # ── log tail ─────────────────────────────────────────────────────
         log_h = h - y - 1

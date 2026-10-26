@@ -1,3 +1,28 @@
+**12:12 — RUN DETAIL now explains every loss term (definitions taken from compute_loss).**
+Owner asked what the component numbers mean, so the panel is a legend, not just numbers.
+Verified against ClarkeHead.compute_loss rather than guessing:
+- null    p_null BCE over every grounded field ("is this field absent?"); per field.
+  This is the head that carries the NULL_OK metric - it is why our model can refuse fields
+  that generative extractors fill in (clairic null_ok .255 vs ours .989).
+- span    start/end pointer cross-entropy over state tokens, for text fields AND list-text
+  slots; per pointer. The dominant term early in training.
+- present list-slot presence BCE; per list. Also supervised toward all-zeros on null lists,
+  otherwise 91%-absent regimes (CUAD) get no "no list here" gradient and decode fabricates.
+- cand    candidate-atom CE for numbers/durations/dates/times (label-smoothed 0.1); per atom.
+- op      5-way arithmetic operator CE (label-smoothed 0.05), supervised on every solved
+  scalar including single-atom reads - an untrained op head turned reads into random
+  arithmetic once (the duration-0% bug).
+- dist    estimate/forecast bin CE with adjacent-bin partial credit (the RLCD surrogate);
+  per horizon step.
+IMPORTANT structural fact now visible on screen: total loss = SUM of per-head means, each
+normalised by its own count, so every head carries equal weight no matter how many fields
+exercise it. A high `dist` on a step where no estimate fields existed is therefore a real
+signal, not a scale artefact - e.g. dist 4.558 at step 5500 means the horizon rows that did
+appear were badly wrong.
+Layout: full table (11 rows) when the screen has room, compact one-line summary on short
+terminals (84x26). Added a val line with a delta arrow and the best-val/step pair, so a
+regression is visible without waiting for the next checkpoint.
+
 **12:09 — Dashboard narrowed to the current run; network shows only IP-bearing interfaces.**
 Owner feedback: previous runs are noise, and an interface with a counter but no address is not
 "the network". Changes:
