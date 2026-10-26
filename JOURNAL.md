@@ -1,3 +1,24 @@
+**15:00 — 9B stopped on request; backbone sweep armed. Loader generalised to any family.**
+Owner stopped the 9B 1:1 arm at step 1,580/8,384 (19%) and asked for the backbone sweep
+instead: train one arm, eval it, train the next, eval it - sequential, same frozen bench_v1,
+fresh head, 2 epochs. Reference to beat: 2B .4070 +- .005 (replicate .4023).
+TIER 1 (five arms, all Apache-2.0, all natively supported by transformers 5.20.2):
+  qwen08     Qwen/Qwen3.5-0.8B                    2.1 GiB smoke, ~30 min
+  granite    ibm-granite/granite-4.0-h-1b         3.5 GiB, ~45 min   (Mamba hybrid)
+  hymt2      tencent/Hy-MT2-1.8B                  4.0 GiB, ~70 min   (translation-tuned)
+  gemma_e2b  google/gemma-4-E2B-it               10.1 GiB, ~75 min   (5.12B weights, ~2B compute)
+  ministral  mistralai/Ministral-3-3B-...-BF16    7.7 GiB, ~2.5 h    (4.67B physical)
+Loader work this required (src/clarke/model.py): load_backbone was hardcoded to
+Qwen3_5ForConditionalGeneration; it now keeps that validated path for qwen3_5* and otherwise
+tries AutoModelForCausalLM then AutoModelForImageTextToText (Gemma 4 E-series are multimodal
+wrappers; Clarke's forward already digs out the text decoder). Two integration bugs found by
+the smoke tests before any training time was spent: AutoProcessor returns the tokenizer ITSELF
+for Granite/Hy-MT2, so `.tokenizer` did not exist (now wrapped); and the default
+Ministral-3-3B checkpoint is FP8 and demands a `kernels==0.17.2` install - avoided entirely by
+using the published BF16 variant instead of installing anything.
+Eval protocol per arm: real_eval 168 records (window-level reference) + doc_eval_40 at
+max_length 65536 (document-level), both with the shared metrics, then notify.
+
 **14:12 — Seed replicate lands: 2B is reproducible within ~0.005, and the 4B gap is ~4x that.**
 scale-2b-r2 finished (fresh head, identical data, same config, different RNG):
   run 1 (scale-2b)    exact .4070  tokF1 .5541  answered 380  null_ok .9853

@@ -377,13 +377,46 @@ def _find_calendar_span(state: str, value: str | None, kind: str) -> list[int] |
 
 
 def load_backbone(model_id: str, device: str = "cuda", dtype=torch.bfloat16):
-    from transformers import AutoProcessor, Qwen3_5ForConditionalGeneration
+    """Load a frozen backbone + tokenizer for ANY causal LM family.
 
-    backbone = Qwen3_5ForConditionalGeneration.from_pretrained(
-        model_id, dtype=dtype, device_map={"": device}
-    )
+    Qwen3.5 keeps its conditional-generation wrapper (that path is validated end to
+    end), everything else falls back to the generic auto classes. Multimodal repos
+    (Gemma 4 E-series) are loaded through their conditional-generation class; Clarke's
+    forward digs out the text decoder either way, so pixel inputs are never needed.
+    """
+    from transformers import AutoConfig, AutoProcessor, AutoTokenizer
+
+    config = AutoConfig.from_pretrained(model_id)
+    model_type = getattr(config, "model_type", "")
+    backbone = None
+    if model_type.startswith("qwen3_5"):
+        from transformers import Qwen3_5ForConditionalGeneration
+        backbone = Qwen3_5ForConditionalGeneration.from_pretrained(
+            model_id, dtype=dtype, device_map={"": device})
+    else:
+        attempts = ("AutoModelForCausalLM", "AutoModelForImageTextToText")
+        last_err = None
+        for name in attempts:
+            try:
+                import transformers
+                cls = getattr(transformers, name)
+                backbone = cls.from_pretrained(model_id, dtype=dtype,
+                                               device_map={"": device})
+                break
+            except Exception as exc:                      # noqa: BLE001
+                last_err = exc
+        if backbone is None:
+            raise RuntimeError(f"could not load {model_id} as a text backbone: {last_err}")
+
     backbone.config.use_cache = False
-    processor = AutoProcessor.from_pretrained(model_id)
+    try:
+        processor = AutoProcessor.from_pretrained(model_id)
+    except Exception:                                     # noqa: BLE001 - text-only repos
+        processor = AutoTokenizer.from_pretrained(model_id)
+    if not hasattr(processor, "tokenizer"):
+        # AutoProcessor sometimes returns the tokenizer itself (Granite); Clarke only
+        # ever needs `.tokenizer`, so wrap it rather than special-casing per family.
+        processor = type("P", (), {"tokenizer": processor})()
     return backbone, processor
 
 
