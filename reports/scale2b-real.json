@@ -1,0 +1,37 @@
+{
+  "checkpoint": "runs/scale-2b/checkpoint-8384",
+  "data": "data/real_eval.jsonl",
+  "records": 168,
+  "metrics": {
+    "list-text": {
+      "n": 6088,
+      "exact": 0.407,
+      "located": 0.407,
+      "null_correct": 0.9853,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0377
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 6068,
+        "exact": 0.4281,
+        "located": 0.4281,
+        "null_correct": 0.9853,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0378
+      }
+    },
+    "keyphrase": {
+      "list-text": {
+        "n": 20,
+        "exact": 0.0267,
+        "located": 0.0267,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      }
+    }
+  }
+}

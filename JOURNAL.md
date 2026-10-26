@@ -1,3 +1,24 @@
+**10:57 — 2B SURPRISE: beats 9B on CUAD (.4281 vs .4097) with LESS data.**
+Same dense family, 2 epochs, 2B (5.8GB, fresh head). Read:
+- CUAD exact **.4281** (+.0184 vs expDense2's .4097) | null_ok .9853
+- pm p@1 **.225** (was .157), p@5 **.483** (was .416), median rank **5** (was 7)
+- typed text .1944 (+.011), number .0716 (-.020), list-text .6167 (-.035)
+- ACORD .0463 (+.012), contract .9995, val3 text .9085 (+.011), number .8320 (-.052)
+CAVEATS (stated to owner): (1) data is NOT perfectly matched - the 9B reference used 4k
+CUAD windows (6,199) + 48-window ACORD (2,736); the 2B used 8k windows (3,207) + 8-slot
+ACORD (1,368), i.e. the 2B won with LESS data; (2) the +.018 exact is near noise (~10 fields)
+but the ranking metrics moved together and much more, which is the consistent signal;
+(3) numeric fields regressed (typed number -0.020, val3 number -0.052) - the 2B is weaker at
+atom/op solving; (4) val loss is NOT predictive (2B val 5.28 vs 9B 4.42 yet better task
+scores) - useful lesson.
+NEXT (queued): 4B arm (10:47 start, ~13:35 verdict) = the clean matched 2B-vs-4B; then a 2B
+SEED REPLICATE (seed2_chain.sh, waits for SCALE DONE) since no seed flag exists - loader
+shuffle + head init come from the default RNG, so a plain re-run is a genuine replicate.
+PRE-REGISTERED CONFIRMATION (2B is the base if the replicate holds): CUAD >= .41 AND
+pm p@5 >= .45 AND median rank <= 6 AND typed text >= .18. Then: reranker/selection work first
+(targets p@1 .225 vs p@5 .483 - the remaining gap), then a wider head (~350M: width 1536,
+6 layers, ff 8192) on the 2B.
+
 **10:15 — Data-source assessment for the from-scratch plan (owner thinking it over).**
 isaacus/open-australian-legal-corpus: 1.4B tokens, CC-BY-4.0 with specific attribution
 strings (some Federal Court material has non-commercial nuances - check before commercial
