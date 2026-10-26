@@ -1,3 +1,45 @@
+**23:05 — Clef recipe (frozen model + joint head + rank-256 LoRA + 64k): what it would take, and
+a LoRA config bug found while checking.**
+Owner wants to replicate the Clef recipe: frozen backbone + our joint schema head + rank-256 LoRA,
+eventually at 64k. Facts from the code and the card, not guesswork:
+1. MEMORY AT 9B: measured earlier, LoRA r16 at 8k on 9B/4B OOMs at ~30.6GB even with gradient
+   checkpointing (hybrid arch gets little relief). Rank 256 is far more than r16: measured on the
+   0.8B with our CURRENT targets, r256 gives 73.9M trainable params. Scaled to 9B (~11x) that is
+   ~0.81B adapter params, and fp32 weights+grad+Adam is ~16 bytes/param = ~13GB of adapter state
+   ALONE. Plus 18.6GB of bf16 backbone = 31.6GB before a single activation. So 9B + r256 is
+   impossible on 32GB; it needs >=48GB, realistically 80GB for anything at 64k.
+2. TARGET-MODULE BUG (found by inspecting what PEFT actually wraps): our LoraConfig targets
+   q_proj/k_proj/v_proj/o_proj/up_proj/down_proj. Qwen3.5-0.8B adapted 72 modules = 24 self_attn +
+   48 mlp, i.e. q/k/v/o on only the 6 FULL-attention layers plus up/down on all 24 MLP blocks.
+   The 18 linear-attention layers get NO attention adapter at all - their modules are
+   in_proj_qkv, in_proj_z, in_proj_a, in_proj_b, conv1d, out_proj, none of which we target.
+   So every LoRA run so far (including the 4B/9B OOM attempts) was MLP-heavy and blind to 3/4 of
+   the attention stack. A faithful Clef-style adapter must add those modules plus gate_proj.
+3. What the Clef recipe has that we do not: schema/field/prompt permutations (free, data-side),
+   Brier loss on p_null (cheap), label-smoothed CE (we already use 0.1), RLCD preference objective
+   (needs preference data), 64k training context (needs the bigger card).
+PLAN: (a) fix target_modules now - free and correct; (b) run r256 at 2B/8k to test whether
+backbone adaptation moves exact AT ALL before renting hardware - 2B r256 adapter state is ~1.2GB,
+so it fits; (c) add the free recipe pieces (permutations, Brier) at the same time; (d) only then
+decide on a 48-80GB rental for the real 9B/64k replicate (roughly 4-8h of compute).
+
+**22:48 — BACKBONE SWEEP RESULT 7/7: granite-4.2-3b matches the 2B per answer, best null_ok and
+best contains, but lower recall.**
+(runs/bb-granite42/checkpoint-8380, 2 epochs, bench_v1, fresh head, 63 min, 8.5 GB)
+  arm            eval     exact   tokF1  contains  null_ok  answered  exact@all
+  2B (ref)       real168  .4070   .5541   .6859    .9853    380/593   .2608
+  2B (ref)       doc40    .4407   .5731   .6790    .9720    322/498   .2850
+  granite42      real168  .4087   .5337   .6746    .9891    336/593   .2316
+  granite42      doc40    .4389   .5682   .6957    .9834    278/498   .2450
+READ: statistically TIED with the 2B on per-answer exact at both lengths (.4087 vs .4070 short,
+.4389 vs .4407 doc), and it has the BEST contains of any arm (.6957 doc) and the BEST null_ok
+(.9891 short / .9834 doc). The deficit is coverage: 278 vs 322 answered gold fields at doc level,
+so exact@all .2450 vs .2850. Profile: the most precise and most conservative backbone tested -
+it rarely points at unrelated text and rarely over-fills, but it declines more fields.
+Contrast with LFM1.2B, whose profile is the mirror image (aggressive, null_ok .9501). Both end up
+below the incumbent on exact@all for opposite reasons, which is a useful map of the trade-off
+rather than two independent failures.
+
 **22:55 — LoRA-at-65k feasibility probe: inconclusive while another arm runs; LoRA does work at
 8k on the 0.8B.**
 Question: can we run any LoRA with a 65k context on the 32GB 5090 right now?
