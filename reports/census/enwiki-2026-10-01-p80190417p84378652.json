@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p80190417p84378652.xml.bz2",
+ "pages": 895162,
+ "coverage_pct": {
+  "infobox": 19.6,
+  "shortdesc": 22.6,
+  "categories": 32.5,
+  "cites": 26.3,
+  "external_links": 27.7,
+  "sections": 29.1,
+  "redirect_page": 68.9,
+  "anytable": 6.0,
+  "life_date_templates": 10.2,
+  "files_images": 4.9,
+  "ipa_scripts": 0.3,
+  "flags": 2.1,
+  "disambiguation_page": 1.9,
+  "hatnote": 0.1,
+  "succession": 0.0
+ },
+ "mean_counts": {
+  "categories_n": 1.62,
+  "sections_n": 1.66,
+  "wikitables_n": 0.2,
+  "cites_n": 2.77,
+  "images_n": 0.22,
+  "bullets_n": 2.14,
+  "infobox_params_n": 0.93
+ },
+ "top_infobox_types": [
+  [
+   "officeholder",
+   19259
+  ],
+  [
+   "person",
+   17739
+  ],
+  [
+   "football",
+   11911
+  ],
+  [
+   "settlement",
+   7925
+  ],
+  [
+   "film",
+   6080
+  ],
+  [
+   "album",
+   4775
+  ],
+  [
+   "election",
+   4672
+  ],
+  [
+   "military",
+   4631
+  ],
+  [
+   "sportsperson",
+   3765
+  ],
+  [
+   "musical",
+   3676
+  ],
+  [
+   "television",
+   3639
+  ],
+  [
+   "college",
+   3516
+  ],
+  [
+   "song",
+   3348
+  ],
+  [
+   "company",
+   2957
+  ],
+  [
+   "book",
+   2898
+  ],
+  [
+   "sports",
+   2632
+  ],
+  [
+   "building",
+   2281
+  ],
+  [
+   "scientist",
+   2031
+  ],
+  [
+   "artwork",
+   1834
+  ],
+  [
+   "name",
+   1723
+  ]
+ ],
+ "samples": {
+  "infobox": "ne 2025}}\n{{Infobox officeholder\n| name           = Yuri Gorlov\n| native_name    = {{Nobold|\u042e\u0440\u0438\u0439 \u0413\u043e\u0440\u043b\u043e\u0432}}\n| native_name_lang = ru\n| image          = Y",
+  "shortdesc": "{{short description|Belarusian politician (born 1977)}}\n{{Family name hatnote|Nikolayevich|Gorlov|lang=Eastern Slavic}}\n{{use dmy dates|date=June 2025",
+  "categories": "v, Yuri}}\n[[Category:1977 births]]\n[[Category:Living people]]\n[[Category:Agriculture ministers of Belarus]]\n[[Category:21st-century Belarusian politic",
+  "cites": "lt;ref&gt;{{cite web|url=https://www.sb.by/en/yuri-gorlov-appointed-as-belarus-agriculture-and-food-minister-.html|title=Yuri Gorlov appointed Belarus",
+  "external_links": "e web|url=https://www.sb.by/en/yuri-gorlov-appointed-as-belarus-agriculture-and-food-minister-.html|title=Yuri Gorlov appointed Belarus' Agriculture a",
+  "sections": "/ref&gt;\n\n==References==\n{{reflist}}\n\n{{DEFAULTSORT:Gorlov, Yuri}}\n[[Category:1977 births]]\n[[Category:Living people]]\n[[Category:Agriculture minister",
+  "anytable": "olades ==\n{|class=&quot;wikitable sortable plainrowheaders&quot; style=&quot;text-align:center;&quot;\n|-\n! scope=&quot;col&quot; | Award\n! scope=&quot",
+  "life_date_templates": "{{Use mdy dates|date=May 2025}}\n{{Use Philippine English|date=December 2024}}\n{{Infobox song\n| name          = I Feel Good\n| cover         = I Feel Go",
+  "files_images": "istory ==\n[[File:Mapa maquis.svg|thumb|300x300px|Areas occupied by the [[Spanish Maquis|Maqui]] guerrillas.]]\nThe Allies' declarations condemning the ",
+  "ipa_scripts": "d support.{{scicn|date=March 2026}}\n\nUnlike conventional pillows that rely entirely on fixed fill materials, water pillows allow the level of support ",
+  "flags": "y       = {{Flag|Italy}}&lt;br&gt;{{Collapsible list\n| title = Former countries\n|\n*{{Flag|Kingdom of Sicily}}\n*{{Flag|Two Sicilies}}\n*{{Flag|Kingdom o",
+  "hatnote": "0\u20132025)}}\n{{about|the politician|the violinist|Stella Chen (violinist)}}\n{{Use dmy dates|date=June 2025}}\n{{Infobox officeholder\n| name               ",
+  "succession": "S-start}}\n{{Succession box\n| before = [[Lord's]] &lt;!-- [[2019 Cricket World Cup]] --&gt;\n| title  = [[Cricket World Cup]]&lt;br/&gt;[[List of Cricke"
+ }
+}

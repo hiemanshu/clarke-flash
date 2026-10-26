@@ -1,0 +1,27 @@
+{
+  "checkpoint": "runs/expMix-nospan/checkpoint-6852",
+  "data": "data/acord_test.jsonl",
+  "records": 228,
+  "metrics": {
+    "list-text": {
+      "n": 228,
+      "exact": 0.009,
+      "located": 0.009,
+      "null_correct": 0.0086,
+      "mean_confidence": 0.0,
+      "brier_null": 0.4783
+    }
+  },
+  "by_domain": {
+    "acord": {
+      "list-text": {
+        "n": 228,
+        "exact": 0.009,
+        "located": 0.009,
+        "null_correct": 0.0086,
+        "mean_confidence": 0.0,
+        "brier_null": 0.4783
+      }
+    }
+  }
+}

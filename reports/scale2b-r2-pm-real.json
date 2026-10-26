@@ -1,0 +1,17 @@
+{
+  "checkpoint": "runs/scale-2b-r2/checkpoint-8384",
+  "data": "data/real_eval.jsonl",
+  "records": 24,
+  "postmortem": {
+    "cuad": {
+      "list-text": {
+        "scored": 89,
+        "unrankable": 895,
+        "p@1": 0.202,
+        "p@3": 0.427,
+        "p@5": 0.539,
+        "median_rank": 4
+      }
+    }
+  }
+}

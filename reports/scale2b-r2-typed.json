@@ -1,0 +1,103 @@
+{
+  "checkpoint": "runs/scale-2b-r2/checkpoint-8384",
+  "data": "data/typed_test.jsonl",
+  "records": 400,
+  "metrics": {
+    "list-text": {
+      "n": 82,
+      "answered": 10,
+      "null_n": 70,
+      "exact": 0.6,
+      "located": 0.6,
+      "null_correct": 1.0,
+      "tok_f1": 0.7654,
+      "contains": 0.8467,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0194
+    },
+    "number": {
+      "n": 1340,
+      "answered": 1340,
+      "null_n": 0,
+      "exact": 0.0799,
+      "located": null,
+      "null_correct": 0.0,
+      "tok_f1": 0.003,
+      "contains": 0.1351,
+      "mean_confidence": 0.1136,
+      "brier_null": 0.0,
+      "solvable_rate": 0.8149,
+      "exact_when_solvable": 0.098
+    },
+    "text": {
+      "n": 2252,
+      "answered": 1229,
+      "null_n": 904,
+      "exact": 0.2067,
+      "located": 0.2531,
+      "null_correct": 0.8783,
+      "tok_f1": 0.3213,
+      "contains": 0.5346,
+      "mean_confidence": 0.1422,
+      "brier_null": 0.0742
+    }
+  },
+  "by_domain": {
+    "typed-cuad": {
+      "list-text": {
+        "n": 82,
+        "answered": 10,
+        "null_n": 70,
+        "exact": 0.6,
+        "located": 0.6,
+        "null_correct": 1.0,
+        "tok_f1": 0.7654,
+        "contains": 0.8467,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0194
+      }
+    },
+    "typed-drop": {
+      "number": {
+        "n": 1340,
+        "answered": 1340,
+        "null_n": 0,
+        "exact": 0.0799,
+        "located": null,
+        "null_correct": 0.0,
+        "tok_f1": 0.003,
+        "contains": 0.1351,
+        "mean_confidence": 0.1136,
+        "brier_null": 0.0,
+        "solvable_rate": 0.8149,
+        "exact_when_solvable": 0.098
+      },
+      "text": {
+        "n": 344,
+        "answered": 344,
+        "null_n": 0,
+        "exact": 0.1802,
+        "located": 0.1948,
+        "null_correct": 0.0,
+        "tok_f1": 0.235,
+        "contains": 0.4331,
+        "mean_confidence": 0.0836,
+        "brier_null": 0.0
+      }
+    },
+    "typed-squad2": {
+      "text": {
+        "n": 1908,
+        "answered": 885,
+        "null_n": 904,
+        "exact": 0.2169,
+        "located": 0.2757,
+        "null_correct": 0.8783,
+        "tok_f1": 0.3549,
+        "contains": 0.574,
+        "mean_confidence": 0.1649,
+        "brier_null": 0.0876
+      }
+    }
+  }
+}

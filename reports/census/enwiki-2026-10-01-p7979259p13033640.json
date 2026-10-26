@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p7979259p13033640.xml.bz2",
+ "pages": 1082654,
+ "coverage_pct": {
+  "redirect_page": 55.6,
+  "shortdesc": 30.1,
+  "files_images": 11.5,
+  "sections": 41.0,
+  "categories": 41.7,
+  "cites": 32.0,
+  "external_links": 36.0,
+  "infobox": 25.7,
+  "anytable": 7.0,
+  "life_date_templates": 18.9,
+  "flags": 2.3,
+  "disambiguation_page": 0.7,
+  "ipa_scripts": 1.7,
+  "succession": 0.2,
+  "hatnote": 0.5
+ },
+ "mean_counts": {
+  "categories_n": 2.71,
+  "sections_n": 2.37,
+  "wikitables_n": 0.19,
+  "cites_n": 2.66,
+  "images_n": 0.39,
+  "bullets_n": 4.77,
+  "infobox_params_n": 1.43
+ },
+ "top_infobox_types": [
+  [
+   "settlement",
+   20557
+  ],
+  [
+   "person",
+   19966
+  ],
+  [
+   "football",
+   16405
+  ],
+  [
+   "officeholder",
+   15977
+  ],
+  [
+   "album",
+   14711
+  ],
+  [
+   "film",
+   9363
+  ],
+  [
+   "musical",
+   9105
+  ],
+  [
+   "military",
+   7510
+  ],
+  [
+   "song",
+   7215
+  ],
+  [
+   "school",
+   5837
+  ],
+  [
+   "german",
+   5321
+  ],
+  [
+   "company",
+   5310
+  ],
+  [
+   "uk",
+   4916
+  ],
+  [
+   "ship/career",
+   4780
+  ],
+  [
+   "television",
+   4700
+  ],
+  [
+   "book",
+   4411
+  ],
+  [
+   "baseball",
+   4022
+  ],
+  [
+   "nfl",
+   3783
+  ],
+  [
+   "ship/characteristics",
+   3736
+  ],
+  [
+   "ship/image",
+   3617
+  ]
+ ],
+ "samples": {
+  "shortdesc": "{{Short description|none}}\n'''Route 610''' or '''Highway 610''' may refer to:\n\n==Canada==\n* [[File:Alberta Highway 610.svg|31px]] [[Alberta Highway 61",
+  "files_images": "anada==\n* [[File:Alberta Highway 610.svg|31px]] [[Alberta Highway 610]]\n* [[Manitoba Provincial Road 610]]\n* [[File:NB 610.svg|31px]] [[New Brunswick ",
+  "sections": "efer to:\n\n==Canada==\n* [[File:Alberta Highway 610.svg|31px]] [[Alberta Highway 610]]\n* [[Manitoba Provincial Road 610]]\n* [[File:NB 610.svg|31px]] [[N",
+  "categories": "ontrol}}\n\n[[Category:Relief maps]]\n[[Category:Physical geography]]\n[[Category:Topography]]\n[[Category:Chinese inventions]]",
+  "cites": "&quot;&gt;{{cite web |url=https://terrainmodels.ethz.ch/techniques/vacuum-forming/ |title=Thermoplastic reliefs |access-date=April 7, 2026 |work=Vacuu",
+  "external_links": " web |url=https://terrainmodels.ethz.ch/techniques/vacuum-forming/ |title=Thermoplastic reliefs |access-date=April 7, 2026 |work=Vacuum Forming - Terr",
+  "infobox": "r 2020}}\n\n{{Infobox musical artist\n| background      = group_or_band\n| name            = The La De Da's\n| image           = The_La_De_Da's_performing.",
+  "anytable": "ingles===\n{| class=&quot;wikitable plainrowheaders&quot; style=&quot;text-align:center;&quot;\n|+ List of singles with selected chart positions\n! scope",
+  "life_date_templates": "er 2012}}\n{{Use dmy dates|date=October 2020}}\n\n{{Infobox musical artist\n| background      = group_or_band\n| name            = The La De Da's\n| image  ",
+  "flags": "d coach\n| {{flagicon|JPN}} [[Kenichiro Kogure]]\n|- \n| Assistant coach\n| {{flagicon|JPN}} [[Kensuke Takahashi (futsal player)|Kensuke Takahashi]]&lt;br",
+  "ipa_scripts": "\u062f\u0631 \u0634\u0627\u0643\u0631}} {{IPA|ar|fad\u02e4l \u0295abdurra\u0127ma\u02d0n \u0283amandar \u0283a\u02d0k\u026ar}}; also transliterated as '''Fadl Shaker''', born 1 April 1969) is a [[Palestinians|Palestinian",
+  "succession": "s-start}}\n{{Succession box\n| before=[[Hakim Taniwal]]\n| title=[[Governor]] of [[Paktia Province]], [[Afghanistan]]\n| years=2006&amp;ndash;\n| after=Inc",
+  "hatnote": " of pig}}\n{{about|the type of extinct swine|the musician|Grice Peters|other uses|}}\n{{Use dmy dates|date=September 2021}}\n{{Infobox pig breed\n| name  "
+ }
+}

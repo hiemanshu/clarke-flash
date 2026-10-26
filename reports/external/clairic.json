@@ -1,0 +1,32 @@
+{
+  "model": "external:default:@cf/cloudflare/clairic",
+  "data": "data/real_eval.jsonl",
+  "records": 20,
+  "metrics": {
+    "list-text": {
+      "n": 820,
+      "exact": 0.0047,
+      "tok_f1": 0.2365,
+      "contains": 0.9528,
+      "answered": 60,
+      "null_correct": 0.2546,
+      "grounded_rate": 0.8667
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 820,
+        "exact": 0.0047,
+        "tok_f1": 0.2365,
+        "contains": 0.9528,
+        "answered": 60,
+        "null_correct": 0.2546,
+        "grounded_rate": 0.8667
+      }
+    }
+  },
+  "max_context_tokens": 64000,
+  "truncated_records": 0,
+  "failed_calls": 0
+}

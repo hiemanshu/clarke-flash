@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p43486390p48278244.xml.bz2",
+ "pages": 898022,
+ "coverage_pct": {
+  "redirect_page": 60.3,
+  "infobox": 24.6,
+  "categories": 39.6,
+  "anytable": 7.4,
+  "cites": 30.4,
+  "life_date_templates": 17.3,
+  "external_links": 34.6,
+  "sections": 37.7,
+  "files_images": 7.3,
+  "shortdesc": 28.3,
+  "flags": 2.5,
+  "disambiguation_page": 1.5,
+  "ipa_scripts": 0.6,
+  "succession": 0.1,
+  "hatnote": 0.3
+ },
+ "mean_counts": {
+  "categories_n": 2.34,
+  "sections_n": 1.92,
+  "wikitables_n": 0.22,
+  "cites_n": 2.71,
+  "images_n": 0.27,
+  "bullets_n": 3.18,
+  "infobox_params_n": 1.26
+ },
+ "top_infobox_types": [
+  [
+   "person",
+   21434
+  ],
+  [
+   "football",
+   16459
+  ],
+  [
+   "film",
+   14164
+  ],
+  [
+   "officeholder",
+   11762
+  ],
+  [
+   "settlement",
+   10944
+  ],
+  [
+   "album",
+   8622
+  ],
+  [
+   "musical",
+   5856
+  ],
+  [
+   "nrhp",
+   5553
+  ],
+  [
+   "military",
+   5231
+  ],
+  [
+   "television",
+   5125
+  ],
+  [
+   "sportsperson",
+   4275
+  ],
+  [
+   "afl",
+   4219
+  ],
+  [
+   "song",
+   4180
+  ],
+  [
+   "company",
+   4039
+  ],
+  [
+   "station",
+   3540
+  ],
+  [
+   "cyclist",
+   3254
+  ],
+  [
+   "book",
+   2653
+  ],
+  [
+   "scientist",
+   2632
+  ],
+  [
+   "sports",
+   2606
+  ],
+  [
+   "road",
+   2563
+  ]
+ ],
+ "samples": {
+  "infobox": "ay 2014}}\n{{Infobox album\n| name       = The Shawn Mendes EP\n| type       = EP\n| artist     = [[Shawn Mendes]]\n| cover      = Shawn Mendes - The Shawn",
+  "categories": "ndes Ep}}\n[[Category:2014 debut EPs]]\n[[Category:Shawn Mendes albums]]",
+  "anytable": "=Charts==\n{| class=&quot;wikitable sortable plainrowheaders&quot;\n|-\n! scope=&quot;col&quot;| Chart (2014)\n! scope=&quot;col&quot;| Peak&lt;br /&gt;po",
+  "cites": "&quot;&gt;{{cite web |url=https://www.billboard.com/pro/shawn-mendes-stitches-hits-no-1-adult-contemporary-chart/ |title=Shawn Mendes' 'Stitches' Hits",
+  "life_date_templates": "{{Use dmy dates|date=May 2014}}\n{{Use Canadian English|date=May 2014}}\n{{Infobox album\n| name       = The Shawn Mendes EP\n| type       = EP\n| artist  ",
+  "external_links": " web |url=https://www.billboard.com/pro/shawn-mendes-stitches-hits-no-1-adult-contemporary-chart/ |title=Shawn Mendes' 'Stitches' Hits No. 1 on Adult ",
+  "sections": "/ref&gt;\n\n== Background ==\nAfter signing with Island Records in May 2014, Mendes began working on his self-title debut EP. The first single, &quot;Lif",
+  "files_images": "e\n|logo = [[File:Tringme-logo.png|250px|TringMe logo]]\n|name = TringMe \n|genre = International Calling\n|language = English\n|operating_system = [[Andro",
+  "shortdesc": "{{Short description|2003 video game}}\n{{Infobox video game\n| title        = Brother Bear\n| image        = File:brother-bear.jpg\n| caption      = \n| de",
+  "flags": "\n| Hard\n| {{flagicon|BRA}} Carolina Salge\n| {{flagicon|USA}} [[Jennifer Elie]] &lt;br/&gt; {{flagicon|USA}} Nadja Gilchrist\n| 1\u20136, 6\u20130, [5\u201310]\n|- styl",
+  "ipa_scripts": "ze=85%}} ({{IPAc-en|n|\u028a|k}} {{Respell|NUUK}};&lt;ref&gt;{{cite web|url=https://www.youtube.com/watch?v=Lea0d_skruM|title=22.10.14 \u2013 Address in Reply D",
+  "succession": "S-start}}\n{{Succession box|title=''[[World Squash Championships|Women's World Championship]]'' &lt;br /&gt;Malaysia (Kuala Lumpur)|before=[[2014 Women",
+  "hatnote": "{{about|the river that rises in the Cathedral Range State Park|other|Little River (disambiguation){{!}}Little River}}\n{{Use dmy dates|date=August 2014"
+ }
+}

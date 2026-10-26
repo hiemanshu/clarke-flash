@@ -1,0 +1,281 @@
+{
+  "checkpoint": "runs/expSpan/checkpoint-5852",
+  "data": "data/val2.jsonl",
+  "records": 400,
+  "metrics": {
+    "date": {
+      "n": 301,
+      "exact": 0.9635,
+      "located": null,
+      "null_correct": 0.0,
+      "mean_confidence": 0.9472,
+      "brier_null": 0.0,
+      "solvable_rate": 0.9635,
+      "exact_when_solvable": 1.0
+    },
+    "datetime": {
+      "n": 140,
+      "exact": 1.0,
+      "located": null,
+      "null_correct": 0.0,
+      "mean_confidence": 0.9418,
+      "brier_null": 0.0,
+      "solvable_rate": 1.0,
+      "exact_when_solvable": 1.0
+    },
+    "duration": {
+      "n": 190,
+      "exact": 1.0,
+      "located": null,
+      "null_correct": 0.0,
+      "mean_confidence": 1.0,
+      "brier_null": 0.0,
+      "solvable_rate": 1.0,
+      "exact_when_solvable": 1.0
+    },
+    "estimate": {
+      "n": 64,
+      "exact": 0.0,
+      "located": null,
+      "null_correct": 0.0,
+      "mean_confidence": 0.0277,
+      "brier_null": 0.0,
+      "median_ape": 0.2914,
+      "coverage_80": 0.8906
+    },
+    "forecast": {
+      "n": 67,
+      "exact": 0.0,
+      "located": null,
+      "null_correct": 0.0,
+      "mean_confidence": 0.0259,
+      "brier_null": 0.0,
+      "median_ape": 0.1154,
+      "coverage_80": 0.7824
+    },
+    "list-number": {
+      "n": 61,
+      "exact": 0.3279,
+      "located": null,
+      "null_correct": 0.0,
+      "mean_confidence": 0.5256,
+      "brier_null": 0.0
+    },
+    "list-text": {
+      "n": 120,
+      "exact": 1.0,
+      "located": 1.0,
+      "null_correct": 0.0,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0
+    },
+    "number": {
+      "n": 750,
+      "exact": 0.8867,
+      "located": null,
+      "null_correct": 0.0,
+      "mean_confidence": 0.7572,
+      "brier_null": 0.0,
+      "solvable_rate": 1.0,
+      "exact_when_solvable": 0.8867
+    },
+    "text": {
+      "n": 906,
+      "exact": 0.8921,
+      "located": 0.9003,
+      "null_correct": 1.0,
+      "mean_confidence": 0.8941,
+      "brier_null": 0.0
+    }
+  },
+  "by_domain": {
+    "comps": {
+      "estimate": {
+        "n": 64,
+        "exact": 0.0,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0277,
+        "brier_null": 0.0,
+        "median_ape": 0.2914,
+        "coverage_80": 0.8906
+      }
+    },
+    "forecast": {
+      "forecast": {
+        "n": 67,
+        "exact": 0.0,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0259,
+        "brier_null": 0.0,
+        "median_ape": 0.1154,
+        "coverage_80": 0.7824
+      }
+    },
+    "invoice": {
+      "date": {
+        "n": 183,
+        "exact": 0.9727,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.9444,
+        "brier_null": 0.0,
+        "solvable_rate": 0.9727,
+        "exact_when_solvable": 1.0
+      },
+      "duration": {
+        "n": 61,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 1.0,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "list-number": {
+        "n": 61,
+        "exact": 0.3279,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.5256,
+        "brier_null": 0.0
+      },
+      "list-text": {
+        "n": 61,
+        "exact": 1.0,
+        "located": 1.0,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      },
+      "number": {
+        "n": 305,
+        "exact": 0.8426,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.7997,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 0.8426
+      },
+      "text": {
+        "n": 212,
+        "exact": 1.0,
+        "located": 1.0,
+        "null_correct": 1.0,
+        "mean_confidence": 0.9975,
+        "brier_null": 0.0
+      }
+    },
+    "support": {
+      "date": {
+        "n": 118,
+        "exact": 0.9492,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.9515,
+        "brier_null": 0.0,
+        "solvable_rate": 0.9492,
+        "exact_when_solvable": 1.0
+      },
+      "duration": {
+        "n": 59,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 1.0,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "list-text": {
+        "n": 59,
+        "exact": 1.0,
+        "located": 1.0,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      },
+      "number": {
+        "n": 59,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.789,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "text": {
+        "n": 265,
+        "exact": 1.0,
+        "located": 1.0,
+        "null_correct": 1.0,
+        "mean_confidence": 0.9972,
+        "brier_null": 0.0
+      }
+    },
+    "table": {
+      "number": {
+        "n": 316,
+        "exact": 0.8829,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.6757,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 0.8829
+      },
+      "text": {
+        "n": 79,
+        "exact": 0.0,
+        "located": 0.0759,
+        "null_correct": 0.0,
+        "mean_confidence": 0.034,
+        "brier_null": 0.0
+      }
+    },
+    "ticket": {
+      "datetime": {
+        "n": 140,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.9418,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "duration": {
+        "n": 70,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 1.0,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "number": {
+        "n": 70,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.9129,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "text": {
+        "n": 350,
+        "exact": 1.0,
+        "located": 1.0,
+        "null_correct": 1.0,
+        "mean_confidence": 0.9992,
+        "brier_null": 0.0
+      }
+    }
+  }
+}

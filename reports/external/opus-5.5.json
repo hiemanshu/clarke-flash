@@ -1,0 +1,32 @@
+{
+  "model": "external:default:anthropic/claude-opus-5.5",
+  "data": "data/real_eval.jsonl",
+  "records": 20,
+  "metrics": {
+    "list-text": {
+      "n": 820,
+      "exact": 0.3396,
+      "tok_f1": 0.6179,
+      "contains": 0.7432,
+      "answered": 53,
+      "null_correct": 0.9169,
+      "grounded_rate": 0.8302
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 820,
+        "exact": 0.3396,
+        "tok_f1": 0.6179,
+        "contains": 0.7432,
+        "answered": 53,
+        "null_correct": 0.9169,
+        "grounded_rate": 0.8302
+      }
+    }
+  },
+  "max_context_tokens": 64000,
+  "truncated_records": 0,
+  "failed_calls": 0
+}

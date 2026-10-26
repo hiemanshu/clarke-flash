@@ -1,0 +1,17 @@
+{
+  "checkpoint": "runs/expA1D/checkpoint-5852",
+  "data": "data/typed_test.jsonl",
+  "records": 96,
+  "postmortem": {
+    "typed-squad2": {
+      "text": {
+        "scored": 458,
+        "unrankable": 451,
+        "p@1": 0.218,
+        "p@3": 0.437,
+        "p@5": 0.563,
+        "median_rank": 3
+      }
+    }
+  }
+}

@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p48278245p53408686.xml.bz2",
+ "pages": 1090832,
+ "coverage_pct": {
+  "redirect_page": 64.8,
+  "infobox": 22.6,
+  "categories": 35.7,
+  "external_links": 30.7,
+  "sections": 33.5,
+  "cites": 27.1,
+  "life_date_templates": 16.1,
+  "shortdesc": 25.0,
+  "ipa_scripts": 0.5,
+  "files_images": 6.4,
+  "anytable": 6.7,
+  "flags": 2.5,
+  "disambiguation_page": 1.7,
+  "hatnote": 0.2,
+  "succession": 0.1
+ },
+ "mean_counts": {
+  "categories_n": 2.1,
+  "sections_n": 1.73,
+  "wikitables_n": 0.21,
+  "cites_n": 2.58,
+  "images_n": 0.22,
+  "bullets_n": 2.97,
+  "infobox_params_n": 1.06
+ },
+ "top_infobox_types": [
+  [
+   "person",
+   23982
+  ],
+  [
+   "football",
+   18788
+  ],
+  [
+   "officeholder",
+   12699
+  ],
+  [
+   "film",
+   12311
+  ],
+  [
+   "settlement",
+   10189
+  ],
+  [
+   "album",
+   8891
+  ],
+  [
+   "musical",
+   6266
+  ],
+  [
+   "nrhp",
+   6124
+  ],
+  [
+   "sportsperson",
+   5776
+  ],
+  [
+   "military",
+   5589
+  ],
+  [
+   "television",
+   5430
+  ],
+  [
+   "college",
+   5399
+  ],
+  [
+   "song",
+   4772
+  ],
+  [
+   "cricketer",
+   4766
+  ],
+  [
+   "company",
+   4110
+  ],
+  [
+   "election",
+   3312
+  ],
+  [
+   "scientist",
+   3169
+  ],
+  [
+   "station",
+   3066
+  ],
+  [
+   "book",
+   2885
+  ],
+  [
+   "christian",
+   2780
+  ]
+ ],
+ "samples": {
+  "infobox": "ry 2025}}\n{{Infobox river\n| name              = Wolf Run\n| source1_location  = valley near the edge of a plateau in Ross Township, Luzerne County, Pen",
+  "categories": "ontrol}}\n\n[[Category:Rivers of Luzerne County, Pennsylvania]]\n[[Category:Tributaries of Bowman Creek]]\n[[Category:Rivers of Pennsylvania]]",
+  "external_links": "vey|url = http://viewer.nationalmap.gov/viewer/|title = The National Map Viewer|accessdate = October 18, 2015|author-link = United States Geological S",
+  "sections": "Fishery.\n\n==Course==\nWolf Run begins in a valley near the edge of a plateau in Ross Township. It flows south-southwest for several hundred feet before",
+  "cites": "&quot;&gt;{{Cite journal |last=Gardner |first=Barbara |date=February 2, 1961 |title=Philly Joe's Beat |journal=[[DownBeat]] |volume=28 |issue=3 |pages",
+  "life_date_templates": "{{Use mdy dates|date=May 2025}}\n{{Infobox album\n| name       = Philly Joe's Beat\n| type       = Studio\n| artist     = [[Philly Joe Jones]]\n| cover    ",
+  "shortdesc": "{{Short description|Hong Kong judge, barrister and author}}\n'''Gerald Arthur de Basto''', [[Queen's Counsel|QC]] (Chinese:\u5df4\u58eb\u5ea6;31 December 1924 \u2013 28 Ja",
+  "ipa_scripts": "ewski''' ({{IPA|pl|ta\u02c8d\u025b.u\u0282 xmj\u025b\u02c8l\u025bfsk\u02b2i}}; 7 June 1927 \u2013 4 December 2016) was a Polish film director, screenwriter and film producer, most notable fo",
+  "files_images": "        = [[Image:W248AW,_Business_News_97.5FM_logo,_Indianapolis.png|125px]]\n| city             = [[Indianapolis|Indianapolis, Indiana]]\n| area      ",
+  "anytable": "charts===\n{| class=&quot;wikitable plainrowheaders sortable&quot; style=&quot;text-align:center;&quot;\n|-\n! scope=&quot;col&quot;| Chart (2015\u201316)\n! s",
+  "flags": "_scorer = {{flagicon|VEN}} [[Deyna Castellanos]] {{nowrap|(12 goals)}}\n| player =\n| goalkeeper =\n| fair_play =\n| prevseason = [[2013 South American U-",
+  "hatnote": "{{about|the rock song by The Choir|the 1940s song written by Frank Loesser|Baby, It's Cold Outside}}\n\n{{Infobox song\n| name       = It's Cold Outside\n",
+  "succession": "S-start}}\n{{Succession box|title=''[[PSA World Series 2015\u201316]]'' &lt;br /&gt; Hong Kong Open&lt;br /&gt;Hong Kong|before=[[Men's Qatar Classic 2015|Q"
+ }
+}

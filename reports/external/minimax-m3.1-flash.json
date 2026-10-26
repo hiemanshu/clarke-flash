@@ -1,0 +1,32 @@
+{
+  "model": "external:default:minimax/m3.1-flash",
+  "data": "data/real_eval.jsonl",
+  "records": 20,
+  "metrics": {
+    "list-text": {
+      "n": 820,
+      "exact": 0.0,
+      "tok_f1": 0.0,
+      "contains": 0.0,
+      "answered": 0,
+      "null_correct": 1.0,
+      "grounded_rate": 0.0
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 820,
+        "exact": 0.0,
+        "tok_f1": 0.0,
+        "contains": 0.0,
+        "answered": 0,
+        "null_correct": 1.0,
+        "grounded_rate": 0.0
+      }
+    }
+  },
+  "max_context_tokens": 64000,
+  "truncated_records": 0,
+  "failed_calls": 20
+}

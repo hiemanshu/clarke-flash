@@ -27,13 +27,9 @@ keys.json
 *.swp
 .DS_Store
 
-# --- generated artifacts (kept on disk, not in git) ---
-# reports/ holds regenerable eval JSONs; only the external-baseline README is tracked
-# (git cannot re-include a file whose parent dir is excluded, hence the two-step pattern).
-reports/*
-!reports/external/
-reports/external/*
-!reports/external/README.md
+# --- artifacts ---
+# reports/ IS tracked (owner decision 2026-10-26): eval JSONs + raw prediction dumps are
+# the audit trail behind every journaled number, so they live in history (~2.7MB today).
 
 # --- transient logs ---
 logs/

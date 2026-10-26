@@ -1,0 +1,30 @@
+{
+  "model": "clairic",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 28,
+  "metrics": {
+    "list-text": {
+      "n": 1148,
+      "exact": 0.0162,
+      "tok_f1": 0.4152,
+      "contains": 0.9526,
+      "answered": 329,
+      "null_correct": 0.1612,
+      "grounded_rate": 0.8085
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1148,
+        "exact": 0.0162,
+        "tok_f1": 0.4152,
+        "contains": 0.9526,
+        "answered": 329,
+        "null_correct": 0.1612,
+        "grounded_rate": 0.8085
+      }
+    }
+  },
+  "gold_fields": 329
+}

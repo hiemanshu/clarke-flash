@@ -1,0 +1,127 @@
+{
+ "shard": "enwiki-2026-10-01-p75710816p80190416.xml.bz2",
+ "pages": 984919,
+ "coverage_pct": {
+  "infobox": 19.6,
+  "shortdesc": 21.7,
+  "categories": 30.8,
+  "anytable": 6.3,
+  "cites": 24.7,
+  "files_images": 5.5,
+  "external_links": 25.7,
+  "sections": 27.0,
+  "redirect_page": 71.0,
+  "life_date_templates": 11.1,
+  "flags": 2.2,
+  "disambiguation_page": 1.8,
+  "succession": 0.0,
+  "ipa_scripts": 0.4,
+  "hatnote": 0.1
+ },
+ "mean_counts": {
+  "categories_n": 1.65,
+  "sections_n": 1.66,
+  "wikitables_n": 0.23,
+  "cites_n": 3.1,
+  "images_n": 0.25,
+  "bullets_n": 2.5,
+  "infobox_params_n": 0.76
+ },
+ "top_infobox_types": [
+  [
+   "officeholder",
+   18962
+  ],
+  [
+   "person",
+   18660
+  ],
+  [
+   "football",
+   15431
+  ],
+  [
+   "film",
+   7504
+  ],
+  [
+   "election",
+   6042
+  ],
+  [
+   "settlement",
+   6041
+  ],
+  [
+   "album",
+   5669
+  ],
+  [
+   "military",
+   5633
+  ],
+  [
+   "college",
+   5242
+  ],
+  [
+   "television",
+   4291
+  ],
+  [
+   "musical",
+   3852
+  ],
+  [
+   "sportsperson",
+   3625
+  ],
+  [
+   "song",
+   3564
+  ],
+  [
+   "rugby",
+   3451
+  ],
+  [
+   "book",
+   3035
+  ],
+  [
+   "company",
+   2866
+  ],
+  [
+   "sports",
+   2585
+  ],
+  [
+   "building",
+   2331
+  ],
+  [
+   "name",
+   2284
+  ],
+  [
+   "scientist",
+   2060
+  ]
+ ],
+ "samples": {
+  "infobox": "lection}}\n{{Infobox election\n| election_name = 2022 Adelaide City Council election\n| country = South Australia\n| type = Parliamentary\n| vote_type = [[",
+  "shortdesc": "{{Short description|none}}\n\nThis is a list of [[Local government areas of South Australia|local government area]] results for the [[2022 South Austral",
+  "categories": "eflist}}\n\n[[Category:2022 South Australian local elections]]\n[[Category:Local elections in South Australia]]\n[[Category:Results of South Australian el",
+  "anytable": "results==\n{| class=&quot;wikitable sortable mw-datatable&quot; style=&quot;text-align:right; margin-bottom:0&quot;\n|+ South Australian Councils ([[Sin",
+  "cites": "&quot;&gt;{{cite web |title=Council Elections |url=https://result.ecsa.sa.gov.au/lgeresults |publisher=Electoral Commission SA |archive-url=https://we",
+  "files_images": "er&quot; |[[File:South Australia Councils 2022.svg]]\n|-\n! colspan=&quot;2&quot; rowspan=&quot;2&quot; style=&quot;width:200px&quot; |Party\n! colspan=&",
+  "external_links": "ions |url=https://result.ecsa.sa.gov.au/lgeresults |publisher=Electoral Commission SA |archive-url=https://web.archive.org/web/20240103072022/https://",
+  "sections": "imit|2}}\n\n==Overall results==\n{| class=&quot;wikitable sortable mw-datatable&quot; style=&quot;text-align:right; margin-bottom:0&quot;\n|+ South Austra",
+  "life_date_templates": "ly 2026}}\n{{Use mdy dates|date=January 2019}}\n{{Infobox officeholder\n| image       = Rep.-Moran-Photo-1 (1).jpg\n| caption     = Official portrait\n| na",
+  "flags": "]]}}\n* '''{{flagicon|England}} [[Richard Illingworth]]'''\n|-\n| valign=&quot;top&quot; width=&quot;50%&quot;|\n{{Award category|#eedd82|Spirit of Cricke",
+  "succession": "s-start}}\n{{Succession box\n | title=[[Awards of the Israeli Television Academy]] &lt;br&gt;Best Actor (Comedy Series)\n | years=2021\n | before=[[Assi C",
+  "ipa_scripts": "ybach''' ({{IPA|de|\u02c8\u028a\u0281.zu.la \u02c8tsi.bax}}; born 29 August 1967) is a Swiss [[Food engineering|food engineer]] and politician currently serving on the [[",
+  "hatnote": "ne 2024}}\n{{about|the American rapper|other uses|Gawne (disambiguation)}}\n{{infobox musical artist\n| background        = person\n| name              = "
+ }
+}

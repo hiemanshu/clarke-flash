@@ -1,0 +1,32 @@
+{
+  "model": "external:default:google/gemini-4-argon",
+  "data": "data/real_eval.jsonl",
+  "records": 20,
+  "metrics": {
+    "list-text": {
+      "n": 820,
+      "exact": 0.275,
+      "tok_f1": 0.6608,
+      "contains": 0.7934,
+      "answered": 53,
+      "null_correct": 0.934,
+      "grounded_rate": 0.6415
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 820,
+        "exact": 0.275,
+        "tok_f1": 0.6608,
+        "contains": 0.7934,
+        "answered": 53,
+        "null_correct": 0.934,
+        "grounded_rate": 0.6415
+      }
+    }
+  },
+  "max_context_tokens": 64000,
+  "truncated_records": 0,
+  "failed_calls": 0
+}

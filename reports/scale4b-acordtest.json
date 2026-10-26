@@ -1,0 +1,31 @@
+{
+  "checkpoint": "runs/scale-4b/checkpoint-8384",
+  "data": "data/acord_test.jsonl",
+  "records": 228,
+  "metrics": {
+    "list-text": {
+      "n": 228,
+      "answered": 67,
+      "null_n": 116,
+      "exact": 0.0789,
+      "located": 0.0789,
+      "null_correct": 0.5517,
+      "mean_confidence": 0.0,
+      "brier_null": 0.3522
+    }
+  },
+  "by_domain": {
+    "acord": {
+      "list-text": {
+        "n": 228,
+        "answered": 67,
+        "null_n": 116,
+        "exact": 0.0789,
+        "located": 0.0789,
+        "null_correct": 0.5517,
+        "mean_confidence": 0.0,
+        "brier_null": 0.3522
+      }
+    }
+  }
+}

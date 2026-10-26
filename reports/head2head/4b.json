@@ -1,0 +1,31 @@
+{
+  "checkpoint": "runs/scale-4b/checkpoint-8384",
+  "data": "data/real_eval.jsonl",
+  "records": 20,
+  "metrics": {
+    "list-text": {
+      "n": 820,
+      "answered": 27,
+      "null_n": 758,
+      "exact": 0.0735,
+      "located": 0.0735,
+      "null_correct": 0.9855,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0411
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 820,
+        "answered": 27,
+        "null_n": 758,
+        "exact": 0.0735,
+        "located": 0.0735,
+        "null_correct": 0.9855,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0411
+      }
+    }
+  }
+}

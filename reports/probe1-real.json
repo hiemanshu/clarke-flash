@@ -1,0 +1,37 @@
+{
+  "checkpoint": "runs/probe1/checkpoint-3185",
+  "data": "data/real_eval.jsonl",
+  "records": 168,
+  "metrics": {
+    "list-text": {
+      "n": 6088,
+      "exact": 0.005,
+      "located": 0.005,
+      "null_correct": 0.0,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 6068,
+        "exact": 0.0039,
+        "located": 0.0039,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      }
+    },
+    "keyphrase": {
+      "list-text": {
+        "n": 20,
+        "exact": 0.0375,
+        "located": 0.0375,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      }
+    }
+  }
+}

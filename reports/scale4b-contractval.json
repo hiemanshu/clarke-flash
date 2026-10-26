@@ -1,0 +1,143 @@
+{
+  "checkpoint": "runs/scale-4b/checkpoint-8384",
+  "data": "data/contract_val.jsonl",
+  "records": 300,
+  "metrics": {
+    "date": {
+      "n": 895,
+      "answered": 596,
+      "null_n": 296,
+      "exact": 0.9832,
+      "located": null,
+      "null_correct": 0.9764,
+      "tok_f1": 0.9832,
+      "contains": 0.9832,
+      "mean_confidence": 0.9458,
+      "brier_null": 0.0078,
+      "solvable_rate": 0.9832,
+      "exact_when_solvable": 1.0
+    },
+    "duration": {
+      "n": 598,
+      "answered": 343,
+      "null_n": 255,
+      "exact": 1.0,
+      "located": null,
+      "null_correct": 1.0,
+      "tok_f1": 1.0,
+      "contains": 1.0,
+      "mean_confidence": 0.9301,
+      "brier_null": 0.0,
+      "solvable_rate": 1.0,
+      "exact_when_solvable": 1.0
+    },
+    "list-text": {
+      "n": 296,
+      "answered": 116,
+      "null_n": 180,
+      "exact": 1.0,
+      "located": 1.0,
+      "null_correct": 1.0,
+      "tok_f1": 1.0,
+      "contains": 1.0,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0
+    },
+    "number": {
+      "n": 1193,
+      "answered": 657,
+      "null_n": 536,
+      "exact": 1.0,
+      "located": null,
+      "null_correct": 1.0,
+      "tok_f1": 1.0,
+      "contains": 1.0,
+      "mean_confidence": 0.8956,
+      "brier_null": 0.0,
+      "solvable_rate": 1.0,
+      "exact_when_solvable": 1.0
+    },
+    "text": {
+      "n": 2990,
+      "answered": 1940,
+      "null_n": 1050,
+      "exact": 1.0,
+      "located": 1.0,
+      "null_correct": 0.999,
+      "tok_f1": 1.0,
+      "contains": 1.0,
+      "mean_confidence": 0.973,
+      "brier_null": 0.0002
+    }
+  },
+  "by_domain": {
+    "contract": {
+      "date": {
+        "n": 895,
+        "answered": 596,
+        "null_n": 296,
+        "exact": 0.9832,
+        "located": null,
+        "null_correct": 0.9764,
+        "tok_f1": 0.9832,
+        "contains": 0.9832,
+        "mean_confidence": 0.9458,
+        "brier_null": 0.0078,
+        "solvable_rate": 0.9832,
+        "exact_when_solvable": 1.0
+      },
+      "duration": {
+        "n": 598,
+        "answered": 343,
+        "null_n": 255,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 1.0,
+        "tok_f1": 1.0,
+        "contains": 1.0,
+        "mean_confidence": 0.9301,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "list-text": {
+        "n": 296,
+        "answered": 116,
+        "null_n": 180,
+        "exact": 1.0,
+        "located": 1.0,
+        "null_correct": 1.0,
+        "tok_f1": 1.0,
+        "contains": 1.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      },
+      "number": {
+        "n": 1193,
+        "answered": 657,
+        "null_n": 536,
+        "exact": 1.0,
+        "located": null,
+        "null_correct": 1.0,
+        "tok_f1": 1.0,
+        "contains": 1.0,
+        "mean_confidence": 0.8956,
+        "brier_null": 0.0,
+        "solvable_rate": 1.0,
+        "exact_when_solvable": 1.0
+      },
+      "text": {
+        "n": 2990,
+        "answered": 1940,
+        "null_n": 1050,
+        "exact": 1.0,
+        "located": 1.0,
+        "null_correct": 0.999,
+        "tok_f1": 1.0,
+        "contains": 1.0,
+        "mean_confidence": 0.973,
+        "brier_null": 0.0002
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "model": "external:default:openai/gpt-6.1-sol",
+  "data": "data/real_eval.jsonl",
+  "records": 20,
+  "metrics": {
+    "list-text": {
+      "n": 820,
+      "exact": 0.1727,
+      "tok_f1": 0.6286,
+      "contains": 0.7759,
+      "answered": 54,
+      "null_correct": 0.8945,
+      "grounded_rate": 0.7593
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 820,
+        "exact": 0.1727,
+        "tok_f1": 0.6286,
+        "contains": 0.7759,
+        "answered": 54,
+        "null_correct": 0.8945,
+        "grounded_rate": 0.7593
+      }
+    }
+  },
+  "max_context_tokens": 64000,
+  "truncated_records": 0,
+  "failed_calls": 0
+}

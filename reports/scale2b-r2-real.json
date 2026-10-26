@@ -1,0 +1,49 @@
+{
+  "checkpoint": "runs/scale-2b-r2/checkpoint-8384",
+  "data": "data/real_eval.jsonl",
+  "records": 168,
+  "metrics": {
+    "list-text": {
+      "n": 6088,
+      "answered": 384,
+      "null_n": 5495,
+      "exact": 0.4023,
+      "located": 0.4023,
+      "null_correct": 0.9854,
+      "tok_f1": 0.5458,
+      "contains": 0.6697,
+      "mean_confidence": 0.0,
+      "brier_null": 0.037
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 6068,
+        "answered": 364,
+        "null_n": 5495,
+        "exact": 0.4237,
+        "located": 0.4237,
+        "null_correct": 0.9854,
+        "tok_f1": 0.5685,
+        "contains": 0.6896,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0371
+      }
+    },
+    "keyphrase": {
+      "list-text": {
+        "n": 20,
+        "answered": 20,
+        "null_n": 0,
+        "exact": 0.0125,
+        "located": 0.0125,
+        "null_correct": 0.0,
+        "tok_f1": 0.1325,
+        "contains": 0.3083,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      }
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "checkpoint": "runs/probe1/checkpoint-3185",
+  "data": "data/typed_test.jsonl",
+  "records": 400,
+  "metrics": {
+    "list-text": {
+      "n": 82,
+      "exact": 0.0167,
+      "located": 0.0167,
+      "null_correct": 0.0,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0
+    },
+    "number": {
+      "n": 1340,
+      "exact": 0.0403,
+      "located": null,
+      "null_correct": 0.0,
+      "mean_confidence": 0.0794,
+      "brier_null": 0.0017,
+      "solvable_rate": 0.8148,
+      "exact_when_solvable": 0.0495
+    },
+    "text": {
+      "n": 2252,
+      "exact": 0.0646,
+      "located": 0.087,
+      "null_correct": 0.7223,
+      "mean_confidence": 0.0391,
+      "brier_null": 0.109
+    }
+  },
+  "by_domain": {
+    "typed-cuad": {
+      "list-text": {
+        "n": 82,
+        "exact": 0.0167,
+        "located": 0.0167,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      }
+    },
+    "typed-drop": {
+      "number": {
+        "n": 1340,
+        "exact": 0.0403,
+        "located": null,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0794,
+        "brier_null": 0.0017,
+        "solvable_rate": 0.8148,
+        "exact_when_solvable": 0.0495
+      },
+      "text": {
+        "n": 344,
+        "exact": 0.0471,
+        "located": 0.0588,
+        "null_correct": 0.0,
+        "mean_confidence": 0.0366,
+        "brier_null": 0.0106
+      }
+    },
+    "typed-squad2": {
+      "text": {
+        "n": 1908,
+        "exact": 0.0712,
+        "located": 0.0975,
+        "null_correct": 0.7223,
+        "mean_confidence": 0.0401,
+        "brier_null": 0.1267
+      }
+    }
+  }
+}
