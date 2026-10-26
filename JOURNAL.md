@@ -1,3 +1,24 @@
+**23:15 — OWNER RULE: from here on, training AND eval at 65,536 tokens.**
+Recorded in OPERATIONS.md ("Context regime"). Consequences, so they are planned rather than
+discovered:
+- Training data becomes data/doc_train_470.jsonl: 470 full contracts, median 7,149 tokens,
+  p90 26,522, 38.8% multi-item gold. With --max-length 65536 only 4 of 470 exceed the ~63k state
+  budget after the 2.4k schema, so truncation is negligible (vs 45% of contracts being split
+  across windows at 8k).
+- STEP COUNT is the new constraint: 470 docs at batch 1 = ~470 optimizer steps/epoch. That is an
+  order of magnitude fewer than the 4,192/epoch the windowed mix gives. Long-context runs
+  therefore need 4-8 epochs (or more document-length data) rather than a higher LR; expect ~25-40
+  min per 2-epoch pass on a 2B, so 4-8 epochs is 1-2.5h.
+- PRIMARY EVAL becomes doc40 (40 held-out contracts at 65k). real168 (16k-char windows, 8k) is
+  demoted to a diagnostic, because it no longer matches the training distribution.
+- MEMORY: head-only training at 65k on a 2B needs roughly eval-plus-head-grads (~10-11GB), so it
+  fits beside nothing else but fits comfortably alone. 4B/12B at 65k training are tighter but
+  plausible; LoRA at 65k is not (see 23:05 entry: 9B r256 adapter state alone is ~13GB).
+- CONSEQUENCE FOR THE SWEEP: the seven arms were trained at 8k and only evaluated at 65k. Their
+  doc40 numbers measure backbone representations at length, NOT what happens when the head learns
+  at length. The owner flagged this earlier; this rule is the answer - the post-sweep comparison
+  that matters is 65k-train / 65k-eval, and the backbone ranking must be re-checked there.
+
 **23:05 — Clef recipe (frozen model + joint head + rank-256 LoRA + 64k): what it would take, and
 a LoRA config bug found while checking.**
 Owner wants to replicate the Clef recipe: frozen backbone + our joint schema head + rank-256 LoRA,

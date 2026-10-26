@@ -30,6 +30,24 @@ The external baselines have reported tokF1 and contains since the first comparis
 only `exact` for our arms is an apples-to-oranges presentation that happens to favour us. If a
 metric is missing for one side, say so explicitly rather than dropping the column.
 
+
+## Context regime (owner rule, 2026-10-26)
+
+**Everything after the 2026-10-26 backbone sweep is trained AND evaluated at 65,536 tokens.**
+
+| use | dataset | length |
+|---|---|---|
+| training | `data/doc_train_470.jsonl` (470 full contracts, median 7,149 tok, 38.8% multi-item) | `--max-length 65536`, batch 1 |
+| primary eval | `data/doc_eval_40.jsonl` (40 held-out full contracts) | `--max-length 65536` |
+| secondary/diagnostic | `data/real_eval.jsonl` (168 × 16k-char windows) | 8192 — no longer the headline |
+
+Consequences to design around, not discover later:
+- 470 documents/epoch at batch 1 = only ~470 optimizer steps per epoch; long-context runs need
+  more epochs (4-8) or more document-length data, not a bigger LR.
+- 4 of 470 docs exceed the 63k state budget after the ~2.4k-token schema and are truncated.
+- 65k training is head-only territory: LoRA at 9B cannot fit 32GB at any rank (adapter state alone
+  is ~13GB at r256), and LoRA at 2B/65k is still unverified.
+
 ## Monitoring
 
 `./scripts/watch_training.sh` — TTY: ncurses dashboard for the CURRENT run only (progress,
