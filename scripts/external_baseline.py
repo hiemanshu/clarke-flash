@@ -52,6 +52,27 @@ import urllib.request
 from pathlib import Path
 
 
+def load_dotenv(path: str = ".env") -> None:
+    """Load KEY=VALUE lines from .env without overriding exported variables.
+
+    Dependency-free on purpose; .env is gitignored, .env.example documents it.
+    """
+    p = Path(path)
+    if not p.exists():
+        return
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_dotenv()
+
+
 # ---------------------------------------------------------------- schema mapping
 
 def fields_for_record(record: dict) -> dict:
