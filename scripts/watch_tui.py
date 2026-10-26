@@ -90,9 +90,28 @@ def _scan_run(path: Path) -> dict:
     return info
 
 
+def _claimed_run_dirs() -> set[str]:
+    """Run dirs named by live trainer processes, taken from --run-dir, not by substring.
+
+    Substring matching is a trap: "scale-2b" is contained in "scale-2b-r2", so the old
+    check flagged a finished run as active and the dashboard showed the wrong one.
+    """
+    claimed: set[str] = set()
+    for cmd in _procs():
+        if "clarke-train" not in cmd:
+            continue
+        parts = cmd.split()
+        for i, part in enumerate(parts):
+            if part == "--run-dir" and i + 1 < len(parts):
+                claimed.add(Path(parts[i + 1]).name)
+            elif part.startswith("--run-dir="):
+                claimed.add(Path(part.split("=", 1)[1]).name)
+    return claimed
+
+
 def current_run() -> dict | None:
     """The active run if one is training, else the most recently touched run."""
-    cmds = _procs()
+    claimed = _claimed_run_dirs()
     best = None
     for path in glob.glob(str(ROOT / "runs" / "*" / "train.jsonl")):
         p = Path(path)
@@ -121,8 +140,7 @@ def current_run() -> dict | None:
             "val_prev": (info.get("prev_val") or {}).get("loss"),
             "ckpts": info.get("ckpts") or [],
             "mtime": os.path.getmtime(p),
-            "active": any("clarke-train" in c and (str(run_dir) in c or run_dir.name in c)
-                          for c in cmds),
+            "active": run_dir.name in claimed,
         }
         if rec["active"]:
             return rec

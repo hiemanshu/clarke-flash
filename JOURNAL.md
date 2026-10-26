@@ -1,3 +1,15 @@
+**13:12 — Dashboard bug: it was showing `scale-2b` (finished) while `scale-2b-r2` trained.**
+Cause: active-run detection asked whether the run-dir NAME appeared anywhere in a live
+trainer command line, so "scale-2b" matched inside "scale-2b-r2". The seed-2 replicate
+therefore looked like it was running the older, completed 2B arm, and the real run (step 900
+of 8,384) never appeared.
+Fix: parse the actual `--run-dir` argument out of each trainer command line and compare exact
+directory names (also handles `--run-dir=...`). Verified: dashboard now reads "scale-2b-r2
+step 920 / 8,384, ep 0, 14-16 rec/s, eta 1.6h" with the right component losses.
+Lesson worth keeping: substring matching on process command lines is exactly the class of bug
+that bit the kill-command discipline earlier (a pattern that also matches its own neighbours);
+identity checks against a parsed argument are the safe form.
+
 **13:45 — 4B verdict is in, and the tokF1/contains columns change the story.**
 4B finished (8,384/8,384) and I reran both arms with the new metrics on the SAME
 real_eval (168 records, 5,936 field slots, 593 gold):
