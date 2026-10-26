@@ -1,3 +1,21 @@
+**10:15 — Data-source assessment for the from-scratch plan (owner thinking it over).**
+isaacus/open-australian-legal-corpus: 1.4B tokens, CC-BY-4.0 with specific attribution
+strings (some Federal Court material has non-commercial nuances - check before commercial
+use). Content = LEGISLATION + JUDGMENTS (Federal Register, Fed/High Court, NSW/QLD/WA/SA/TAS
+legislation), NOT contracts. Verdict: useful as legal-register seasoning (2-3B of a 20B mix),
+wrong staple for clause extraction.
+Recommended 20B mix if the plan proceeds: 12-13B US contracts (EDGAR Exhibit-10 cleaned,
+CUAD/LEDGAR/ContractNLI) + 2B other-English contracts + 2-4B legal-general (AU corpus,
+EUR-Lex, Pile of Law - which also contains contracts) + 4B Wikipedia. ~75% contract text.
+Two practical warnings: dedupe across sources (EDGAR exhibits repeat across filings; Pile of
+Law overlaps EDGAR), and leak-guard the pretraining corpus against CUAD eval docs +
+typed_test sources with our existing token matcher.
+Compute reality for 1B x 20B tokens: 1.2e20 FLOPs = ~23 days on one 5090, ~11-14h on 8xH100
+(~$350-450). Caveat recorded: 20 tok/param is compute-optimal, not quality-optimal - modern
+small models see 100-500x that, so a 20B-token 1B is a domain specialist, not a generalist.
+Ladder before any big spend: 100M x 2B pilot (~5h) -> 360M x 7B (~3 days) -> 1B x 20B (rented).
+Owner is considering GPU access; 2B/4B matched runs continue meanwhile.
+
 **09:45 — MATCHED SCALING RUN (owner: stop 1-epoch 2B, do 2 epochs; compare vs 4B 2 epochs).**
 Killed the 1-epoch 2B chain and its waiting 4B child; old runs/exp2b kept (partial history).
 New chain (scale_chain.sh): 2B head-only 2 epochs -> battery -> 4B head-only 2 epochs ->
