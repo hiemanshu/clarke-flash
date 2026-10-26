@@ -1,3 +1,11 @@
+**12:20 — External baseline roster fixed by owner:** the 1:1 comparison set is now
+clairic (@cf/cloudflare/clairic, the ONLY non-chat/clairic kind), openai/gpt-6.1-sol,
+google/gemini-4-argon, anthropic/claude-opus-5.5, alibaba/qwen3.8-max,
+@cf/deepseek-ai/deepseek-v4.1-flash-1017, minimax/m3.1-flash. All chat models go through
+the REST chat endpoint with cf-aig-gateway-id; only Clairic keeps the native state+fields
+call, which is why it stays the true 1:1 reference. Roster verified by --dry-run; labels
+drive the report filenames under reports/external/.
+
 **12:05 — External baseline simplified to Cloudflare-AI-Gateway-only + declarative model list.**
 Transport decisions:
 - ALL models now go through one Cloudflare surface. Chat models (OpenAI / Anthropic /

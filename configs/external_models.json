@@ -1,5 +1,5 @@
 {
-  "_note": "Models the external baseline will call, all routed through Cloudflare AI Gateway. Verify exact model IDs in the Cloudflare dashboard (Workers AI catalog / AI Gateway providers) - provider naming changes over time. 'kind' selects the transport: 'clairic' = native state+fields schema (non-chat), 'chat' = OpenAI-compatible messages.",
+  "_note": "Models the external baseline calls, all routed through Cloudflare AI Gateway. 'kind': 'clairic' = native state+fields schema (non-chat); 'chat' = OpenAI-compatible messages. Clairic is the only non-chat model here.",
   "models": [
     {
       "label": "clairic",
@@ -7,24 +7,34 @@
       "model": "@cf/cloudflare/clairic"
     },
     {
-      "label": "gpt",
+      "label": "gpt-6.1-sol",
       "kind": "chat",
-      "model": "openai/gpt-6-luna"
+      "model": "openai/gpt-6.1-sol"
     },
     {
-      "label": "opus",
+      "label": "gemini-4-argon",
       "kind": "chat",
-      "model": "anthropic/claude-opus-5-5"
+      "model": "google/gemini-4-argon"
     },
     {
-      "label": "gemini",
+      "label": "opus-5.5",
       "kind": "chat",
-      "model": "google-ai-studio/gemini-2.5-flash"
+      "model": "anthropic/claude-opus-5.5"
     },
     {
-      "label": "workers-llama",
+      "label": "qwen3.8-max",
       "kind": "chat",
-      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+      "model": "alibaba/qwen3.8-max"
+    },
+    {
+      "label": "deepseek-v4.1-flash",
+      "kind": "chat",
+      "model": "@cf/deepseek-ai/deepseek-v4.1-flash-1017"
+    },
+    {
+      "label": "minimax-m3.1-flash",
+      "kind": "chat",
+      "model": "minimax/m3.1-flash"
     }
   ]
 }
