@@ -6,9 +6,10 @@ then PLAN.md.
 
 ## Artifacts
 
-`reports/` is gitignored — eval JSONs are regenerable from `runs/*/checkpoint-*` + data, so they
-stay on disk only. Therefore **every result must be journaled with its number, run dir and report
-path**; a figure that lives only in `reports/` is not durable.
+`reports/` **is tracked** (2.7MB, eval JSONs + raw prediction dumps) so every journaled number
+can be traced to the report that produced it. `logs/` is ignored (transient). Every result still
+goes in the journal with its number, run dir and report path - the report is the evidence, the
+journal is the claim.
 
 ## Monitoring
 

@@ -1,3 +1,10 @@
+**15:52 — reports/ tracked in git after all (owner reversal of the 15:45 decision).**
+169 files / 2.7MB committed, including the raw .preds.jsonl dumps. The earlier "journal is the
+only durable record" rule is superseded: every journaled number can now be traced to the exact
+report that produced it, and the failure taxonomy / threshold sweeps remain reproducible from
+the stored predictions rather than requiring a re-run. logs/ stays ignored (transient curl
+output, no evidential value).
+
 **15:45 — reports/ is gitignored (owner request). Consequence: the journal is now the only
 durable record of results.**
 114 tracked eval JSONs were dropped from the index (files untouched on disk) and `reports/` is
