@@ -1,3 +1,29 @@
+**00:25 — YES: "answered" is a head/decode property, not a capacity one, and loosening the gates is
+worth +.03 exact@all on BOTH backbones.**
+Owner asked whether the lower answered count could be tweaked through a head change. Short answer:
+it can be tweaked TODAY without any head change, by the null/slot gates - and the effect is large.
+doc40 @65k, all current decoder (eps .25):
+  config                   exact   contains  answered  null_ok  exact@all
+  2B  n.5 s.5 (default)    .4535   .6602     322/498   .9720    .2932
+  2B  n.6 s.2              .4536   .6601     357/498   .9571    .3252   <- +.0320
+  4B  n.5 s.5              .4749   .6901     296/498   .9877    .2823
+  4B  n.6 s.2              .4740   .7015     328/498   .9772    .3122   <- +.0299
+READ: exact is FLAT while answered jumps (+35 / +32 fields) - so the fields being unlocked are
+already being extracted at the same precision; the gate was simply hiding them. null_ok pays for it
+(.972 -> .957 on the 2B, .988 -> .977 on the 4B), which is the honest cost. This reframes the whole
+coverage discussion: the model is not unable to answer those fields, it is declining to, and the
+decline threshold was set for WINDOW base rates (92% absent) while we evaluate at DOCUMENT base
+rates (~65% present). That is a mis-set prior, not a capability gap.
+CONSEQUENCE: 2B now leads 4B by .013 on exact@all (.3252 vs .3122) rather than .011, and both are
+far above the .28-.29 that all earlier tables showed. The "no backbone beats the 2B" conclusion
+survives, but the ABSOLUTE numbers in every earlier table were pessimistic because they all used
+window-calibrated gates.
+CAVEAT / NEXT: these thresholds were tuned on the same 40 documents we report on, so there is
+overfitting risk - the honest follow-up is (a) a finer gate sweep validated on a held-out slice of
+contracts, and (b) the proper fix, a calibration loss (Brier on p_null, already in the backlog)
+so the head learns document base rates instead of us dialling a threshold. Ladder A (65k training)
+should do much of (b) for free, since it changes the training prior from 8% to 24% present.
+
 **00:15 — Comparability correction: the 4B doc40 number was from a DIFFERENT decoder version, so
 comparing it to current arms was invalid. Re-ran it.**
 Owner challenged "second only to Qwen 4B's .4710". Correct to challenge: that report was produced
