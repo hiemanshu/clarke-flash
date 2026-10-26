@@ -1,3 +1,40 @@
+**16:20 — SWEEP DESIGN LOCKED (owner decisions). Recorded here because the queue has been
+edited four times and the reasoning only existed in chat.**
+FINAL ARM LIST AND ORDER (bb_sweep_v3.sh, runs sequentially, no early stop):
+  1 minicpm5   openbmb/MiniCPM5-2B                  bs6  accum2   cap .60   ~65m
+  2 lfm12      LiquidAI/LFM2.5-1.2B-Base            bs6  accum2   cap .60   ~40m
+  3 gemma_e2b  google/gemma-4-E2B-it                bs3  accum4   cap .60   ~75m
+  4 granite42  ibm-granite/granite-4.2-3b           bs3  accum4   cap .60  ~105m
+  5 ministral  mistralai/Ministral-3-3B-Base-2512   bs3  accum4   cap .60  ~150m
+  6 lfm26      LiquidAI/LFM2.5-2.6B                 bs6  accum2   cap .60   ~70m
+  7 gemma12b   google/gemma-4-12B                   bs1 accum12   cap .85   ~5.5h
+Plus the two already measured: qwen08 (Qwen3.5-0.8B) and lfm230 (LFM2.5-230M).
+NO EARLY STOP (owner: "no no, no early stop, keep going"): every arm runs regardless of results.
+The >=.415 rule is about the VERDICT (adopt + replicate), never about halting the queue. The only
+conditional in the script is a load-failure preflight for the 12B (it cannot fit only by failing;
+a skipped arm is notified, and the queue continues).
+DECISIONS AND WHY:
+- Base checkpoints everywhere they exist; instruct only where forced (Gemma E2B) or where
+  post-training IS the hypothesis (Hy-MT2). Ministral switched from Instruct to Base for this.
+- gemma-4-12B appended last on owner request: it is the only arm that tests whether Google's
+  recipe keeps paying off with capacity, and it fits at 23.9GB bf16 (~26GB train/infer) only
+  with batch 1, accum 12 and an otherwise idle card. Preflight guards it.
+- granite-4.0-h-1b DROPPED: superseded by granite-4.2-3b (a year newer, Apache, 131k, still fits;
+  its Mamba-hybrid angle is partly redundant since Qwen3.5 is already hybrid linear attention).
+- falcon-h1 EXCLUDED earlier on license (falcon-llm-license, not Apache).
+- llm-jp-4-8b EXCLUDED: Japanese-centric en+ja, 8.59B cost, and its context is EXACTLY 65,536 -
+  no headroom for the 2.4k schema, so it cannot honour our protocol without truncating more
+  than every other arm.
+- LFM2.5-1.2B-Base added after I wrongly reported it as 401: I had queried "LFM2.5-1.2B" not
+  "LFM2.5-1.2B-Base". Owner supplied the URL. It closes the within-family curve 0.23 -> 1.2 ->
+  2.6B, which is the cleanest "does this recipe scale" test in the set.
+- MiniCPM5-2B included as the newest pretraining (Sep 2026, Ultra-FineWeb, Apache, 131k, 2.52B).
+QUEUE MECHANICS: v1 -> v2 -> v3 transitions happen only at arm boundaries, by killing the chain's
+process tree from /proc children (explicit PIDs, never name matching) and relaunching; no edits
+to a running script (bash reads incrementally and an in-place edit can corrupt it).
+Results land one entry per arm (1/7 ... 7/7) with the full metric set - exact, tokF1, contains,
+null_ok, answered/gold, exact@all - per the OPERATIONS reporting rule.
+
 **16:05 — RULE ADDED TO OPERATIONS: never report exact alone. This was my repeated error, and
 the owner has now called it out twice.**
 Every table I printed for the sweep showed `exact` (and sometimes exact@all) while the shares
