@@ -1,3 +1,27 @@
+**11:35 — EXTERNAL BASELINE harness built (owner: compare against Clairic/GPT/Opus via
+Cloudflare AI Gateway). scripts/external_baseline.py.**
+Access paths:
+- Clairic: Workers AI native run endpoint (api.cloudflare.com/.../ai/run/@cf/cloudflare/clairic)
+  - it accepts our schema DIRECTLY (state + typed fields -> typed answers), so this is the ONE
+  true 1:1 comparison against our own model; no prompt engineering involved.
+- Chat models (OpenAI/Anthropic, or any gateway-supported provider): Cloudflare AI Gateway
+  OpenAI-compatible endpoint
+  https://gateway.ai.cloudflare.com/v1/{account}/{gateway}/compat/chat/completions
+  with cf-aig-authorization: Bearer <CF_AIG_TOKEN>; model string "{provider}/{model}"
+  (e.g. anthropic/claude-opus-5-5). Optional provider Authorization header for BYOK/pass-through.
+- Fallbacks: direct OpenAI /v1/chat/completions and Anthropic /v1/messages if no gateway.
+Design decisions:
+- Chat models get an explicit JSON contract ("return EXACT substrings, array per field, or null");
+  we then LOCATE their strings in the state ourselves and report a `grounded_rate` - because
+  model-supplied offsets are untrustworthy and paraphrases cannot be scored as spans.
+- Scoring mirrors eval.py semantics (set-F1 exact over answered fields, null_correct), so numbers
+  are comparable with our own reports; adds grounded_rate + answered counts for transparency.
+- Keys ONLY from env (CF_AIG_TOKEN, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, OPENAI_API_KEY,
+  ANTHROPIC_API_KEY); never written to disk.
+- --dry-run validates payloads/endpoint without spending money (verified for clairic + gateway).
+Next: owner sets up account/keys; run on data/real_eval.jsonl (CUAD+keyphrase) with --limit 20
+first for cost, then 148. Reports land as reports/external-*.json for the comparison table.
+
 **11:12 — BACKLOG of experiments to try (owner: finish baselines first; note these).**
 Source: read the public Cloudflare Clef blog/docs. Facts recorded for reference:
 - Clef = frozen Qwen3.8-27B (Clef) / Qwen3.5-9B (Clef-flash), 64k context, vision encoder.
