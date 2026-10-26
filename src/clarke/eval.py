@@ -35,7 +35,9 @@ def match_scalar(spec: FieldSpec, predicted: Any, gold: Any) -> bool:
 @torch.no_grad()
 def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              device: torch.device, batch_size: int = 8,
-             agg_atoms: bool = False, max_length: int = 8192) -> dict[str, Any]:
+             agg_atoms: bool = False, max_length: int = 8192,
+             null_threshold: float = 0.5, slot_threshold: float = 0.5,
+             dedupe: bool = True) -> dict[str, Any]:
     stats: dict[tuple[str, str], dict[str, float]] = {}
 
     def stat(dom: str, kind: str) -> dict[str, float]:
@@ -59,7 +61,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
         batch_records = encoded_records[start:start + batch_size]
         batch = collate_records(batch_records, tokenizer.pad_token_id, device)
         with torch.inference_mode():
-            answers = model.answer(batch)
+            answers = model.answer(batch, null_threshold=null_threshold,
+                                   slot_threshold=slot_threshold, dedupe=dedupe)
         torch.cuda.empty_cache()  # varying-length long docs + per-field NxN pointer
         # matrices fragment the allocator fast; releasing per batch costs ~nothing
         # next to a 19GB model and prevents the 30GB OOM seen at 02:46
@@ -294,6 +297,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--head", required=True, help="checkpoint dir with extraction_head.safetensors")
     parser.add_argument("--data", required=True, help="records JSONL to evaluate")
     parser.add_argument("--limit", type=int, default=256)
+    parser.add_argument("--slot-threshold", dest="slot_threshold", type=float, default=0.5,
+                        help="present-head gate per list slot; lower emits more items")
+    parser.add_argument("--no-dedupe", dest="dedupe", action="store_false",
+                        help="keep duplicate/overlapping list slots (default suppresses them)")
+    parser.add_argument("--null-threshold", dest="null_threshold", type=float, default=0.5,
+                        help="report a field only when p_null <= this value; raising it "
+                             "trades null discipline for recall (sweepable offline)")
     parser.add_argument("--max-length", dest="max_length", type=int, default=8192,
                         help="token budget for schema+state; raise it for full-contract "
                              "evaluation (the backbone natively handles 256k)")
@@ -343,6 +353,8 @@ def main(argv: list[str] | None = None) -> None:
     else:
         summary = evaluate(records, model, processor.tokenizer, device,
                            batch_size=args.batch_size, max_length=args.max_length,
+                           null_threshold=args.null_threshold,
+                           slot_threshold=args.slot_threshold, dedupe=args.dedupe,
                            agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "metrics": summary["overall"], "by_domain": summary["by_domain"]}

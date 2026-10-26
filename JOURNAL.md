@@ -1,3 +1,43 @@
+**14:20 — Free-GPU diagnosis of the document-level gap (no API spend). Findings are
+specific, and they kill two of my earlier hypotheses.**
+Ran the 4B on all 40 full contracts, then a failure taxonomy, then threshold sweeps.
+1) 4B vs 2B at 65k (40 docs, 498 gold fields):
+     2B: exact .4407 tokF1 .5731 contains .6790 answered 322/498 null_ok .9720 | exact@all .2850
+     4B: exact .4710 tokF1 .5885 contains .7068 answered 296/498 null_ok .9877 | exact@all .2799
+   4B is more precise per answer but answers fewer fields - a wash on exact@all, at 2.2x cost.
+2) FAILURE TAXONOMY (scripts/doc_diagnose.py, decoding with the null gate disabled so the
+   span is always produced):
+     ok_reported     124 (24.9%)   correct span, reported
+     ok_rejected       2 ( 0.4%)   correct span, p_null > 0.5   <- CALIBRATION LOSS IS NIL
+     wrong_reported  215 (43.2%)   answered with the wrong span
+     wrong_rejected  157 (31.5%)   p_null > 0.5 and span also wrong
+   So the "raise the p_null threshold" lever I proposed is dead twice over: only 0.4% of gold
+   fields are found-but-rejected, and a sweep (0.5/0.6/0.75/0.9) saturates at 339 answered
+   fields because the head is confidently null, not borderline. p_null p50 on gold-present
+   fields is 0.21, and 11.6% sit above 0.9.
+3) The real shape of the failure: multi-item under-emission. Gold is multi-item in 40.0% of
+   document-level fields (338 of 498 are 1-item, then 2:13%, 3:9%, 4:9%...), but the model
+   predicts more than one item in only 13.9%. Duplicate slots exist (5.0% of fields, 29 wasted
+   slots) but suppressing them changes nothing (.4407 -> .4406), so that was not the issue.
+   Spot checks: 'parties' 0/40 - gold is aliases plus the entity name ("we"/"us"/"our",
+   "you"/"Franchisee", the company), the model returns one long over-extended span;
+   'insurance' 0/14 - gold lists 4 separate clauses, the model returns 1-2; 'governing_law'
+   57% - where gold's span includes trailing context the model trims it, which Jaccard punishes.
+4) CHEAP INFERENCE WIN (free, no retraining). The slot-present gate was the binding constraint:
+     config                  exact   answered  null_ok  exact@all
+     slot .50 (default)      .4407   322/498   .9720    .2850
+     slot .05                .4497   339/498   .9685    .3061
+     slot .20 + null .60     .4382   357/498   .9571    .3141
+   +10% exact@all for a 1.5-point null_ok cost; no model change. Defaults stay conservative
+   (null_ok is our differentiator) but the flags exist: --slot-threshold / --null-threshold.
+5) Deferred: the 9B at 65k needs ~21-23GB and seed-2 is holding 8.9GB, so it waits for the GPU
+   to free up rather than risking the run in flight.
+WHAT THIS MEANS FOR TRAINING: the head's weakness is not context length (recall is ~65% at 8k
+windows AND at 65k docs) and not calibration. It is multi-span extraction plus boundary
+granularity on long clauses. Those are data/target-definition problems - the fix is training
+on document-level answer sets (and/or per-slot diversity losses), not more parameters or more
+context.
+
 **13:12 — Dashboard bug: it was showing `scale-2b` (finished) while `scale-2b-r2` trained.**
 Cause: active-run detection asked whether the run-dir NAME appeared anywhere in a live
 trainer command line, so "scale-2b" matched inside "scale-2b-r2". The seed-2 replicate

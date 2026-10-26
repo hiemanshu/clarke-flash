@@ -58,7 +58,8 @@ class ClarkeModel(torch.nn.Module):
             )
         return self.head(outputs.last_hidden_state, batch["attention_mask"], batch["records"])
 
-    def answer(self, batch: dict[str, Any]) -> list[dict[str, Any]]:
+    def answer(self, batch: dict[str, Any], null_threshold: float = 0.5,
+               slot_threshold: float = 0.5, dedupe: bool = True) -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -71,7 +72,9 @@ class ClarkeModel(torch.nn.Module):
         out = []
         for record, record_logits in zip(batch["records"], logits):
             out.append({
-                encoded.name: decode_answer(encoded.spec, record, field_logits)
+                encoded.name: decode_answer(encoded.spec, record, field_logits,
+                                            null_threshold=null_threshold,
+                                            slot_threshold=slot_threshold, dedupe=dedupe)
                 for encoded, field_logits in zip(record.fields, record_logits)
             })
         return out
@@ -81,25 +84,35 @@ def _probability(mass: torch.Tensor) -> float:
     return float(mass.item()) if torch.is_tensor(mass) else float(mass)
 
 
-def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits) -> dict[str, Any]:
+def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
+                  null_threshold: float = 0.5, slot_threshold: float = 0.5,
+                  dedupe: bool = True) -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
 
     if spec.type == "text":
-        span_answer = _decode_span(logits.start, logits.end, record, spec, p_null)
+        span_answer = _decode_span(logits.start, logits.end, record, spec, p_null,
+                                   null_threshold=null_threshold)
         answer.update(span_answer)
     elif spec.type == "list" and spec.items == "text":
         values, spans = [], []
         present = torch.sigmoid(logits.present.float())
-        if float(p_null) <= 0.5:  # absent list: honor the trained null head
+        if float(p_null) <= null_threshold:  # absent list: honor the trained null head
             for slot in range(LIST_SLOTS):
-                if present[slot] < 0.5:
+                if present[slot] < slot_threshold:
                     continue
                 part = _decode_span(logits.start[slot], logits.end[slot], record, spec,
                                     torch.tensor(0.0))
-                if part.get("value"):
-                    values.append(part["value"])
-                    spans.append(part["span"])
+                if not part.get("value"):
+                    continue
+                span = part["span"]
+                if dedupe and any(
+                        (span[0] < s[1] and s[0] < span[1])      # overlapping start/end
+                        or part["value"].strip().lower() == v.strip().lower()
+                        for v, s in zip(values, spans)):
+                    continue            # independent slots collapse onto the same text
+                values.append(part["value"])
+                spans.append(span)
         answer["value"] = values or None
         answer["spans"] = spans
         answer["p_null"] = _probability(p_null)
@@ -109,7 +122,7 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits) -
         present = torch.sigmoid(logits.present.float())
         values, confidences, spans = [], [], []
         used_agg = False
-        if logits.cand_a is not None and float(p_null) <= 0.5:
+        if logits.cand_a is not None and float(p_null) <= null_threshold:
             atoms = field_atoms(spec, record.pool)
             n_plain = len(record.pool.numbers)
             for slot in range(min(LIST_SLOTS, logits.cand_a.shape[0])):
@@ -159,7 +172,7 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits) -
             answer["origin"] = "computed" if (op != OP_IDS["id"] or is_agg) else "read"
             if op == OP_IDS["id"] and atom[1] and not is_agg:
                 answer["span"] = list(atom[1])
-            if float(p_null) > 0.5:
+            if float(p_null) > null_threshold:
                 answer.update({"value": None, "guess": raw, "confidence": _probability(p_null)})
             else:
                 answer.update({"value": raw, "confidence": round(confidence, 6)})
@@ -168,7 +181,7 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits) -
             answer["origin"] = "read"
             if atom[1]:
                 answer["span"] = list(atom[1])
-            if float(p_null) > 0.5:
+            if float(p_null) > null_threshold:
                 answer.update({"value": None, "guess": text_value, "confidence": _probability(p_null)})
             else:
                 answer.update({"value": text_value, "confidence": round(confidence, 6)})
@@ -218,7 +231,7 @@ def _round_value(value: float, spec: FieldSpec) -> float:
 
 def _decode_span(
     start: torch.Tensor, end: torch.Tensor, record: EncodedRecord, spec: FieldSpec,
-    p_null: torch.Tensor,
+    p_null: torch.Tensor, null_threshold: float = 0.5,
 ) -> dict[str, Any]:
     """Pointer decode: the answer text is a slice of the input, never generated.
 
@@ -257,7 +270,7 @@ def _decode_span(
         char_end = char_start + len(stripped)
     text = stripped
     return {
-        "value": None if float(p_null) > 0.5 else text,
+        "value": None if float(p_null) > null_threshold else text,
         "guess": text,
         "span": [char_start, char_end],
         "p_null": _probability(p_null),
