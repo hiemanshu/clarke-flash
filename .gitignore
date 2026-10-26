@@ -28,4 +28,9 @@ keys.json
 .DS_Store
 
 # --- generated artifacts (kept on disk, not in git) ---
-reports/
+# reports/ holds regenerable eval JSONs; only the external-baseline README is tracked
+# (git cannot re-include a file whose parent dir is excluded, hence the two-step pattern).
+reports/*
+!reports/external/
+reports/external/*
+!reports/external/README.md
