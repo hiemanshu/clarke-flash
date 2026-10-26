@@ -1,3 +1,24 @@
+**15:20 — Pointer-temperature hypothesis tested at 65k: DEAD. Localisation is not a
+sharpness problem.**
+Observation that motivated it: span_scale (the head's learnable pointer temperature) finished
+training at exp=1.013 (2B) and 0.996 (4B) - i.e. it never moved from init. Since the pointer is
+a softmax over POSITIONS, 65k candidates should dilute it relative to the ~400-2k seen in
+training, so a decode-time temperature sweep was the free test.
+Result (2B, 40 full contracts, 65k cap):
+  pointer_temp   exact   tokF1   contains  answered  null_ok  exact@all
+  1.0 (base)    .4407   .5731    .6790    322/498   .9720    .2850
+  2                .4406   .5624    .6718    322/498   .9720    .2849
+  4                .4406   .5641    .6718    322/498   .9720    .2849
+  8                .4406   .5618    .6718    322/498   .9720    .2849
+Essentially identical, and `answered` does not move at all (temperature touches the span
+pointer, not p_null). So the head is not uncertain between good and bad positions - it is
+CONFIDENTLY pointing at the wrong text, and sharpening the distribution changes nothing. The
+44.6% of fields answered with a wrong span are not a softmax-dilution artefact of length.
+Consequence: the fix has to come from better evidence routing (what the head attends to when it
+decides the span) or from doc-level training that teaches document cues - not from decode-time
+temperature, and not from pointer calibration. span_scale staying at 1.0 is consistent: it never
+needed to sharpen, because the failure is elsewhere.
+
 **15:00 — 9B stopped on request; backbone sweep armed. Loader generalised to any family.**
 Owner stopped the 9B 1:1 arm at step 1,580/8,384 (19%) and asked for the backbone sweep
 instead: train one arm, eval it, train the next, eval it - sequential, same frozen bench_v1,

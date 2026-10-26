@@ -59,7 +59,8 @@ class ClarkeModel(torch.nn.Module):
         return self.head(outputs.last_hidden_state, batch["attention_mask"], batch["records"])
 
     def answer(self, batch: dict[str, Any], null_threshold: float = 0.5,
-               slot_threshold: float = 0.5, dedupe: bool = True) -> list[dict[str, Any]]:
+               slot_threshold: float = 0.5, dedupe: bool = True,
+               pointer_temp: float = 1.0) -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -74,7 +75,8 @@ class ClarkeModel(torch.nn.Module):
             out.append({
                 encoded.name: decode_answer(encoded.spec, record, field_logits,
                                             null_threshold=null_threshold,
-                                            slot_threshold=slot_threshold, dedupe=dedupe)
+                                            slot_threshold=slot_threshold, dedupe=dedupe,
+                                            pointer_temp=pointer_temp)
                 for encoded, field_logits in zip(record.fields, record_logits)
             })
         return out
@@ -86,13 +88,14 @@ def _probability(mass: torch.Tensor) -> float:
 
 def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                   null_threshold: float = 0.5, slot_threshold: float = 0.5,
-                  dedupe: bool = True) -> dict[str, Any]:
+                  dedupe: bool = True, pointer_temp: float = 1.0) -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
 
     if spec.type == "text":
         span_answer = _decode_span(logits.start, logits.end, record, spec, p_null,
-                                   null_threshold=null_threshold)
+                                   null_threshold=null_threshold,
+                                   pointer_temp=pointer_temp)
         answer.update(span_answer)
     elif spec.type == "list" and spec.items == "text":
         values, spans = [], []
@@ -102,7 +105,7 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                 if present[slot] < slot_threshold:
                     continue
                 part = _decode_span(logits.start[slot], logits.end[slot], record, spec,
-                                    torch.tensor(0.0))
+                                    torch.tensor(0.0), pointer_temp=pointer_temp)
                 if not part.get("value"):
                     continue
                 span = part["span"]
@@ -231,7 +234,7 @@ def _round_value(value: float, spec: FieldSpec) -> float:
 
 def _decode_span(
     start: torch.Tensor, end: torch.Tensor, record: EncodedRecord, spec: FieldSpec,
-    p_null: torch.Tensor, null_threshold: float = 0.5,
+    p_null: torch.Tensor, null_threshold: float = 0.5, pointer_temp: float = 1.0,
 ) -> dict[str, Any]:
     """Pointer decode: the answer text is a slice of the input, never generated.
 
@@ -244,8 +247,11 @@ def _decode_span(
     tokens = start.shape[0]
     if tokens == 0:
         return {"value": None, "p_null": _probability(p_null), "confidence": 0.0}
-    start_probs = torch.softmax(start.float(), dim=-1)
-    end_probs = torch.softmax(end.float(), dim=-1)
+    # pointer_temp sharpens the positional softmax. span_scale stayed at 1.0 through
+    # training in every run so far, so at 65k positions the distribution is diluted;
+    # this makes that hypothesis testable without retraining.
+    start_probs = torch.softmax(start.float() * pointer_temp, dim=-1)
+    end_probs = torch.softmax(end.float() * pointer_temp, dim=-1)
     # Exact argmax over the allowed band without materialising a T x T joint matrix:
     # at 65k tokens that matrix is 65k^2 floats (~17 GB) and OOMs the whole eval.
     # A sliding window of width SPAN_MAX_TOKENS is the same search in O(T * L)
