@@ -1,3 +1,28 @@
+**16:05 — RULE ADDED TO OPERATIONS: never report exact alone. This was my repeated error, and
+the owner has now called it out twice.**
+Every table I printed for the sweep showed `exact` (and sometimes exact@all) while the shares
+were computed all along - the RESULT lines literally contain tokF1 and contains. Meanwhile the
+external baselines have reported tokF1/contains since the first comparison, so a table that shows
+only exact for our arms is not a neutral presentation: `exact` is conditioned on answered fields
+and structurally favours a conservative extractor, which is us. That is the definition of a
+self-serving table, even when the missing numbers are unflattering (they are: our tokF1 and
+contains trail the frontier models).
+OPERATIONS.md now carries a "Reporting metrics" rule: every result carries exact, tokF1, contains,
+null_ok, answered/gold and exact@all; if a metric is missing for one side, say so rather than
+dropping the column.
+Full sweep numbers so far (all six columns, 2B ref / 0.8B / 230M):
+  arm          eval     exact   tokF1  contains  null_ok  answered  exact@all
+  2B (ref)     real168  .4070   .5541   .6859    .9853    380/593   .2608
+  2B (ref)     doc40    .4407   .5731   .6790    .9720    322/498   .2850
+  Qwen0.8B     real168  .3914   .5391   .6851    .9880    353/593   .2330
+  Qwen0.8B     doc40    .4409   .5639   .6875    .9825    275/498   .2435
+  LFM2.5-230M  real168  .3220   .4642   .6021    .9843    294/593   .1596
+  LFM2.5-230M  doc40    .3343   .4725   .6063    .9615    243/498   .1631
+The added columns sharpen the capacity story: 0.8B is not merely "slightly worse on exact" - its
+contains is EQUAL to the 2B (.6851 vs .6859 short, .6875 vs .6790 doc) while its answered count is
+lower (353 vs 380, 275 vs 322). So the small model is not localising worse; it is refusing/missing
+more fields. That distinction was invisible in my exact-only tables.
+
 **16:01 — BACKBONE SWEEP RESULT 2/7: LFM2.5-230M establishes the capacity floor.**
 (runs/bb-lfm230/checkpoint-8384, 2 epochs, bench_v1, fresh head, ~20 min, 0.9 GB)
                  real168 exact   doc40 exact   doc40 answered   doc40 exact@all

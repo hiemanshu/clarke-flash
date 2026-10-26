@@ -11,6 +11,25 @@ can be traced to the report that produced it. `logs/` is ignored (transient). Ev
 goes in the journal with its number, run dir and report path - the report is the evidence, the
 journal is the claim.
 
+
+## Reporting metrics (owner rule, 2026-10-26 — violated repeatedly before this was written)
+
+**Never report `exact` alone.** Every result table, every arm, every model — ours included —
+carries the full set:
+
+| metric | why it must be shown |
+|---|---|
+| `exact` | set-F1 over *answered* fields only; flatters a conservative extractor |
+| `tokF1` | token-level F1; credits the right clause quoted with different trimming |
+| `contains` | did the answer land on the right text at all (lenient either direction) |
+| `null_ok` | share of truly-absent fields left absent; our differentiator, so hiding it is self-serving |
+| `answered` / gold | recall; the binding constraint at document level |
+| `exact@all` | `exact × answered/gold` — the only number that combines precision and recall |
+
+The external baselines have reported tokF1 and contains since the first comparison, so showing
+only `exact` for our arms is an apples-to-oranges presentation that happens to favour us. If a
+metric is missing for one side, say so explicitly rather than dropping the column.
+
 ## Monitoring
 
 `./scripts/watch_training.sh` — TTY: ncurses dashboard for the CURRENT run only (progress,
