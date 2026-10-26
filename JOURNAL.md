@@ -1,3 +1,30 @@
+**13:25 — Full-contract external comparison done (partially: billing ran out mid-run).**
+Ran the 4 working models on the same 40 full contracts our 2B saw (data/doc_eval_40.jsonl,
+65536-token cap, 8k output budget, 600s timeout). 18 calls died with HTTP 402 "Insufficient
+unified billing balance" - OpenAI and Anthropic only; Gemini and Clairic were unaffected.
+Failed per model: clairic 0, gemini 7, gpt 5, opus 8 (of 40). To avoid letting failures flatter
+anyone (a failed call yields an empty prediction, which scores as "correctly null"), everything
+below is re-scored on the 28 records ALL models completed (329 gold fields):
+  model            exact   tokF1  contains  answered      null_ok  exact@all
+  gemini-4-argon  .5625   .7468    .9048    306 (93%)     .9255    .5232
+  opus-5.5        .5515   .7296    .8560    298 (91%)     .9072    .4995
+  gpt-6.1-sol     .5361   .6998    .8522    307 (93%)     .8706    .5003
+  clarke-2b       .4538      -        -     219 (67%)     .9719    .3021
+  clairic         .0162   .4151    .9526    329 (100%)    .1612    .0162
+Read it honestly: on whole contracts the frontier chat models beat us by ~0.2 exact@all, and
+the reason is RECALL, not precision - they answer 91-93% of gold fields, we answer 67%. Where
+we do answer, .4538 vs their .52-.56 is close. Our null discipline is still the best on the
+board (.972 vs .87-.93), which is exactly the trade the head was trained for.
+Clairic on full documents is the surprise: it answers all 329 gold fields, 95% of its text is
+contained in the gold answer, and it still scores .016 exact because it returns whole clauses
+instead of the annotated span. At document level that gap is starker than at window level.
+NEXT LEVER (cheap): our 67% recall is a p_null threshold effect - decode rejects a field when
+p_null > 0.5, and the span is chosen independently of that decision. So one pass that dumps
+(p_null, span-correct) per field gives the entire precision/recall curve offline; thresholds
+can then be swept without re-running the model. Also worth testing: whether our head finds the
+right span but marks it null (a calibration fix) versus never finding it (a context/attention
+limit). Billing must be topped up before any further paid calls.
+
 **13:05 — FULL-DOCUMENT 65k EVAL: the 2B works, zero-shot, on whole contracts. Blocker was
 our own O(T^2) decoder, not the model.**
 Setup: all 40 held-out CUAD contracts (docs[470:510]), full text, --max-length 65536 (Clairic's

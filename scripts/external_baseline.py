@@ -192,7 +192,7 @@ def _post_stream_text(url: str, headers: dict, body: dict, timeout: int = 300) -
     return "".join(out)
 
 
-def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None):
+def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None, timeout=600):
     acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or sys.exit("set CLOUDFLARE_ACCOUNT_ID")
     url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions"
     body = {"model": model,
@@ -206,7 +206,7 @@ def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None):
     resp, use_stream, last_err, applied = None, False, None, set()
     for _ in range(6):
         try:
-            resp = _post_json(url, _cf_headers(), body)
+            resp = _post_json(url, _cf_headers(), body, timeout=int(timeout))
             break
         except RuntimeError as e:
             msg = last_err = str(e)
@@ -248,22 +248,23 @@ def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None):
 
     time.sleep(sleep_s)
     if use_stream:
-        return extract_json_block(_post_stream_text(url, _cf_headers(), body))
+        return extract_json_block(_post_stream_text(url, _cf_headers(), body,
+                                                    timeout=int(timeout)))
     return extract_json_block(_response_text(resp))
 
 
-def call_cf_clairic(record, fields, model, sleep_s):
+def call_cf_clairic(record, fields, model, sleep_s, timeout=600):
     acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or sys.exit("set CLOUDFLARE_ACCOUNT_ID")
     url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/{model}"
     payload = {"state": record["state"], "fields": fields}
     headers = _cf_headers()
     try:
-        resp = _post_json(url, headers, payload)
+        resp = _post_json(url, headers, payload, timeout=int(timeout))
     except RuntimeError:
         # /ai/run is not documented to accept gateway routing; fall back to a
         # direct call rather than losing the baseline entirely.
         headers.pop("cf-aig-gateway-id", None)
-        resp = _post_json(url, headers, payload)
+        resp = _post_json(url, headers, payload, timeout=int(timeout))
     time.sleep(sleep_s)
     if not resp.get("success", True):
         raise RuntimeError(f"cloudflare error: {json.dumps(resp)[:400]}")
@@ -404,9 +405,11 @@ def run_model(spec, records, args):
     label = f"external:{args.gateway}:{spec['model']}"
     def one(rec, fields):
         if spec.get("kind", "chat") == "clairic":
-            return call_cf_clairic(rec, fields, spec["model"], args.sleep)
+            return call_cf_clairic(rec, fields, spec["model"], args.sleep,
+                                   timeout=args.timeout)
         return call_cf_chat(rec, fields, spec["model"], args.sleep,
-                            max_tokens=args.max_output_tokens, extra=spec.get("params"))
+                            max_tokens=args.max_output_tokens, extra=spec.get("params"),
+                            timeout=args.timeout)
     tag = spec.get("label") or spec["model"]
     print(f"[{tag}] start {label} ({spec.get('kind','chat')}) on {len(records)} records "
           f"(concurrency {args.concurrency})", flush=True)
@@ -504,6 +507,9 @@ def main(argv=None):
     ap.add_argument("--max-context-tokens", dest="max_context_tokens", type=int, default=64000)
     ap.add_argument("--tokenizer", default="Qwen/Qwen3.5-9B")
     ap.add_argument("--retries", type=int, default=2)
+    ap.add_argument("--timeout", type=float, default=600.0,
+                    help="per-request read timeout; 65k-token prompts take far longer than "
+                         "short ones, and a timeout burns a paid call")
     ap.add_argument("--max-output-tokens", dest="max_output_tokens", type=int, default=4000,
                     help="completion budget per record (chat models); 41 typed fields of spans "
                          "need room, and adversarial models burn tokens on reasoning")

@@ -1,0 +1,9 @@
+{
+  "_note": "Full-contract comparison: the four models that actually work through the gateway. deepseek (403, free plan), minimax (gateway 500) and qwen (timeouts) are excluded so money is not spent on known failures.",
+  "models": [
+    {"label": "clairic", "kind": "clairic", "model": "@cf/cloudflare/clairic"},
+    {"label": "opus-5.5", "kind": "chat", "model": "anthropic/claude-opus-5.5"},
+    {"label": "gemini-4-argon", "kind": "chat", "model": "google/gemini-4-argon"},
+    {"label": "gpt-6.1-sol", "kind": "chat", "model": "openai/gpt-6.1-sol"}
+  ]
+}
