@@ -1,3 +1,27 @@
+**20:40 — FIXED A SETTINGS BUG MID-SWEEP: effective batch was not 6 for the big arms.**
+train.py treats --batch-size as the EFFECTIVE batch and derives micro = max(1, batch_size //
+accum) (train.py:107), then steps_per_epoch = ceil(len(loader)/accum) (train.py:199). So passing
+accum > batch_size clamps micro to 1 and the real records-per-update becomes micro*accum, NOT
+batch_size. My arm settings for the large models were therefore wrong:
+  completed arms (qwen08, lfm230, hymt2, minicpm5, lfm12): bs6 accum2 -> micro 3, eff 6  [correct]
+  gemma_e2b: bs3 accum4 -> micro 1, eff 4  [WRONG: 6,287 steps/epoch instead of 4,192]
+  gemma12b (queued): bs1 accum12 -> micro 1, eff 12  [WRONG: only ~2,096 steps/epoch]
+Consequence: E2B was training with a 1.5x smaller effective batch and 1.5x more updates than
+every other arm - a recipe difference in a sweep whose entire point is holding everything but the
+backbone fixed. Owner said fix it now, so:
+- killed v3 at E2B step 8,620/12,574 (69%, 44 min of compute lost);
+- preserved the partial run as runs/bb-gemma_e2b-eff4 (NOT deleted - it is a free eff-4 ablation
+  if we ever want to measure batch sensitivity);
+- v4 runs at eff 6 everywhere: gemma_e2b 6/6 (micro1), granite42 6/6 (micro1), ministral 6/6
+  (micro1), lfm26 6/2 (micro3), gemma12b 6/6 (micro1). Verified in the log:
+  "steps_per_epoch=4192 epochs=2 (effective_bs=6 micro=1 accum=6)" - now identical to the
+  five completed arms.
+LESSON for OPERATIONS-worthiness: for this trainer, --grad-accum must be <= --batch-size; the
+"--batch-size small + big accum" trick to save memory does the opposite of what it looks like.
+To get micro=1 with eff 6, pass 6/6, not 3/4 or 1/12.
+Revised timings: E2B restarts ~21:45, then granite42 ~23:30, ministral ~02:00, lfm26 ~03:10,
+gemma12b ~08:45.
+
 **19:54 — BACKBONE SWEEP RESULT 5/7: LFM2.5-1.2B — the Liquid curve climbs, but a null-discipline
 regression appears.**
 (runs/bb-lfm12/checkpoint-8384, 2 epochs, bench_v1, fresh head, 46 min, 3.9 GB, 17.5 rec/s)
