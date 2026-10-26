@@ -34,3 +34,6 @@ reports/*
 !reports/external/
 reports/external/*
 !reports/external/README.md
+
+# --- transient logs ---
+logs/
