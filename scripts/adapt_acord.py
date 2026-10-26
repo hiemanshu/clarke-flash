@@ -15,7 +15,7 @@ import json, re, sys
 from pathlib import Path
 
 BASE = Path("data/raw/acord_extract/ACORD Dataset & ReadMe (external)")
-N_SLOTS = 14
+N_SLOTS = int(sys.argv[sys.argv.index("--slots") + 1]) if "--slots" in sys.argv else 14
 WINDOWS_PER_QUERY_TRAIN = int(sys.argv[sys.argv.index("--windows") + 1]) if "--windows" in sys.argv else 12
 WINDOWS_PER_QUERY_EVAL = 4  # deterministic decoy samples -> stable eval
 import random

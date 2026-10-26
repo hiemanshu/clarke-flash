@@ -1,3 +1,20 @@
+**09:30 — LoRA UNBLOCKED AT 2B (owner idea: "what if we used 2B"). A/B running.**
+Measured grad-memory slopes (LoRA r=16, micro-batch 1):
+- 4B: 7.7 MB/token -> T=1536 21GB, T=3277 OOM (our CUAD records are ~3.3k tok)
+- 2B: 3.7 MB/token -> T=1024 8.3GB, T=2048 12.0GB, T=3072 15.8GB, **T=4096 19.5GB**
+So at 2B, LoRA fits the FULL-LENGTH dense records - no truncation, no field subsetting.
+(Truncation is not an option at all: encode_record cuts the state and build_targets then marks
+out-of-range positives as NULL -> it would teach false absences. Documented in build_lora_mix.py.)
+Also learned: CUAD's 41-field schema alone eats ~1.3k tokens, which is why a length filter at
+2560 kept only 71/12,173 CUAD records until field-subsetting (keep state, drop fields) fixed
+it -> 12,173 kept, 33,112-record LoRA-safe mix built as a side artifact.
+Owner note: QLoRA reportedly not recommended for newer Qwens -> not attempted; owner is
+looking into higher-VRAM cards.
+RUNNING (exp2b chain): arm 1 = 2B head-only on the full dense mix (cuad_train_8k + 8-slot
+ACORD, max-length 8192, 1 epoch, 4,192 steps - very fast at ~15 rec/s, 5.8GB);
+arm 2 = 2B + LoRA r=16 on identical data, init from arm 1. Identical battery, compare notify.
+This is the clean capacity-vs-adaptation A/B: same data, same epochs, only LoRA on/off.
+
 **09:20 — expDense2 VERDICT (4k windows): CUAD .4004 -> .4097. DIMINISHING RETURNS.**
 - CUAD exact .4097 (+.0093; previous doubling gave +.0198) | null_ok .9893
 - pm: p@5 .416 (+.012), med rank 7 (-1), but p@1 .157 (-.012)
