@@ -1,3 +1,24 @@
+**22:55 — LoRA-at-65k feasibility probe: inconclusive while another arm runs; LoRA does work at
+8k on the 0.8B.**
+Question: can we run any LoRA with a 65k context on the 32GB 5090 right now?
+Probes (all with a hard allocator cap so the running granite42 arm could not be starved):
+  0.8B, LoRA r16, 65k, cap .50 (15.7GB): OOM while allocating 896MB
+  0.8B, LoRA r16, 32k, cap .50:          OOM while allocating 384MB
+  0.8B, LoRA r16,  8k, cap .50:          RAN - step 20/3207 at 3.2GB, then OOM on a 22MB alloc
+Two readings, and the second is the important one:
+1. The 32k/65k failures are CAP-limited, not card-limited: at failure the device still had
+   3-4.5GB free outside our cap. So these say "needs >15.7GB", not "impossible".
+2. The 8k run reaching only 3.2GB and STILL dying later on a 22MB allocation is suspicious -
+   either allocator fragmentation under a hard cap, or something growing across steps (optimizer
+   state, retained graph, the head's per-field tensors). Needs one clean run on a free card to
+   tell the difference; do not conclude "leak" yet.
+What we know from earlier work: LoRA at 4B/9B OOMs at ~30.6GB even at 8k with gradient
+checkpointing on (hybrid arch does not get much relief from it). So the ordering is:
+  8k:  0.8B works (3.2GB observed) | 2B plausible | 4B/9B no
+  65k: unknown for 0.8B (>15.7GB), needs a free card; 2B doubtful; 4B+ no
+DEFINITIVE TEST QUEUED: after granite42 finishes (~23:30), run 0.8B LoRA at 65k with cap .90 on
+an otherwise idle card, then 2B at 65k if the 0.8B fits at <24GB.
+
 **20:40 — FIXED A SETTINGS BUG MID-SWEEP: effective batch was not 6 for the big arms.**
 train.py treats --batch-size as the EFFECTIVE batch and derives micro = max(1, batch_size //
 accum) (train.py:107), then steps_per_epoch = ceil(len(loader)/accum) (train.py:199). So passing
