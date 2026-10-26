@@ -1,3 +1,27 @@
+**11:12 — BACKLOG of experiments to try (owner: finish baselines first; note these).**
+Source: read the public Cloudflare Clef blog/docs. Facts recorded for reference:
+- Clef = frozen Qwen3.8-27B (Clef) / Qwen3.5-9B (Clef-flash), 64k context, vision encoder.
+- Trains: joint schema head + rank-256 LoRA ADAPTERS jointly; backbone frozen.
+- Data: internal SYNTHETIC sets permuting field order, prompts, schema structure.
+- Losses: label-smoothed CE for schema outputs + BRIER loss for calibration.
+- Extra objective: RLCD (partial credit for adjacent ordinal choices, precise-record reward,
+  reference penalty vs distribution shift).
+- Clairic (extraction): same family; training recipe not published; weights "soon".
+- Our gaps vs them: no adapters (blocked at 9B), no Brier term (we only measure brier_null),
+  label smoothing only on candidate head, 8k context vs their 64k.
+QUEUE (after the current baseline trio completes; one variable per run against bench_v1):
+1. Brier loss on p_null + label smoothing on span heads (calibration).
+2. Schema/field/prompt permutation augmentation applied to REAL records (they do this).
+3. 16k-context training at 2B (matches eval windows; fixes our train/eval truncation gap).
+4. Rank-256 LoRA jointly with the head at 2B (reproduces the Clef training setup at our scale).
+5. Reranker/selection work targeting p@1 .225 vs p@5 .483 (26-point gap).
+6. Wider head (~350M: width 1536, 6 layers, ff 8192) on 2B.
+7. New corpora when available: LEDGAR, ContractNLI, DocILE, Kleister, Pile of Law, AU legal
+   corpus (2-3B legal-register seasoning of a 20B pretraining mix).
+8. From-scratch 1B x 20B (16B contracts + 4B wiki) - owner exploring GPU access.
+PROTOCOL: bench_v1 frozen; data provenance logged per run; compare only matching hashes.
+CURRENT: 4B arm running (step 1,500/8,384); then 2B seed replicate; then 9B bench_v1 arm.
+
 **11:05 — COMPARISON DISCIPLINE FIX (owner: "why aren't we doing 1:1 comparisons?").**
 Fair criticism, accepted. The confounds in 2B-vs-9B were: CUAD window size (8k/3,207 vs
 4k/6,199), ACORD variant (8-slot/1,368 vs 48-win/2,736) AND head warm-start - three variables
