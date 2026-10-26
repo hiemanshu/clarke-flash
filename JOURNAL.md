@@ -1,3 +1,15 @@
+**12:50 — Stopped the first batch on request; no temperature parameter is sent any more.**
+Owner interrupted the 20-record run. Disk state: reports/external/ holds only clairic
+(complete, 20 records); gpt's partial calls were not flushed (preds are written per model
+at completion - accepted, cheap to redo). Then the owner hit the same class of provider
+quirk directly ("temperature does not support 0"), so the request body no longer sends a
+temperature at all - determinism is now the provider default, and we accept whatever default
+the model ships with rather than fighting each API. This is the right trade: temperature 0
+was never part of the comparison contract, and per-provider parameter politics would
+otherwise leak into the numbers.
+Concurrency (--concurrency, default 8, thread pool over records, models sequential) is
+implemented and compiles but has NOT been exercised against the live API yet.
+
 **12:35 — First live external run: provider param quirks fixed, 20-record pass launched.**
 Smoke tests found that the OpenAI-compat surface is only superficially uniform:
 - openai/gpt-6.1-sol rejects `max_tokens` (demands `max_completion_tokens`) AND rejects

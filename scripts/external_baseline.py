@@ -35,8 +35,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -150,8 +152,7 @@ def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None):
     url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions"
     body = {"model": model,
             "messages": [{"role": "system", "content": json_instruction(fields)},
-                         {"role": "user", "content": "STATE:\n" + record["state"]}],
-            "temperature": 0}
+                         {"role": "user", "content": "STATE:\n" + record["state"]}]}
     # OpenAI's newer models reject max_tokens outright; everything else still wants it.
     token_key = "max_completion_tokens" if model.startswith("openai/") else "max_tokens"
     body[token_key] = max_tokens
@@ -167,7 +168,7 @@ def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None):
                 token_key = "max_completion_tokens" if token_key == "max_tokens" else "max_tokens"
                 body[token_key] = max_tokens
             elif "temperature" in msg and "temperature" in body:
-                body.pop("temperature")          # some models only allow the default
+                body.pop("temperature")          # belt-and-braces; we no longer send one
             elif "max_completion_tokens" in msg and "max_completion_tokens" in body:
                 body.pop("max_completion_tokens")
                 body["max_tokens"] = max_tokens
@@ -224,10 +225,58 @@ def locate(state: str, value: str):
     return [i, i + len(value)] if i >= 0 else None
 
 
+def _toks(s) -> list:
+    return _norm(s).lower().split()
+
+
+def _tok_f1(a: str, b: str) -> float:
+    from collections import Counter
+    ca, cb = Counter(_toks(a)), Counter(_toks(b))
+    inter = sum((ca & cb).values())
+    if not inter:
+        return 0.0
+    prec = inter / max(sum(cb.values()), 1)
+    rec = inter / max(sum(ca.values()), 1)
+    return 2 * prec * rec / (prec + rec)
+
+
+def _pair_f1(gset: set, pset: set) -> float:
+    """Token F1 with greedy best pairing; separates 'quoted the right clause but
+    trimmed it differently' from 'wrong clause entirely'."""
+    rem, total = list(pset), 0.0
+    for g in gset:
+        best, bi = 0.0, -1
+        for i, p in enumerate(rem):
+            v = _tok_f1(g, p)
+            if v > best:
+                best, bi = v, i
+        total += best
+        if bi >= 0:
+            rem.pop(bi)
+    return total / max(len(gset), 1)
+
+
+def _contained(gset: set, pset: set) -> float:
+    """Fraction of gold values whose text appears inside some prediction (or vice
+    versa) after whitespace normalisation, case-insensitive."""
+    if not gset:
+        return 0.0
+    hit = 0
+    for g in gset:
+        gl = _norm(g).lower()
+        for p in pset:
+            pl = _norm(p).lower()
+            if gl and (gl in pl or pl in gl):
+                hit += 1
+                break
+    return hit / len(gset)
+
+
 def score(records, preds, label, data):
     from collections import defaultdict
-    agg = defaultdict(lambda: {"n": 0, "answered": 0, "exact": 0.0,
-                               "null_correct": 0, "null_n": 0, "grounded": 0})
+    agg = defaultdict(lambda: {"n": 0, "answered": 0, "exact": 0.0, "tok_f1": 0.0,
+                               "contains": 0.0, "null_correct": 0, "null_n": 0,
+                               "grounded": 0})
     for rec, pred in zip(records, preds):
         dom = rec.get("domain", "?")
         for name, spec in rec["fields"].items():
@@ -249,20 +298,28 @@ def score(records, preds, label, data):
                 continue
             b["answered"] += 1
             b["exact"] += len(gset & pset) / (len(gset | pset) or 1)
+            b["tok_f1"] += _pair_f1(gset, pset)
+            b["contains"] += _contained(gset, pset)
             b["grounded"] += int(all(locate(rec["state"], v) for v in pset))
     metrics, by_domain = {}, {}
     for (dom, kind), b in agg.items():
         by_domain.setdefault(dom, {})[kind] = {
             "n": b["n"], "exact": round(b["exact"] / max(b["answered"], 1), 4),
+            "tok_f1": round(b["tok_f1"] / max(b["answered"], 1), 4),
+            "contains": round(b["contains"] / max(b["answered"], 1), 4),
             "answered": b["answered"],
             "null_correct": round(b["null_correct"] / max(b["null_n"], 1), 4),
             "grounded_rate": round(b["grounded"] / max(b["answered"], 1), 4)}
-        m = metrics.setdefault(kind, {"n": 0, "exact_sum": 0.0, "answered": 0,
+        m = metrics.setdefault(kind, {"n": 0, "exact_sum": 0.0, "f1_sum": 0.0,
+                                      "contains_sum": 0.0, "answered": 0,
                                       "null_correct": 0, "null_n": 0, "grounded": 0})
         m["n"] += b["n"]; m["exact_sum"] += b["exact"]; m["answered"] += b["answered"]
+        m["f1_sum"] += b["tok_f1"]; m["contains_sum"] += b["contains"]
         m["null_correct"] += b["null_correct"]; m["null_n"] += b["null_n"]
         m["grounded"] += b["grounded"]
     overall = {k: {"n": m["n"], "exact": round(m["exact_sum"] / max(m["answered"], 1), 4),
+                   "tok_f1": round(m["f1_sum"] / max(m["answered"], 1), 4),
+                   "contains": round(m["contains_sum"] / max(m["answered"], 1), 4),
                    "answered": m["answered"],
                    "null_correct": round(m["null_correct"] / max(m["null_n"], 1), 4),
                    "grounded_rate": round(m["grounded"] / max(m["answered"], 1), 4)}
@@ -280,24 +337,33 @@ def run_model(spec, records, args):
             return call_cf_clairic(rec, fields, spec["model"], args.sleep)
         return call_cf_chat(rec, fields, spec["model"], args.sleep,
                             max_tokens=args.max_output_tokens, extra=spec.get("params"))
-    print(f"[external] {label} ({spec.get('kind','chat')}) on {len(records)} records", flush=True)
-    preds, failed = [], 0
-    for i, rec in enumerate(records):
+    print(f"[external] {label} ({spec.get('kind','chat')}) on {len(records)} records "
+          f"(concurrency {args.concurrency})", flush=True)
+
+    def work(idx, rec):
         fields = fields_for_record(rec)
-        pred = {}
         for attempt in range(args.retries + 1):
             try:
-                pred = one(rec, fields)
-                break
+                return idx, one(rec, fields), None
             except (RuntimeError, urllib.error.URLError, TimeoutError, KeyError) as e:
                 if attempt == args.retries:
-                    failed += 1
-                    print(f"  [{i}] failed: {e}", file=sys.stderr)
-                else:
-                    time.sleep(2 + 2 * attempt)
-        preds.append(pred if isinstance(pred, dict) else {})
-        if (i + 1) % 10 == 0:
-            print(f"  {i + 1}/{len(records)}", flush=True)
+                    return idx, {}, str(e)
+                # jittered backoff: parallel workers must not retry in lockstep
+                time.sleep(1.5 * (attempt + 1) + random.random())
+
+    preds = [{} for _ in records]
+    failed, done = 0, 0
+    with ThreadPoolExecutor(max_workers=max(1, args.concurrency)) as pool:
+        futures = [pool.submit(work, i, r) for i, r in enumerate(records)]
+        for fut in as_completed(futures):
+            idx, pred, err = fut.result()
+            preds[idx] = pred if isinstance(pred, dict) else {}
+            if err:
+                failed += 1
+                print(f"  [{idx}] failed: {err}", file=sys.stderr)
+            done += 1
+            if done % 10 == 0:
+                print(f"  {done}/{len(records)}", flush=True)
     report = score(records, preds, label, args.data)
     report["max_context_tokens"] = args.max_context_tokens
     report["truncated_records"] = args.truncated
@@ -313,6 +379,39 @@ def run_model(spec, records, args):
     return report
 
 
+def rescore_dir(args) -> int:
+    """Re-score already-collected predictions; lets metrics evolve without re-spending."""
+    d = Path(args.rescore_dir)
+    raw = [json.loads(l) for l in open(args.data)]
+    by_id = {}
+    for r in raw:
+        by_id.setdefault(r.get("id"), []).append(r)
+    rows = []
+    for pf in sorted(d.glob("*.preds.jsonl")):
+        recs, preds = [], []
+        for line in pf.read_text().splitlines():
+            item = json.loads(line)
+            cand = by_id.get(item["id"]) or []
+            if not cand:
+                continue
+            recs.append(cand[0])
+            preds.append(item["pred"])
+        rep = score(recs, preds, f"external:{pf.stem}", args.data)
+        rep["failed_calls"] = None
+        out = d / f"{pf.stem.replace('.preds', '')}.json"
+        out.write_text(json.dumps(rep, indent=2))
+        for kind, m in rep["metrics"].items():
+            rows.append([pf.stem.replace(".preds", ""), kind, m["answered"], m["exact"],
+                         m["tok_f1"], m["contains"], m["null_correct"], m["grounded_rate"]])
+    if rows:
+        print(f"{'model':24s} {'kind':10s} {'ans':>4s} {'exact':>7s} {'tokF1':>7s} "
+              f"{'contains':>8s} {'nullok':>7s} {'grd':>5s}")
+        for r in rows:
+            print(f"{r[0]:24s} {r[1]:10s} {r[2]:4d} {r[3]:7.4f} {r[4]:7.4f} "
+                  f"{r[5]:8.4f} {r[6]:7.4f} {r[7]:5.3f}")
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--models-file", default=None,
@@ -322,7 +421,10 @@ def main(argv=None):
     ap.add_argument("--label", default=None)
     ap.add_argument("--data", default="data/real_eval.jsonl")
     ap.add_argument("--limit", type=int, default=20)
-    ap.add_argument("--sleep", type=float, default=0.5)
+    ap.add_argument("--sleep", type=float, default=0.25,
+                    help="per-call pause (parallel workers share the provider rate limit)")
+    ap.add_argument("--concurrency", type=int, default=8,
+                    help="in-flight requests per model; models still run sequentially")
     ap.add_argument("--out-dir", default="reports/external")
     ap.add_argument("--max-context-tokens", dest="max_context_tokens", type=int, default=64000)
     ap.add_argument("--tokenizer", default="Qwen/Qwen3.5-9B")
@@ -331,8 +433,13 @@ def main(argv=None):
                     help="completion budget per record (chat models); 41 typed fields of spans "
                          "need room, and adversarial models burn tokens on reasoning")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--rescore-dir", default=None,
+                    help="recompute reports from saved <label>.preds.jsonl (no API calls)")
     args = ap.parse_args(argv)
     args.gateway = os.environ.get("CLOUDFLARE_GATEWAY", "default")
+
+    if args.rescore_dir:
+        return rescore_dir(args)
 
     if args.models_file:
         specs = json.loads(Path(args.models_file).read_text())["models"]
