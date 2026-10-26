@@ -1,3 +1,31 @@
+**23:40 — Post-sweep plan restructured as a ONE-VARIABLE-AT-A-TIME ladder (owner directive: "we
+should do the changes in 1 by 1 steps, so we know what caused a change").**
+Also answered the owner's question about why SPAN_MAX_TOKENS is capped at all: there is no good
+reason. The 256 came from the ORIGINAL decoder, which materialised a T x T joint matrix and needed
+a band to be tractable; when I replaced that with a sliding window the cap survived as legacy.
+Nothing about the model requires it - training supervises exact (start,end) tokens and the head
+can express any span. Its only cost is that 1.9% of doc-level gold spans (19/1022) are structurally
+unreachable.
+Implemented an UNCAPPED decoder: exact argmax over all j >= i via suffix maxima, O(T) memory, no
+matrix. Verified identical to brute force at T=1,2,7,40,300,5000. So the span cap is now an
+eval-time knob with three settings: 256 (default, keeps old numbers comparable), 512, uncapped.
+LADDER (all training: doc_train_470, --max-length 65536, fresh head, 4 epochs ~1,880 updates):
+  A  Qwen2B + current head (112M)   -> isolates the 65k-training regime vs the 8k-trained sweep
+  A' same checkpoint, eval at span cap 256 / 512 / uncapped  -> FREE, isolates span reachability
+  B  Qwen2B + wide head (371M)      -> isolates head capacity (measured: width1536/layers6/
+     heads24/ff8192 on hidden 2048 = 371.0M params, ~5.9GB fp32 weights+grad+Adam)
+  C  top-2 sweep backbones + winning head -> isolates pretraining under our real regime
+Deliberate controls: FRESH head at 65k (the 8k baseline it is compared against was fresh; warm-start
+is its own later step), and epochs fixed at 4 across A and B so epoch count stays a separate knob.
+Eval-time knobs (slot threshold, null threshold, dedupe, pointer temp, span cap) are swept per
+checkpoint at no training cost.
+Prepared meanwhile, no GPU needed: public.cuad_records now REPORTS how many QAs it truncates to
+max_spans instead of doing it silently (CUAD has up to 55 answers; 1.7% train / 2.2% held-out
+exceed 8). And the LoRA target bug is confirmed fixable only partially: adding the hybrid modules
+(in_proj_qkv/z/a/b, out_proj, gate_proj) works, but conv1d cannot be LoRA-adapted because its
+groups (6144) require a rank divisible by groups - PEFT raises. So a faithful Clef-style adapter
+targets everything except conv1d.
+
 **23:15 — OWNER RULE: from here on, training AND eval at 65,536 tokens.**
 Recorded in OPERATIONS.md ("Context regime"). Consequences, so they are planned rather than
 discovered:

@@ -183,6 +183,7 @@ def cuad_records(path: Path, doc_start: int = 0, doc_end: int | None = None,
     blob = json.loads(path.read_text(encoding="utf-8"))
     docs = blob["data"][doc_start:doc_end]
     records: list[dict[str, Any]] = []
+    truncated_qas = 0
     for doc in docs:
         for p in doc.get("paragraphs", []):
             ctx = p.get("context") or ""
@@ -211,6 +212,9 @@ def cuad_records(path: Path, doc_start: int = 0, doc_end: int | None = None,
                             if 0 <= s and e <= len(chunk) and len(texts) < max_spans:
                                 spans.append([s, e])
                                 texts.append(a["text"])
+                    n_gold = len({a["text"] for a in (qa.get("answers") or [])})
+                    if n_gold > max_spans:
+                        truncated_qas += 1
                     answers[name] = ({"value": texts, "spans": spans} if texts
                                      else {"value": None})
                 records.append({
@@ -220,7 +224,9 @@ def cuad_records(path: Path, doc_start: int = 0, doc_end: int | None = None,
                     "fields": fields,
                     "answers": answers,
                 })
-    print(f"[public] cuad: {len(records)} windowed records from {len(docs)} contracts")
+    print(f"[public] cuad: {len(records)} windowed records from {len(docs)} contracts"
+          + (f"; TRUNCATED {truncated_qas} QAs to {max_spans} answers (CUAD has up to 55)"
+             if truncated_qas else ""))
     return records
 
 

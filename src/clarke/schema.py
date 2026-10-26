@@ -50,7 +50,8 @@ MAX_GRID_BINS = 256
 OVERFLOW_BINS = 2      # p_below, p_above appended after grid bins
 
 LIST_SLOTS = 8         # max items for list fields
-SPAN_MAX_TOKENS = 256   # max span length in tokens for text/list spans
+SPAN_MAX_TOKENS = 256   # default decode span cap; 512 is tested via --span-max-tokens
+                        # (256 leaves 1.9% of doc-level gold spans unreachable)
 
 
 class FieldSpec:

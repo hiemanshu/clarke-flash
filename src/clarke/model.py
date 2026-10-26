@@ -60,7 +60,8 @@ class ClarkeModel(torch.nn.Module):
 
     def answer(self, batch: dict[str, Any], null_threshold: float = 0.5,
                slot_threshold: float = 0.5, dedupe: bool = True,
-               pointer_temp: float = 1.0) -> list[dict[str, Any]]:
+               pointer_temp: float = 1.0,
+               span_max_tokens: int | None = None) -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -76,7 +77,8 @@ class ClarkeModel(torch.nn.Module):
                 encoded.name: decode_answer(encoded.spec, record, field_logits,
                                             null_threshold=null_threshold,
                                             slot_threshold=slot_threshold, dedupe=dedupe,
-                                            pointer_temp=pointer_temp)
+                                            pointer_temp=pointer_temp,
+                                            span_max_tokens=span_max_tokens)
                 for encoded, field_logits in zip(record.fields, record_logits)
             })
         return out
@@ -88,14 +90,16 @@ def _probability(mass: torch.Tensor) -> float:
 
 def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                   null_threshold: float = 0.5, slot_threshold: float = 0.5,
-                  dedupe: bool = True, pointer_temp: float = 1.0) -> dict[str, Any]:
+                  dedupe: bool = True, pointer_temp: float = 1.0,
+                  span_max_tokens: int | None = None) -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
 
     if spec.type == "text":
         span_answer = _decode_span(logits.start, logits.end, record, spec, p_null,
                                    null_threshold=null_threshold,
-                                   pointer_temp=pointer_temp)
+                                   pointer_temp=pointer_temp,
+                                   span_max_tokens=span_max_tokens)
         answer.update(span_answer)
     elif spec.type == "list" and spec.items == "text":
         values, spans = [], []
@@ -105,7 +109,8 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                 if present[slot] < slot_threshold:
                     continue
                 part = _decode_span(logits.start[slot], logits.end[slot], record, spec,
-                                    torch.tensor(0.0), pointer_temp=pointer_temp)
+                                    torch.tensor(0.0), pointer_temp=pointer_temp,
+                                    span_max_tokens=span_max_tokens)
                 if not part.get("value"):
                     continue
                 span = part["span"]
@@ -235,6 +240,7 @@ def _round_value(value: float, spec: FieldSpec) -> float:
 def _decode_span(
     start: torch.Tensor, end: torch.Tensor, record: EncodedRecord, spec: FieldSpec,
     p_null: torch.Tensor, null_threshold: float = 0.5, pointer_temp: float = 1.0,
+    span_max_tokens: int | None = None,
 ) -> dict[str, Any]:
     """Pointer decode: the answer text is a slice of the input, never generated.
 
@@ -242,7 +248,8 @@ def _decode_span(
     offsets (mirrors Cloudflare's tracking_number example), so near-misses are
     auditable.
     """
-    from .schema import SPAN_MAX_TOKENS
+    from .schema import SPAN_MAX_TOKENS as _DEFAULT_SPAN
+    SPAN_MAX_TOKENS = int(span_max_tokens or _DEFAULT_SPAN)
 
     tokens = start.shape[0]
     if tokens == 0:
@@ -256,6 +263,19 @@ def _decode_span(
     # at 65k tokens that matrix is 65k^2 floats (~17 GB) and OOMs the whole eval.
     # A sliding window of width SPAN_MAX_TOKENS is the same search in O(T * L)
     # (65k x 24 floats ~ 6 MB), and picks the identical (start, end).
+    if span_max_tokens is not None and int(span_max_tokens) <= 0:
+        # UNCAPPED: exact argmax over every j >= i in O(T) via suffix maxima. The 256
+        # default is a leftover from the O(T^2) joint matrix this replaced; no model
+        # property requires a span cap.
+        rev_max, rev_arg = torch.cummax(torch.flip(end_probs, [0]), dim=0)
+        suffix_max = torch.flip(rev_max, [0])                       # max over j >= i
+        suffix_arg = tokens - 1 - torch.flip(rev_arg, [0])          # the j achieving it
+        scores = start_probs * suffix_max
+        i = int(scores.argmax())
+        j = int(suffix_arg[i])
+        score = scores[i]
+        return _span_from_indices(record, i, j, p_null, null_threshold, score)
+
     window = min(SPAN_MAX_TOKENS, tokens)
     # pad so EVERY start position gets a full window (otherwise starts in the last
     # window-1 positions are never considered); zero scores can never win, as all
@@ -266,6 +286,11 @@ def _decode_span(
     i, off = divmod(flat, window)
     j = i + off
     score = scores.reshape(-1)[flat]
+    return _span_from_indices(record, i, j, p_null, null_threshold, score)
+
+
+def _span_from_indices(record: EncodedRecord, i: int, j: int, p_null: torch.Tensor,
+                       null_threshold: float, score: torch.Tensor) -> dict[str, Any]:
     char_start = record.char_offsets[i][0]
     char_end = record.char_offsets[j][1]
     text = record.state[char_start:char_end]

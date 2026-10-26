@@ -37,7 +37,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              device: torch.device, batch_size: int = 8,
              agg_atoms: bool = False, max_length: int = 8192,
              null_threshold: float = 0.5, slot_threshold: float = 0.5,
-             dedupe: bool = True, pointer_temp: float = 1.0) -> dict[str, Any]:
+             dedupe: bool = True, pointer_temp: float = 1.0,
+             span_max_tokens: int | None = None) -> dict[str, Any]:
     stats: dict[tuple[str, str], dict[str, float]] = {}
 
     def stat(dom: str, kind: str) -> dict[str, float]:
@@ -63,7 +64,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
         with torch.inference_mode():
             answers = model.answer(batch, null_threshold=null_threshold,
                                    slot_threshold=slot_threshold, dedupe=dedupe,
-                                   pointer_temp=pointer_temp)
+                                   pointer_temp=pointer_temp,
+                                   span_max_tokens=span_max_tokens)
         torch.cuda.empty_cache()  # varying-length long docs + per-field NxN pointer
         # matrices fragment the allocator fast; releasing per batch costs ~nothing
         # next to a 19GB model and prevents the 30GB OOM seen at 02:46
@@ -298,6 +300,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--head", required=True, help="checkpoint dir with extraction_head.safetensors")
     parser.add_argument("--data", required=True, help="records JSONL to evaluate")
     parser.add_argument("--limit", type=int, default=256)
+    parser.add_argument("--span-max-tokens", dest="span_max_tokens", type=int, default=None,
+                        help="decode span cap; default 256. 512 makes the 1.9%% of doc-level "
+                             "gold spans longer than 256 tokens reachable")
     parser.add_argument("--pointer-temp", dest="pointer_temp", type=float, default=1.0,
                         help="temperature on the positional softmax; >1 sharpens the span "
                              "pointer, which matters as sequence length grows")
@@ -360,6 +365,7 @@ def main(argv: list[str] | None = None) -> None:
                            null_threshold=args.null_threshold,
                            slot_threshold=args.slot_threshold, dedupe=args.dedupe,
                            pointer_temp=args.pointer_temp,
+                           span_max_tokens=args.span_max_tokens,
                            agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "metrics": summary["overall"], "by_domain": summary["by_domain"]}
