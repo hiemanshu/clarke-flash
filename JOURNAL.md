@@ -1,3 +1,24 @@
+**23:40 — Span tie-break generalises across ALL seven backbones; now the default.**
+Owner asked why I only tested Qwen. Ran eps=.25 on every checkpoint with a doc40 baseline:
+  model          exact e0   exact .25   delta    exact@all e0 -> .25   delta
+  Qwen 2B         .4407      .4535     +.0128     .2850 -> .2932      +.0082
+  Qwen 0.8B       .4409      .4592     +.0183     .2435 -> .2536      +.0101
+  LFM 1.2B        .4118      .4182     +.0064     .2274 -> .2309      +.0035
+  LFM 230M        .3343      .3594     +.0251     .1631 -> .1754      +.0122
+  Hy-MT2 1.8B     .3761      .3946     +.0185     .1956 -> .2052      +.0096
+  MiniCPM5 2B     .4245      .4434     +.0189     .2804 -> .2929      +.0125
+  granite 3.7B    .4389      .4545     +.0156     .2450 -> .2537      +.0087
+Every model improves, by +.006 to +.025 exact (mean ~+.017) and +.0035 to +.0125 exact@all. The
+gain is LARGEST on the smallest backbone (230M, +.025) and on the MT-tuned one (+.019), i.e. it
+helps most where the boundary prior is weakest - consistent with the mechanism being a decode-time
+length prior rather than anything Qwen-specific.
+DECISION: --span-tiebreak-eps now defaults to 0.25 (was 0). Pass 0 to reproduce any pre-23:40
+number. This is the first decode-time change that is unambiguously a win everywhere, so it should
+be the baseline for the 65k ladder (A/B/C) and for any future comparison against frontier models -
+Clairic's .016 exact, for instance, is a granularity failure this partially addresses.
+NOT YET TESTED: Gemma-4-E2B (its doc40 OOMs at the 0.60 cap and needs a 0.85 cap on an idle card)
+and Ministral (still training). Both will use eps .25 when they run.
+
 **23:28 — OWNER WAS RIGHT: the contains gain was convertible. TIGHT-SPAN TIE-BREAK beats the
 256 default by +.008 to +.010 exact@all. My "keep 256, nothing to gain" conclusion was half wrong.**
 Owner's objection to the span-cap entry: "the contains change means we can optimise exact better".

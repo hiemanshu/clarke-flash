@@ -302,9 +302,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--head", required=True, help="checkpoint dir with extraction_head.safetensors")
     parser.add_argument("--data", required=True, help="records JSONL to evaluate")
     parser.add_argument("--limit", type=int, default=256)
-    parser.add_argument("--span-tiebreak-eps", dest="span_tiebreak_eps", type=float, default=0.0,
-                        help="among spans scoring within eps of the best, prefer the shortest "
-                             "(lets a wide span cap buy region coverage without over-extending)")
+    parser.add_argument("--span-tiebreak-eps", dest="span_tiebreak_eps", type=float, default=0.25,
+                        help="among spans scoring within eps of the best, prefer the shortest. "
+                             "Default 0.25: generalises across all 7 backbones tested (+.006 to "
+                             "+.025 exact). Pass 0 to reproduce pre-2026-10-26 numbers.")
     parser.add_argument("--span-max-tokens", dest="span_max_tokens", type=int, default=None,
                         help="decode span cap; default 256. 512 makes the 1.9%% of doc-level "
                              "gold spans longer than 256 tokens reachable")
