@@ -1,3 +1,16 @@
+**15:58 — Decision trail for reports/ now recorded in three places, not one.**
+Owner asked whether the reports decision is discoverable from the journal AND the reports.
+It was only in the journal + OPERATIONS + commit messages, so a reader opening reports/ had no
+context. Added reports/README.md documenting: the tracking decision and its reversal (2026-10-26),
+which tool produces which file shape, the naming conventions (scale2b-/bb-/doc40-65k-/-pt/-slot/
+external_doc/rescored), which runs are invalid (deepseek 403, minimax 500, qwen timeouts), and the
+four reading rules that have actually misled us - exact is conditioned on answered, null_correct
+must be read with it, failed calls score as correctly-null, and the 20-record slice is 19 windows
+of ONE contract.
+So the trail is now: journal = chronological decisions and claims; OPERATIONS = compaction-proof
+rules; reports/README.md = artifact provenance and reading rules; commit messages = the why at
+the point of change.
+
 **15:52 — reports/ tracked in git after all (owner reversal of the 15:45 decision).**
 169 files / 2.7MB committed, including the raw .preds.jsonl dumps. The earlier "journal is the
 only durable record" rule is superseded: every journaled number can now be traced to the exact
