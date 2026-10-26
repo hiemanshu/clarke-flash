@@ -1,3 +1,14 @@
+**09:40 — 2B A/B running; owner descoped the 3090 (single-GPU path continues).**
+Watcher v6 adds two 2B hooks: arm-1 (head-only) notification as soon as
+reports/exp2b-real.json lands (~10:15) and the full A/B comparison when the LoRA arm's
+battery completes (~12:00). Housekeeping: a STALE watcher from yesterday (1d 2h old, pre-hook
+code) was still alive and would have duplicated notifications - killed by PID; one watcher
+remains. Reminder to self (6th occurrence): a kill command must never contain the target's
+literal name elsewhere in the same command line - the heredoc path "watcher.sh" matched
+pgrep and killed my own shell.
+GPU plan update: owner dropped the 3090 idea; keep the single-5090 path. LoRA at 2B is the
+current feasibility route (3.7MB/token, fits 4k tokens at 19.5GB).
+
 **09:30 — LoRA UNBLOCKED AT 2B (owner idea: "what if we used 2B"). A/B running.**
 Measured grad-memory slopes (LoRA r=16, micro-batch 1):
 - 4B: 7.7 MB/token -> T=1536 21GB, T=3277 OOM (our CUAD records are ~3.3k tok)
