@@ -1,3 +1,29 @@
+**13:45 — 4B verdict is in, and the tokF1/contains columns change the story.**
+4B finished (8,384/8,384) and I reran both arms with the new metrics on the SAME
+real_eval (168 records, 5,936 field slots, 593 gold):
+  model   exact   tokF1  contains  answered     null_ok
+  2B     .4070   .5541    .6859    380 (64%)    .9853
+  4B     .3884   .5492    .6685    385 (65%)    .9887
+Identical profiles; 4B is 0.019 WORSE on exact and 2.2x slower (6.6 vs 14.2 rec/s).
+Combined with the val-loss tie (4.587 vs 4.580 at step 6000) and the 20-record slice
+(4B .0735 vs 2B .1519), the "does model size help" question is now answered: no, not at
+this data scale. 2B stays the working size.
+The document-level table with all three metrics (28 common contracts, 329 gold):
+  gemini  .5625 / .7419 / .9048 / 306
+  opus    .5515 / .7317 / .8560 / 298
+  gpt     .5361 / .6951 / .8522 / 307
+  clarke  .4538 / .5806 / .6863 / 219
+  clairic .0162 / .4152 / .9526 / 329
+WHY THE NEW COLUMNS MATTER: our contains is .686 versus their .85-.90. contains credits a
+prediction that is either a superset OR a subset of the gold text, so this is not a
+granularity artefact - roughly a third of the fields we DO answer point at unrelated text.
+So the gap is two problems, not one: coverage (67% vs 93%) AND pointer placement
+(~68% vs ~88% of answered). Frontier models also show the opposite failure mode from
+Clairic: they quote a correct-but-longer clause (high contains, moderate exact) while
+Clairic quotes nearly-always-correct text at the wrong granularity (.95 contains, .016
+exact). Our failure is neither - we miss the region entirely more often, which points at
+attention/long-context localisation rather than a calibration tweak.
+
 **13:35 — Parity fix: our evaluator now reports tok_f1 and contains too, from the SAME
 module as the external harness (src/clarke/textmetrics.py).**
 Owner asked why our row had dashes for those columns. It was an asymmetry I introduced: I
