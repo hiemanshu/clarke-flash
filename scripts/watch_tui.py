@@ -6,8 +6,9 @@
     ./scripts/watch_training.sh status     # one plain-text frame (logs/cron)
     python3 scripts/watch_tui.py --once    # same, directly
 
-Panels: active run, GPU (util/VRAM/temp/power), CPU (total + per core + load),
-memory/swap, network (per interface with sparkline), all runs, log tail.
+Shows ONE run: the active one, or the most recent when nothing is training.
+Panels: current run + component losses, GPU, CPU (per core), memory/swap/disk,
+network (interfaces that actually hold an IP), log tail.
 
 Keys: q quit | space pause | l cycle log | r reset samplers | ? help
 """
@@ -29,9 +30,12 @@ LOGDIR = Path(os.environ.get("LOGDIR", "/tmp/opencode"))
 HIST = 60
 SPARK = "▁▂▃▄▅▆▇█"
 EIGHTHS = "▏▎▍▌▋▊▉█"
+COMPS = ("null", "span", "cand", "op", "present", "dist")
 
-# colour pairs
 C_ACCENT, C_GOOD, C_WARN, C_BAD, C_DIM = 1, 2, 3, 4, 5
+
+# parsed-run cache: {(path, mtime): extra} - avoids re-scanning a 1MB jsonl every second
+_CACHE: dict[tuple[str, float], dict] = {}
 
 
 # ----------------------------------------------------------------- data sources
@@ -50,13 +54,15 @@ def _procs() -> list[str]:
     return out
 
 
-def _last_train_rows(path: Path, want: int = 2) -> list[dict]:
+def _scan_run(path: Path) -> dict:
+    """Last train row, last val row, best val and checkpoint inventory (cached by mtime)."""
+    key = (str(path), os.path.getmtime(path))
+    if key in _CACHE:
+        return _CACHE[key]
+    last_train, prev_train, last_val, best_val, best_step = None, None, None, None, None
     try:
-        with open(path, "rb") as fh:
-            fh.seek(0, os.SEEK_END)
-            fh.seek(max(0, fh.tell() - 8192))
-            rows: list[dict] = []
-            for line in reversed(fh.read().decode("utf-8", "replace").splitlines()):
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
                 line = line.strip()
                 if not line:
                     continue
@@ -64,42 +70,61 @@ def _last_train_rows(path: Path, want: int = 2) -> list[dict]:
                     row = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if not row.get("val"):
-                    rows.append(row)
-                    if len(rows) >= want:
-                        break
+                if row.get("val"):
+                    last_val = row
+                    if isinstance(row.get("loss"), (int, float)):
+                        if best_val is None or row["loss"] < best_val:
+                            best_val, best_step = row["loss"], row.get("step")
+                else:
+                    prev_train, last_train = last_train, row
     except OSError:
-        return rows
-    return rows
+        return {}
+    ckpts = sorted(int(p.rsplit("checkpoint-", 1)[1])
+                   for p in glob.glob(str(path.parent / "checkpoint-*"))
+                   if p.rsplit("checkpoint-", 1)[-1].isdigit())
+    info = {"train": last_train, "prev_train": prev_train, "val": last_val,
+            "best_val": best_val,
+            "best_step": best_step, "ckpts": ckpts}
+    _CACHE[key] = info
+    return info
 
 
-def discover_runs() -> list[dict]:
-    """Auto-discovered runs (never a hardcoded name: new experiments must appear)."""
+def current_run() -> dict | None:
+    """The active run if one is training, else the most recently touched run."""
     cmds = _procs()
-    runs = []
+    best = None
     for path in glob.glob(str(ROOT / "runs" / "*" / "train.jsonl")):
-        run_dir = Path(path).parent
-        recent = _last_train_rows(Path(path))
-        if not recent:
+        p = Path(path)
+        info = _scan_run(p)
+        train = info.get("train")
+        if not train:
             continue
-        last = recent[0]
-        loss_prev = recent[1].get("loss") if len(recent) > 1 else None
-        runs.append({
+        run_dir = p.parent
+        rec = {
             "name": run_dir.name,
-            "step": last.get("step") or 0,
-            "total": last.get("total") or 0,
-            "epoch": last.get("epoch") or 0,
-            "loss": last.get("loss"),
-            "loss_prev": loss_prev,
-            "lr": last.get("lr"),
-            "rps": last.get("recs_per_s") or 0.0,
-            "gpu_gb": last.get("gpu_gb") or 0.0,
-            "mtime": os.path.getmtime(path),
+            "step": train.get("step") or 0,
+            "total": train.get("total") or 0,
+            "epoch": train.get("epoch") or 0,
+            "loss": train.get("loss"),
+            "loss_prev": (info.get("prev_train") or {}).get("loss"),
+            "lr": train.get("lr"),
+            "rps": train.get("recs_per_s") or 0.0,
+            "gpu_gb": train.get("gpu_gb") or 0.0,
+            "bs": train.get("bs") or 1,
+            "accum": train.get("accum") or 1,
+            "comps": {k: train[k] for k in COMPS if isinstance(train.get(k), (int, float))},
+            "best_val": info.get("best_val"),
+            "best_step": info.get("best_step"),
+            "ckpts": info.get("ckpts") or [],
+            "mtime": os.path.getmtime(p),
             "active": any("clarke-train" in c and (str(run_dir) in c or run_dir.name in c)
                           for c in cmds),
-        })
-    runs.sort(key=lambda r: (not r["active"], -r["mtime"]))
-    return runs
+        }
+        if rec["active"]:
+            return rec
+        if best is None or rec["mtime"] > best["mtime"]:
+            best = rec
+    return best
 
 
 def gpu_stats() -> dict | None:
@@ -170,6 +195,38 @@ def disk_stats() -> dict:
         return {"free": 0.0, "total": 0.0, "pct": 0.0}
 
 
+def ip_addrs() -> dict[str, str]:
+    """Interfaces holding a routable address - a counter with no IP is not 'the network'."""
+    found: dict[str, str] = {}
+    try:
+        out = subprocess.run(["ip", "-o", "addr", "show"], capture_output=True, text=True,
+                             timeout=2).stdout
+    except (OSError, subprocess.SubprocessError):
+        return found
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        iface = parts[1].split("@")[0]
+        if iface == "lo":
+            continue
+        if "scope link" in line or "scope host" in line:
+            continue
+        is4, is6 = " inet " in line, " inet6 " in line
+        if not (is4 or is6):
+            continue
+        fam = "inet" if is4 else "inet6"
+        try:
+            addr = parts[parts.index(fam) + 1].split("/")[0]
+        except (ValueError, IndexError):
+            continue
+        if is4:
+            found[iface] = addr                      # IPv4 wins over IPv6 when both exist
+        else:
+            found.setdefault(iface, addr)
+    return found
+
+
 def net_counters() -> dict[str, tuple[int, int]]:
     cur = {}
     try:
@@ -205,7 +262,6 @@ def hb(b: float) -> str:
 
 
 def pbar(pct: float, width: int) -> str:
-    """Eighth-resolution bar so slow movers still visibly advance."""
     pct = max(0.0, min(100.0, pct))
     eighths = int(round(pct / 100 * width * 8))
     full, rem = divmod(eighths, 8)
@@ -224,17 +280,22 @@ def spark(vals: list[float], width: int) -> str:
         return "·" * width
     vals = list(vals)[-width:]
     peak = max(vals) or 1.0
-    s = "".join(SPARK[min(7, int(v / peak * 7))] for v in vals)
-    return s.rjust(width)
+    return "".join(SPARK[min(7, int(v / peak * 7))] for v in vals).rjust(width)
 
 
-def eta_str(run: dict, bs: int = 6, accum: int = 2) -> str:
+def eta_str(run: dict) -> str:
     if not run["total"] or run["step"] >= run["total"] or run["rps"] <= 0:
         return "—"
-    secs = (run["total"] - run["step"]) / (run["rps"] / (bs * accum))
-    if secs >= 3600:
-        return f"{secs / 3600:.1f}h"
-    return f"{secs / 60:.0f}m"
+    secs = (run["total"] - run["step"]) / (run["rps"] / (run["bs"] * run["accum"]))
+    return f"{secs / 3600:.1f}h" if secs >= 3600 else f"{secs / 60:.0f}m"
+
+
+def ago(secs: float) -> str:
+    if secs < 90:
+        return f"{secs:.0f}s ago"
+    if secs < 5400:
+        return f"{secs / 60:.0f}m ago"
+    return f"{secs / 3600:.1f}h ago"
 
 
 # ----------------------------------------------------------------- dashboard
@@ -248,25 +309,25 @@ class Dash:
         self.h_cpu: deque[float] = deque(maxlen=HIST)
         self.h_gpu: deque[float] = deque(maxlen=HIST)
         self.h_net: deque[float] = deque(maxlen=HIST)
+        self.ips: dict[str, str] = {}
+        self.ips_t = 0.0
         self.log_idx = 0
 
     # -- primitives
     def put(self, win, y: int, x: int, text: str, attr: int = 0) -> None:
-        """Clip by CHARACTERS, not bytes: box-drawing glyphs are 3 bytes in UTF-8 and
-        addnstr() counts bytes, which silently cut every frame to a third of its width."""
+        """Clip by CHARACTERS: box-drawing glyphs are 3 UTF-8 bytes and addnstr() would
+        count bytes, silently truncating frames to a third of their width."""
         h, w = win.getmaxyx()
         if y < 0 or y >= h or x < 0 or x > w - 1:
             return
-        avail = w - x
-        text = text[:avail]
+        text = text[: w - x]
         if not text:
             return
         try:
             win.addstr(y, x, text, attr)
         except curses.error:
-            # writing the very last cell can raise; drop one glyph and retry
             try:
-                win.addstr(y, x, text[:-1], attr)
+                win.addstr(y, x, text[:-1], attr)   # last cell can refuse; drop one glyph
             except curses.error:
                 pass
 
@@ -294,50 +355,55 @@ class Dash:
         if right:
             self.put(win, y, x + 8 + width + len(tail) + 2, right, curses.color_pair(C_DIM))
 
+    def labelled(self, win, y: int, x: int, label: str, value: str, attr: int = 0) -> None:
+        self.put(win, y, x, f"{label:<9}", curses.color_pair(C_DIM))
+        self.put(win, y, x + 9, value, attr)
+
     # -- frame
     def frame(self, win) -> None:
         win.erase()
         h, w = win.getmaxyx()
         now = time.time()
 
-        runs = discover_runs()
+        run = current_run()
         gpu = gpu_stats()
         cores, cpust = cpu_usage(self.cpu_prev)
         self.cpu_prev = cpust["prev"]
         load = cpust["load"]
         mem = mem_stats()
+        disk = disk_stats()
+        if now - self.ips_t > 5:
+            self.ips, self.ips_t = ip_addrs(), now
         counters = net_counters()
         dt = max(1e-3, now - self.net_t)
         rates = {n: (max(0.0, (rx - self.net_prev[n][0]) / dt),
                      max(0.0, (tx - self.net_prev[n][1]) / dt))
                  for n, (rx, tx) in counters.items() if self.net_prev and n in self.net_prev}
         self.net_prev, self.net_t = counters, now
+        # only interfaces that hold an IP; fall back to all if `ip` is unavailable
+        shown = {n: r for n, r in rates.items() if not self.ips or n in self.ips}
         if cores:
             self.h_cpu.append(sum(cores) / len(cores))
         if gpu:
             self.h_gpu.append(gpu["util"])
-        if rates:
-            self.h_net.append(sum(r + t for r, t in rates.values()))
+        if shown:
+            self.h_net.append(sum(r + t for r, t in shown.values()))
 
-        active = next((r for r in runs if r["active"]), runs[0] if runs else None)
         y = 0
-
-        # ── header ────────────────────────────────────────────────────────
+        active = bool(run and run["active"])
+        state = "ACTIVE" if active else ("IDLE" if run else "NO RUN")
         self.put(win, y, 1, "clarke-flash", curses.color_pair(C_ACCENT) | curses.A_BOLD)
         self.put(win, y, 14, time.strftime("%H:%M:%S"), curses.A_BOLD)
-        status = "ACTIVE" if active and active["active"] else ("IDLE" if not active else "DONE")
-        attr = curses.color_pair(C_GOOD if status == "ACTIVE" else C_WARN) | curses.A_BOLD
-        self.put(win, y, w - len(status) - 3, f"● {status}", attr)
+        self.put(win, y, w - len(state) - 3, f"● {state}",
+                 curses.color_pair(C_GOOD if active else C_WARN) | curses.A_BOLD)
         y += 1
 
-        # ── active run block ──────────────────────────────────────────────
-        if active:
-            pct = 100.0 * active["step"] / active["total"] if active["total"] else 0.0
-            name = active["name"][:24]
-            self.put(win, y, 1, f"run", curses.color_pair(C_DIM))
-            self.put(win, y, 7, name, curses.A_BOLD)
-            step_txt = f"step {active['step']:,} / {active['total']:,}"
-            self.put(win, y, max(34, w // 2), step_txt, curses.color_pair(C_DIM))
+        if run:
+            pct = 100.0 * run["step"] / run["total"] if run["total"] else 0.0
+            self.put(win, y, 1, "run", curses.color_pair(C_DIM))
+            self.put(win, y, 7, run["name"][:28], curses.A_BOLD)
+            self.put(win, y, max(38, w // 2),
+                     f"step {run['step']:,} / {run['total']:,}", curses.color_pair(C_DIM))
             y += 1
 
             bw = max(20, w - 26)
@@ -345,33 +411,31 @@ class Dash:
             self.put(win, y, 8 + bw, f" {pct:5.1f}%", curses.color_pair(colour_for(pct)))
             y += 1
 
-            loss = active["loss"]
-            d = ""
-            prev_loss = active.get("loss_prev")
-            if loss is not None and isinstance(prev_loss, float):
+            loss = run["loss"] or 0.0
+            prev_loss = run.get("loss_prev")
+            arrow = ""
+            if isinstance(prev_loss, (int, float)):
                 delta = loss - prev_loss
-                d = f" {'↓' if delta < -0.05 else ('↑' if delta > 0.05 else '·')}"
-            latt = curses.color_pair(C_GOOD if d.startswith(" ↓") else
-                                     (C_WARN if d.startswith(" ↑") else C_ACCENT))
-            self.put(win, y, 7, f"loss {loss:.3f}{d}", latt)
-            self.put(win, y, 7 + len(f"loss {loss:.3f}{d}") + 1,
-                     f"lr {active['lr']:.2e}   {active['rps']:5.1f} rec/s   "
-                     f"ep {active['epoch']}   eta {eta_str(active)}", curses.color_pair(C_DIM))
+                arrow = " ↓" if delta < -0.05 else (" ↑" if delta > 0.05 else " ·")
+            lattr = curses.color_pair(C_GOOD if arrow.startswith(" ↓") else
+                                      (C_WARN if arrow.startswith(" ↑") else C_ACCENT))
+            head = f"loss {loss:.3f}{arrow}"
+            self.put(win, y, 7, head, lattr)
+            self.put(win, y, 7 + len(head) + 1,
+                     f"lr {(run['lr'] or 0):.2e}   {run['rps']:5.1f} rec/s   "
+                     f"ep {run['epoch']}   eta {eta_str(run)}", curses.color_pair(C_DIM))
             y += 1
-        y += 0
         self.hline(win, y, 0, w)
         y += 1
 
-        # ── geometry ─────────────────────────────────────────────────────
+        # ── GPU | CPU ────────────────────────────────────────────────────
         half = (w - 3) // 2
         right_x, right_w = half + 3, w - half - 3
         cell = 4
         per_row = max(1, (right_w - 4) // cell)
-        cores_shown = min(32, os.cpu_count() or 8)
-        core_rows = max(1, (cores_shown + per_row - 1) // per_row)
+        core_rows = max(1, (min(32, os.cpu_count() or 8) + per_row - 1) // per_row)
         mid_h = max(6, min(3 + core_rows + 1, 9))
 
-        # ── GPU ───────────────────────────────────────────────────────────
         self.box(win, y, 0, mid_h, half + 1, "GPU")
         gw = max(8, half - 34)
         if gpu:
@@ -381,11 +445,11 @@ class Dash:
                        f"{gpu['mem'] / 1024:.1f}/{gpu['mem_total'] / 1024:.0f} GiB")
             pw = (f"{gpu['power']:.0f}/{gpu['power_limit']:.0f} W"
                   if gpu.get("power_limit") else f"{gpu['power']:.0f} W")
-            tattr = curses.color_pair(C_BAD if gpu["temp"] >= 85 else
-                                      (C_WARN if gpu["temp"] >= 75 else C_GOOD))
             self.put(win, y + 3, 2, f"{'temp':<8}", curses.color_pair(C_DIM))
-            self.put(win, y + 3, 10, f"{gpu['temp']:.0f}°C", tattr)
-            self.put(win, y + 3, max(20, half - 22), pw, curses.color_pair(C_DIM))
+            self.put(win, y + 3, 10, f"{gpu['temp']:.0f}°C",
+                     curses.color_pair(C_BAD if gpu["temp"] >= 85 else
+                                       (C_WARN if gpu["temp"] >= 75 else C_GOOD)))
+            self.put(win, y + 3, max(20, half - 20), pw, curses.color_pair(C_DIM))
             if mid_h >= 6:
                 self.put(win, y + mid_h - 2, 2,
                          "util " + spark(list(self.h_gpu), max(8, half - 9)),
@@ -393,20 +457,16 @@ class Dash:
         else:
             self.put(win, y + 1, 2, "nvidia-smi unavailable", curses.color_pair(C_BAD))
 
-        # ── CPU ───────────────────────────────────────────────────────────
         self.box(win, y, right_x, mid_h, right_w, "CPU")
         if cores:
-            total = sum(cores) / len(cores)
-            cw = max(8, right_w - 32)
-            self.gauge(win, y + 1, right_x + 2, "total", total, cw,
-                       f"load {load[0]:.2f}")
-            # per-core grid: fixed 4-char cells, wrapped to the panel width
+            self.gauge(win, y + 1, right_x + 2, "total", sum(cores) / len(cores),
+                       max(8, right_w - 32), f"load {load[0]:.2f}")
             for i, u in enumerate(cores[:32]):
                 ry = y + 2 + i // per_row
                 if ry >= y + mid_h - 1:
                     break
-                cx = right_x + 2 + (i % per_row) * cell
-                self.put(win, ry, cx, pbar(u, 3), curses.color_pair(colour_for(u)))
+                self.put(win, ry, right_x + 2 + (i % per_row) * cell, pbar(u, 3),
+                         curses.color_pair(colour_for(u)))
             if mid_h >= 3 + core_rows + 1:
                 self.put(win, y + mid_h - 2, right_x + 2,
                          "cpu " + spark(list(self.h_cpu), max(6, right_w - 8)),
@@ -415,59 +475,64 @@ class Dash:
             self.put(win, y + 1, right_x + 2, "sampling…", curses.color_pair(C_DIM))
         y += mid_h
 
-        # ── memory / network ──────────────────────────────────────────────
+        # ── MEMORY | NETWORK ─────────────────────────────────────────────
         low_h = 6
         self.box(win, y, 0, low_h, half + 1, "MEMORY")
         mw = max(8, half - 34)
-        mp = 100.0 * mem["used"] / max(mem["total"], 1)
-        self.gauge(win, y + 1, 2, "mem", mp, mw, f"{mem['used']:.1f}/{mem['total']:.1f} GB")
+        self.gauge(win, y + 1, 2, "mem", 100.0 * mem["used"] / max(mem["total"], 1), mw,
+                   f"{mem['used']:.1f}/{mem['total']:.1f} GB")
         sp = 100.0 * mem["swap_used"] / mem["swap_total"] if mem["swap_total"] else 0.0
         self.gauge(win, y + 2, 2, "swap", sp, mw,
                    f"{mem['swap_used']:.1f}/{mem['swap_total']:.1f} GB")
-        disk = disk_stats()
-        self.gauge(win, y + 3, 2, "disk", disk["pct"], mw,
-                   f"{disk['free']:.0f} GiB free")
+        self.gauge(win, y + 3, 2, "disk", disk["pct"], mw, f"{disk['free']:.0f} GiB free")
 
-        self.box(win, y, right_x, low_h, right_w, "NETWORK")
-        self.put(win, y + 1, right_x + 2, f"{'iface':<10}{'rx':>9}{'tx':>9}",
-                 curses.color_pair(C_DIM) | curses.A_BOLD)
-        top = sorted(rates.items(), key=lambda kv: -(kv[1][0] + kv[1][1]))[:3]
-        for i, (name, (rx, tx)) in enumerate(top[: low_h - 3]):
-            self.put(win, y + 2 + i, right_x + 2,
-                     f"{name[:9]:<10}{hb(rx) + '/s':>9}{hb(tx) + '/s':>9}",
-                     curses.color_pair(C_GOOD))
+        # wide: iface + address + rates. narrow: address moves into the title so the
+        # rate columns never collide.
+        narrow = right_w < 54
+        only = next(iter(shown), None) if len(shown) == 1 else None
+        title = f"NET {self.ips.get(only, '—')}" if (narrow and only) else "NETWORK"
+        self.box(win, y, right_x, low_h, right_w, title)
+        if narrow:
+            self.put(win, y + 1, right_x + 2, f"{'iface':<11}{'rx':>7} {'tx':>7}",
+                     curses.color_pair(C_DIM) | curses.A_BOLD)
+            fmt = lambda n, rx, tx: (f"{n[:10]:<11}{hb(rx) + '/s':>7} {hb(tx) + '/s':>7}")
+        else:
+            self.put(win, y + 1, right_x + 2,
+                     f"{'iface':<11}{'address':<17}{'rx':>8}{'tx':>8}",
+                     curses.color_pair(C_DIM) | curses.A_BOLD)
+            fmt = lambda n, rx, tx: (f"{n[:10]:<11}{self.ips.get(n, '—')[:16]:<17}"
+                                     f"{hb(rx) + '/s':>8}{hb(tx) + '/s':>8}")
+        top = sorted(shown.items(), key=lambda kv: -(kv[1][0] + kv[1][1]))[: low_h - 3]
+        for i, (name, (rx, tx)) in enumerate(top):
+            if narrow and only:
+                fmt_row = f"{name[:10]:<11}{hb(rx) + '/s':>7} {hb(tx) + '/s':>7}"
+            else:
+                fmt_row = fmt(name, rx, tx)
+            self.put(win, y + 2 + i, right_x + 2, fmt_row, curses.color_pair(C_GOOD))
         if not top:
-            self.put(win, y + 2, right_x + 2, "sampling…", curses.color_pair(C_DIM))
+            self.put(win, y + 2, right_x + 2, "no interface with an IP",
+                     curses.color_pair(C_DIM))
         y += low_h
 
-        # ── runs table ────────────────────────────────────────────────────
-        remaining = h - y - 1
-        log_h = 7 if remaining >= 11 else 0        # only steal space when both fit
-        max_rows = 8
-        table_h = max(3, min(min(len(runs), max_rows) + 3, remaining - log_h))
-        if self.box(win, y, 0, table_h, w, "RUNS"):
-            more = len(runs) - max(0, table_h - 3)
-            cols = f"{'run':<18}{'step':>13}{'ep':>4}{'loss':>7}{'lr':>10}{'rec/s':>8}" \
-                   f"{'vram':>7}   {'state':<11}"
-            self.put(win, y + 1, 2, cols, curses.color_pair(C_DIM) | curses.A_BOLD)
-            for i, r in enumerate(runs[: table_h - 4]):
-                ago = int(now - r["mtime"])
-                state = "● active" if r["active"] else f"{ago}s ago"
-                attr = (curses.color_pair(C_GOOD) | curses.A_BOLD if r["active"] else 0)
-                lr = f"{r['lr']:.1e}" if r["lr"] else "—"
-                progress = f"{r['step']:,}/{r['total']:,}"
-                self.put(win, y + 2 + i, 2,
-                         f"{r['name'][:17]:<18}{progress:>13}"
-                         f"{r['epoch']:>4}{(r['loss'] or 0):>7.3f}{lr:>10}"
-                         f"{r['rps']:>8.1f}{r['gpu_gb']:>6.1f}G   {state:<11}", attr)
-            hidden = len(runs) - min(len(runs), table_h - 4)
-            if hidden > 0:
-                self.put(win, y + table_h - 2, 2,
-                         f"… {hidden} older run{'s' if hidden > 1 else ''} hidden",
-                         curses.color_pair(C_DIM))
-            y += table_h
+        # ── RUN DETAIL ───────────────────────────────────────────────────
+        det_h = 5
+        if run and self.box(win, y, 0, det_h, w, "RUN DETAIL"):
+            comps = "   ".join(f"{k} {v:.3f}" for k, v in run["comps"].items())
+            self.put(win, y + 1, 2, comps or "no component losses in the latest row")
+            val = ("—" if run["best_val"] is None
+                   else f"best val {run['best_val']:.3f} @ {run['best_step']}")
+            n_ck = len(run["ckpts"])
+            ck = f"ckpts {n_ck}" + (f" (latest {run['ckpts'][-1]})" if n_ck else "")
+            self.put(win, y + 2, 2,
+                     f"{val}   {ck}   gpu {run['gpu_gb']:.1f} GB   "
+                     f"bs {run['bs']}×{run['accum']}")
+            stale = now - run["mtime"]
+            self.put(win, y + 3, 2, f"last log {ago(stale)}",
+                     curses.color_pair(C_BAD if stale > 180 else
+                                       (C_WARN if stale > 90 else C_GOOD)))
+        y += det_h
 
-        # ── log tail ──────────────────────────────────────────────────────
+        # ── log tail ─────────────────────────────────────────────────────
         log_h = h - y - 1
         if log_h >= 4:
             logs = sorted(glob.glob(str(LOGDIR / "*.log")), key=os.path.getmtime,
@@ -478,27 +543,26 @@ class Dash:
                 title += f"  ({self.log_idx % len(logs) + 1}/{len(logs)} · l)"
             if self.box(win, y, 0, log_h, w, title):
                 for i, line in enumerate(tail_log(path, log_h - 2)):
-                    attr = 0
-                    if "failed" in line.lower() or "error" in line.lower():
-                        attr = curses.color_pair(C_BAD)
-                    elif "done" in line.lower() or "trained" in line.lower():
-                        attr = curses.color_pair(C_GOOD)
+                    low = line.lower()
+                    attr = (curses.color_pair(C_BAD) if ("failed" in low or "error" in low)
+                            else (curses.color_pair(C_GOOD)
+                                  if ("done" in low or "trained" in low) else 0))
                     self.put(win, y + 1 + i, 2, line, attr or curses.color_pair(C_DIM))
 
-        # ── status bar ────────────────────────────────────────────────────
         pause_txt = " · PAUSED" if self.paused else ""
         bar = (" q quit   space pause   l log   r reset   ? help "
                f"  [{self.interval:g}s{pause_txt}] ")
-        self.put(win, h - 1, 0, bar.ljust(w - 1), curses.color_pair(C_ACCENT) | curses.A_REVERSE)
+        self.put(win, h - 1, 0, bar.ljust(w - 1),
+                 curses.color_pair(C_ACCENT) | curses.A_REVERSE)
         win.noutrefresh()
         curses.doupdate()
 
     def help(self, win) -> None:
         lines = ["keys", "", "q / esc   quit", "space     pause refresh",
                  "l         next log file", "r         reset samplers", "?         this help",
-                 "", "panels: GPU, CPU (per core), MEMORY, NETWORK, RUNS, LOG",
-                 "runs are auto-discovered from runs/*/train.jsonl"]
-        self.box(win, 2, 3, len(lines) + 4, 58, "HELP")
+                 "", "shows the ACTIVE run, or the most recent when idle",
+                 "network lists interfaces holding an IP only"]
+        self.box(win, 2, 3, len(lines) + 4, 60, "HELP")
         for i, line in enumerate(lines):
             self.put(win, 3 + i, 5, line)
         self.put(win, len(lines) + 4, 5, "press any key", curses.color_pair(C_DIM))
@@ -523,9 +587,11 @@ class Dash:
             curses.init_pair(C_WARN, curses.COLOR_YELLOW, -1)
             curses.init_pair(C_BAD, curses.COLOR_RED, -1)
             curses.init_pair(C_DIM, curses.COLOR_BLUE, -1)
-        _, first = cpu_usage(None)          # seed the delta samplers
+        _, first = cpu_usage(None)
         self.cpu_prev = first["prev"]
         self.net_prev = net_counters()
+        self.ips = ip_addrs()
+        self.ips_t = time.time()
         time.sleep(0.3)
         while True:
             self.frame(stdscr)
@@ -552,27 +618,35 @@ class Dash:
 
 
 def plain_frame() -> str:
-    runs = discover_runs()
+    run = current_run()
     gpu = gpu_stats()
     mem = mem_stats()
-    _, first = cpu_usage(None)                 # need a delta before any usage is meaningful
+    _, first = cpu_usage(None)
     time.sleep(0.2)
     cores, _ = cpu_usage(first["prev"])
     lines = [f"clarke-flash {time.strftime('%H:%M:%S')}"]
-    for r in runs[:6]:
-        tag = "● active" if r["active"] else f"{int(time.time() - r['mtime'])}s ago"
-        lines.append(f"{r['name']:<16}{r['step']:>6}/{r['total']:<6} ep{r['epoch']} "
-                     f"loss {r['loss']:.3f}  {r['rps']:5.1f} r/s  {r['gpu_gb']:4.1f}G  {tag}")
+    if run:
+        tag = "ACTIVE" if run["active"] else "last"
+        lines.append(f"{run['name']:<16}{run['step']:>6}/{run['total']:<6} ep{run['epoch']} "
+                     f"loss {run['loss']:.3f}  {run['rps']:5.1f} r/s  "
+                     f"{run['gpu_gb']:4.1f}G  {tag}")
+        comps = "  ".join(f"{k} {v:.3f}" for k, v in run["comps"].items())
+        if comps:
+            lines.append(comps)
+    else:
+        lines.append("no run yet")
     if gpu:
         lines.append(f"gpu  util {gpu['util']:.0f}%  "
-                     f"vram {gpu['mem'] / 1024:.1f}/{gpu['mem_total'] / 1024:.0f}G"
-                     f"  {gpu['temp']:.0f}C  {gpu['power']:.0f}W")
+                     f"vram {gpu['mem'] / 1024:.1f}/{gpu['mem_total'] / 1024:.0f}G  "
+                     f"{gpu['temp']:.0f}C  {gpu['power']:.0f}W")
     else:
         lines.append("gpu  nvidia-smi unavailable")
-    cpu_pct = f"{sum(cores) / len(cores):.0f}%" if cores else "—"
+    cpu_txt = f"  cpu {sum(cores) / len(cores):.0f}%  cores {os.cpu_count()}" if cores else ""
     lines.append(f"mem  {mem['used']:.1f}/{mem['total']:.1f}G  "
-                 f"swap {mem['swap_used']:.1f}/{mem['swap_total']:.1f}G  "
-                 f"cpu {cpu_pct}  cores {os.cpu_count()}")
+                 f"swap {mem['swap_used']:.1f}/{mem['swap_total']:.1f}G{cpu_txt}")
+    ips = ip_addrs()
+    if ips:
+        lines.append("net  " + "  ".join(f"{n} {a}" for n, a in ips.items()))
     return "\n".join(lines)
 
 

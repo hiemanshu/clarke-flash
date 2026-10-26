@@ -6,8 +6,9 @@ then PLAN.md.
 
 ## Monitoring
 
-`./scripts/watch_training.sh` — TTY: ncurses dashboard (run progress, GPU, per-core CPU,
-RAM/swap/disk, network, all runs, log tail; keys q/space/l/r/?). Non-TTY or `status`: the
+`./scripts/watch_training.sh` — TTY: ncurses dashboard for the CURRENT run only (progress,
+component losses, best val, checkpoints, staleness, GPU, per-core CPU, RAM/swap/disk, network
+limited to interfaces holding an IP, log tail; keys q/space/l/r/?). Non-TTY or `status`: the
 older diff-painted one-frame output. `WATCH_TUI=0` forces the old path.
 
 ## Working rules (non-negotiable)

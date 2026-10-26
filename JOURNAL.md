@@ -1,3 +1,20 @@
+**12:09 — Dashboard narrowed to the current run; network shows only IP-bearing interfaces.**
+Owner feedback: previous runs are noise, and an interface with a counter but no address is not
+"the network". Changes:
+- RUNS table removed. A single RUN DETAIL panel shows the active run (or the most recent one
+  when idle, flagged IDLE): step/total, progress, loss WITH a real trend arrow from the last two
+  train rows, lr, rec/s, epoch, ETA, all six component losses (null/span/cand/op/present/dist),
+  best val + its step, checkpoint count + latest, gpu GB, batch x accum, and staleness of the
+  last log line (green <90s, yellow <180s, red beyond - a stalled trainer is the thing this
+  screen exists to catch).
+- NETWORK filters to interfaces that actually hold an address, discovered from `ip -o addr`
+  (loopback and scope link/host excluded, IPv4 preferred over IPv6). Verified: this host has
+  counters on wlan0 and enp7s0 but no addresses there, so only enp16s0f1 (192.168.68.60)
+  appears. Narrow terminals move the address into the panel title so the rate columns never
+  collide; at 84x26 it reads "NET 192.168.68.60" with iface/rx/tx beneath.
+- Per-run scan is cached by train.jsonl mtime, so the 1s refresh no longer re-reads the whole
+  jsonl (the old runs table did that 20 times a frame).
+
 **12:06 — Dashboard upgraded to ncurses with GPU / CPU / RAM / disk / NETWORK panels.**
 scripts/watch_tui.py (stdlib curses, no new deps) is now what `./scripts/watch_training.sh`
 execs when stdout is a TTY; non-TTY and the `status` subcommand keep the old diff-painter so
