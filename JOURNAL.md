@@ -1,3 +1,28 @@
+**12:50 — CUAD accounting corrected: 510 contracts total, 470 train / 40 eval, and my
+"41 documents" was wrong (it is 40). Also found an id-collision bug.**
+Source of truth: data/raw/CUAD_v1.json = 510 contracts, 6,702 answered questions (32% of the
+41 x 510 cells), total 26.8M chars; contract size median 33.4k chars (~7.3k tokens),
+p90 122.7k (~27k), max 338.2k (~74k).
+Our pipeline (scripts/mine_real.py) is an EXPLICIT, hard-coded split:
+  docs[0:470]   -> training corpus (cuad_train*.jsonl, cuad_all.jsonl)
+  docs[470:510] -> held-out eval (cuad_eval.jsonl, real_eval.jsonl)
+Verified just now: real_eval's 40 cuad docs are exactly docs[470:510], zero overlap with the
+training region (so no eval leak), and 148 CUAD windows (real_eval's other 20 records are
+ACORD - which is why "the first 20 of real_eval" was pure CUAD, and pure Goosehead).
+Two defects this exposed:
+1. ids are `cuad-{title[:40]}-{char_offset}` (src/clarke/public.py:217). 21 forty-char prefixes
+   collide across the 470 training contracts, so 30 contracts share an id with another and
+   cuad_all.jsonl reports 440 "docs" for 470 contracts. No records are lost - only identity -
+   but any id-keyed join/merge can conflate two different contracts, which is the same class
+   of bug that collapsed wiki views earlier. Fix = full title or short hash; needs a data
+   regen (and would change the frozen bench_v1 sha256 manifest, so schedule it deliberately).
+2. The 470/40 split is file order, not random. The 40 held-out contracts are whatever CUAD
+   lists last, which is why single-slice effects (one 300k-char franchise agreement) can move
+   eval numbers by tens of points. A doc-stratified eval is the honest fix.
+My earlier claim of "41 docs / median 28.9k chars" came from splitting ids on the last
+hyphen-digit group and from window coverage; correct numbers are 40 docs and 33.4k chars
+median from the raw source.
+
 **12:40 — Full contract lengths measured (corrects an earlier claim of mine).**
 Reconstructed doc length from window offsets in real_eval (41 CUAD docs):
   windows/doc: p10=1, median=2, p90=9, max=20 (distribution: 8 docs single-window,
