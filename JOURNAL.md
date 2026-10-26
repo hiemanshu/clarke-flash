@@ -1,3 +1,19 @@
+**12:35 — First live external run: provider param quirks fixed, 20-record pass launched.**
+Smoke tests found that the OpenAI-compat surface is only superficially uniform:
+- openai/gpt-6.1-sol rejects `max_tokens` (demands `max_completion_tokens`) AND rejects
+  `temperature: 0` (only the default 1 is allowed). Handled with an ordered fallback loop
+  (swap token key -> drop temperature) rather than per-provider special cases, so new
+  models degrade instead of failing.
+- clairic accepts the native state+fields payload and returned answers on the smoke record
+  (5 answered, all grounded, but set-F1 0.0 vs our gold spans: it returns different
+  granularity/whitespace than the annotated span). One record is noise; the 20-record pass
+  will tell us whether this is a real metric gap or an annotation-granularity artefact.
+- Reports now also dump raw predictions (<label>.preds.jsonl) and count failed_calls, so a
+  low score can be distinguished from a failed request instead of being silently zero.
+Early signal worth flagging: gpt-6.1-sol answers very few fields (3 of 41 on the smoke doc)
+with 100% grounded and null_correct .83 - conservative precision, low recall. Clairic answers
+more. This is exactly the axes split our own model must beat.
+
 **12:20 — External baseline roster fixed by owner:** the 1:1 comparison set is now
 clairic (@cf/cloudflare/clairic, the ONLY non-chat/clairic kind), openai/gpt-6.1-sol,
 google/gemini-4-argon, anthropic/claude-opus-5.5, alibaba/qwen3.8-max,

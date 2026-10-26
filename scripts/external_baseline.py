@@ -145,14 +145,36 @@ def _cf_headers() -> dict:
     return headers
 
 
-def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000):
+def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None):
     acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or sys.exit("set CLOUDFLARE_ACCOUNT_ID")
     url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions"
     body = {"model": model,
             "messages": [{"role": "system", "content": json_instruction(fields)},
                          {"role": "user", "content": "STATE:\n" + record["state"]}],
-            "max_tokens": max_tokens, "temperature": 0}
-    resp = _post_json(url, _cf_headers(), body)
+            "temperature": 0}
+    # OpenAI's newer models reject max_tokens outright; everything else still wants it.
+    token_key = "max_completion_tokens" if model.startswith("openai/") else "max_tokens"
+    body[token_key] = max_tokens
+    body.update(extra or {})
+    for _ in range(4):
+        try:
+            resp = _post_json(url, _cf_headers(), body)
+            break
+        except RuntimeError as e:
+            msg = str(e)
+            if "max_tokens" in msg and token_key in body:
+                body.pop(token_key, None)
+                token_key = "max_completion_tokens" if token_key == "max_tokens" else "max_tokens"
+                body[token_key] = max_tokens
+            elif "temperature" in msg and "temperature" in body:
+                body.pop("temperature")          # some models only allow the default
+            elif "max_completion_tokens" in msg and "max_completion_tokens" in body:
+                body.pop("max_completion_tokens")
+                body["max_tokens"] = max_tokens
+            else:
+                raise
+    else:
+        raise RuntimeError("chat call rejected after parameter fallbacks")
     time.sleep(sleep_s)
     if "choices" not in resp:
         raise RuntimeError(f"unexpected response: {json.dumps(resp)[:400]}")
@@ -256,9 +278,10 @@ def run_model(spec, records, args):
     def one(rec, fields):
         if spec.get("kind", "chat") == "clairic":
             return call_cf_clairic(rec, fields, spec["model"], args.sleep)
-        return call_cf_chat(rec, fields, spec["model"], args.sleep)
+        return call_cf_chat(rec, fields, spec["model"], args.sleep,
+                            max_tokens=args.max_output_tokens, extra=spec.get("params"))
     print(f"[external] {label} ({spec.get('kind','chat')}) on {len(records)} records", flush=True)
-    preds = []
+    preds, failed = [], 0
     for i, rec in enumerate(records):
         fields = fields_for_record(rec)
         pred = {}
@@ -268,6 +291,7 @@ def run_model(spec, records, args):
                 break
             except (RuntimeError, urllib.error.URLError, TimeoutError, KeyError) as e:
                 if attempt == args.retries:
+                    failed += 1
                     print(f"  [{i}] failed: {e}", file=sys.stderr)
                 else:
                     time.sleep(2 + 2 * attempt)
@@ -277,10 +301,14 @@ def run_model(spec, records, args):
     report = score(records, preds, label, args.data)
     report["max_context_tokens"] = args.max_context_tokens
     report["truncated_records"] = args.truncated
+    report["failed_calls"] = failed
     body = json.dumps(report, indent=2)
     out = Path(args.out_dir) / f"{spec.get('label') or spec['model'].replace('/', '-').replace('@', '')}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(body)
+    with open(out.with_suffix(".preds.jsonl"), "w") as f:
+        for rec, pred in zip(records, preds):
+            f.write(json.dumps({"id": rec.get("id"), "pred": pred}) + "\n")
     print(f"-> {out}", flush=True)
     return report
 
@@ -299,6 +327,9 @@ def main(argv=None):
     ap.add_argument("--max-context-tokens", dest="max_context_tokens", type=int, default=64000)
     ap.add_argument("--tokenizer", default="Qwen/Qwen3.5-9B")
     ap.add_argument("--retries", type=int, default=2)
+    ap.add_argument("--max-output-tokens", dest="max_output_tokens", type=int, default=4000,
+                    help="completion budget per record (chat models); 41 typed fields of spans "
+                         "need room, and adversarial models burn tokens on reasoning")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
     args.gateway = os.environ.get("CLOUDFLARE_GATEWAY", "default")
