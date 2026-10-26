@@ -1,3 +1,17 @@
+**11:50 — External baseline now caps context at 64k tokens (explicit, never provider-side).**
+scripts/external_baseline.py gains --max-context-tokens (default 64000) with EXACT token
+accounting via the Qwen tokenizer (same family as Clairic's backbone), fallback to a
+chars/2.5 estimate if transformers is unavailable. Truncation, if it ever happens, is
+reported per record (id, before, after) and counted in the report as truncated_records;
+report also records max_context_tokens. Fixed a bug in my own patch where the capped copy
+was assigned to a local instead of back into the list (caught before commit).
+MEASUREMENT CORRECTION (important for the context discussion): real_eval CUAD states are
+~3,485 tokens at 16,000 chars (~4.6 chars/token), NOT ~8k as I estimated earlier. The 41-field
+CUAD schema costs ~2.4k tokens on top. Therefore our --max-length 8192 is already ample for
+CUAD eval, and the "16k context" experiment is much less urgent than I claimed - deprioritise
+it in the backlog unless we move to genuinely long documents (ACORD tail, multi-contract
+bundles). Verified: cap@2000 keeps 9,016 chars; default cap does not bind on CUAD.
+
 **11:35 — EXTERNAL BASELINE harness built (owner: compare against Clairic/GPT/Opus via
 Cloudflare AI Gateway). scripts/external_baseline.py.**
 Access paths:

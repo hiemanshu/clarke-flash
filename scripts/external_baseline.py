@@ -75,6 +75,43 @@ load_dotenv()
 
 # ---------------------------------------------------------------- schema mapping
 
+_TOK = None
+
+
+def _tokenizer(name: str):
+    """Lazy tokenizer for exact context accounting (Qwen family = Clairic's backbone)."""
+    global _TOK
+    if _TOK is None:
+        from transformers import AutoTokenizer
+        _TOK = AutoTokenizer.from_pretrained(name)
+    return _TOK
+
+
+def cap_state(state: str, max_tokens: int, tokenizer_name: str) -> tuple[str, int, int]:
+    """Trim `state` to at most max_tokens (exact token count, not chars).
+
+    Returns (state, before, after). We never rely on the provider's silent
+    truncation: the comparison must be on identical, explicitly-reported input.
+    """
+    if max_tokens <= 0:
+        return state, 0, 0
+    try:
+        tok = _tokenizer(tokenizer_name)
+        ids = tok(state, add_special_tokens=False)["input_ids"]
+        before = len(ids)
+        if before <= max_tokens:
+            return state, before, before
+        kept = tok.decode(ids[:max_tokens], skip_special_tokens=True)
+        return kept, before, max_tokens
+    except Exception:
+        # fallback: conservative legal-text ratio (~2.5 chars/token)
+        before = int(len(state) / 2.5)
+        if before <= max_tokens:
+            return state, before, before
+        keep_chars = int(max_tokens * 2.5)
+        return state[:keep_chars], before, max_tokens
+
+
 def fields_for_record(record: dict) -> dict:
     out = {}
     for name, spec in record["fields"].items():
@@ -259,10 +296,25 @@ def main(argv=None):
     ap.add_argument("--out", default=None)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--retries", type=int, default=2)
+    ap.add_argument("--max-context-tokens", dest="max_context_tokens", type=int, default=64000,
+                    help="hard cap on state tokens sent to any provider (default 64000; "
+                         "0 = no limit). Never leave truncation to the provider.")
+    ap.add_argument("--tokenizer", default="Qwen/Qwen3.5-9B",
+                    help="tokenizer used only for exact context accounting")
     args = ap.parse_args(argv)
 
     records = [json.loads(l) for l in open(args.data)][: args.limit]
     records = [r for r in records if r.get("state") and r.get("fields")]
+    truncations = []
+    for idx, r in enumerate(records):
+        capped, before, after = cap_state(r["state"], args.max_context_tokens, args.tokenizer)
+        if after < before:
+            truncations.append({"id": r.get("id"), "tokens_before": before,
+                                "tokens_after": after})
+            records[idx] = {**r, "state": capped}
+    if truncations:
+        print(f"[external] NOTE truncated {len(truncations)} records to "
+              f"{args.max_context_tokens} tokens", flush=True)
 
     # resolve endpoint + model string
     if args.provider == "cloudflare":
@@ -332,6 +384,8 @@ def main(argv=None):
             print(f"  {i + 1}/{len(records)}", flush=True)
 
     report = score(records, preds, label, args.data)
+    report["max_context_tokens"] = args.max_context_tokens
+    report["truncated_records"] = len(truncations)
     body = json.dumps(report, indent=2)
     print(body)
     if args.out:
