@@ -26,3 +26,6 @@ keys.json
 .vscode/
 *.swp
 .DS_Store
+
+# --- generated artifacts (kept on disk, not in git) ---
+reports/
