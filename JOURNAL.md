@@ -1,3 +1,27 @@
+**15:40 — BACKBONE SWEEP RESULT 1/7: Qwen3.5-0.8B does NOT replace the 2B.**
+(runs/bb-qwen08/checkpoint-8384, 2 epochs, bench_v1, fresh head, 67->40 min)
+                     2B ref   2B repl   0.8B      delta vs 2B
+  real168 exact      .4070    .4023    .3914     -.0156  (~3x noise)
+  real168 tokF1      .5541    .5458    .5391     -.015
+  real168 null_ok    .9853    .9854    .9880     +.003
+  doc40  exact       .4407      -      .4409      ~0
+  doc40  answered    322/498    -      275/498   -47 fields
+  doc40  exact@all   .2850      -      .2435     -.0415
+  doc40  null_ok     .9720      -      .9825     +.011
+READ: on per-answer precision at 65k the 0.8B is IDENTICAL to the 2B (.4409 vs .4407) - the
+smaller backbone points just as accurately when it answers. But it answers 47 fewer gold fields
+(275 vs 322), so exact@all collapses .285 -> .244, and at short context it is .016 behind, ~3x
+noise. So the trade is precision-neutral / recall-losing, and recall is already our binding
+constraint. Verdict: 0.8B stays a cost option only if doc-level recall is ever fixed (then it
+serves 2.5x cheaper at equal per-answer accuracy); it is not the new default.
+CAPACITY PRIOR NOW BRACKETED: going DOWN to 0.8B hurts (.3914), going UP to 4B/9B did not help
+(.3884/.3884). 2B looks like a genuine sweet spot rather than merely the cheapest option -
+which makes the recipe arms (MiniCPM5-2B, LFM2.5-2.6B, Hy-MT2, Gemma-E2B) the interesting ones,
+since they vary the cook at fixed-ish capacity.
+SWITCH MECHANICS (worked): the v1 chain started granite-4.0-h at 15:39 and was killed ~1s later
+by the watcher (process-tree kill via /proc children, explicit PIDs), then bb_sweep_v2.sh took
+over with the base-checkpoint arm list. No GPU work was lost beyond granite's model load.
+
 **15:35 — Instrumentation note for the backbone sweep: two arms carry known confounds; 12B-base
 queued as an owner decision.**
 1) GEMMA-4-E2B-IT IS CONFOUNDED, unavoidable: Google publishes no base E2B checkpoint (only -it
