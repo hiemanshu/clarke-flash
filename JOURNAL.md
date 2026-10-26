@@ -1,3 +1,24 @@
+**12:32 — 2B scored on the 20-record slice; the slice itself is the finding.**
+Ran `clarke-eval --head runs/scale-2b/checkpoint-8384 --limit 20` alongside the 4B training
+(17.2 GB free, eval needs ~7 GB, no OOM, ~3 min). Result on the same 20 records the external
+baselines used:
+  clarke-2b   exact .1519   null_ok .9776
+  opus-5.5    exact .3396   null_ok .9169
+  gemini      exact .2750   null_ok .9340
+  gpt-6.1     exact .1727   null_ok .8945
+  clairic     exact .0047   null_ok .2546
+PROBLEM WITH THE SLICE: 19 of those 20 records are windows of the SAME contract
+(cuad-GOOSEHEADINSURANCE-EX-10 at offsets 0/16000/32000/...), plus one window of a second
+doc. So "20 records" is really a one-document benchmark, and every number in the external
+table is a single-contract estimate. Our own 148-record eval gives .407, so the .152 here is
+slice effect, not a regression. Do not rank models on the 20-record slice.
+Fix needed for a real head-to-head: sample one window per document (41 docs available), then
+re-run both sides. Ours costs GPU minutes; external costs ~80 calls for the 4 live models.
+Also fixed instrumentation while here: clarke-eval now emits `answered` and `null_n` (the
+report previously hid recall entirely, so a model that answered 3 fields and a model that
+answered 50 with the same precision were indistinguishable), and compare_external.py tolerates
+older reports that lack the counter instead of dropping the row.
+
 **12:12 — RUN DETAIL now explains every loss term (definitions taken from compute_loss).**
 Owner asked what the component numbers mean, so the panel is a legend, not just numbers.
 Verified against ClarkeHead.compute_loss rather than guessing:

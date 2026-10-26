@@ -138,6 +138,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
         answered = b["answered"]
         out: dict[str, Any] = {
             "n": int(b["n"]),
+            "answered": int(answered),
+            "null_n": int(b.get("null_n", 0)),
             "exact": round(b["exact"] / max(answered, 1), 4),
             "located": round(b["located"] / max(answered, 1), 4) if b["located"] else None,
             "null_correct": round(b["null_correct"] / max(b.get("null_n", 0), 1), 4),

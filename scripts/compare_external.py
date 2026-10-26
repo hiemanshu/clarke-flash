@@ -37,7 +37,7 @@ def load_external(path: Path):
         "exact": m.get("exact"),
         "tok_f1": m.get("tok_f1"),
         "contains": m.get("contains"),
-        "answered": m.get("answered"),
+        "answered": m.get("answered"),   # None when the report predates the counter
         "null_ok": m.get("null_correct"),
         "n": m.get("n"),
     }
@@ -46,7 +46,7 @@ def load_external(path: Path):
 def load_ours(path: Path):
     d = json.loads(path.read_text())
     kind, m = kind_metric(d.get("metrics") or {})
-    if not m.get("answered"):
+    if m.get("answered") is None and not m.get("n"):
         return None
     return {
         "model": f"clarke-{path.stem}",
@@ -54,7 +54,7 @@ def load_ours(path: Path):
         "exact": m.get("exact"),
         "tok_f1": None,
         "contains": None,
-        "answered": m.get("answered"),
+        "answered": m.get("answered"),   # None when the report predates the counter
         "null_ok": m.get("null_correct"),
         "n": m.get("n"),
     }
@@ -74,8 +74,9 @@ def main() -> int:
           f"{'answer':>6s} {'null_ok':>7s}")
     for r in rows:
         fmt = lambda v, w, p=4: f"{v:>{w}.{p}f}" if isinstance(v, (int, float)) else f"{'—':>{w}}"
+        ans = f"{r['answered']:6d}" if isinstance(r["answered"], int) else f"{'?':>6s}"
         print(f"{r['model']:26s} {fmt(r['exact'], 7)} {fmt(r['tok_f1'], 7)} "
-              f"{fmt(r['contains'], 7)} {r['answered']:6d} {fmt(r['null_ok'], 7)}")
+              f"{fmt(r['contains'], 7)} {ans} {fmt(r['null_ok'], 7)}")
     if invalid:
         print("\nexcluded (invalid runs): " + ", ".join(invalid))
     print(f"\nrows: {len(rows)}  records: "
