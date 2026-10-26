@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/scale-2b/checkpoint-8384",
+  "data": "/tmp/opencode/doc_eval_28.jsonl",
+  "records": 28,
+  "metrics": {
+    "list-text": {
+      "n": 1148,
+      "answered": 219,
+      "null_n": 819,
+      "exact": 0.4691,
+      "located": 0.4691,
+      "null_correct": 0.9719,
+      "tok_f1": 0.5909,
+      "contains": 0.6859,
+      "mean_confidence": 0.0,
+      "brier_null": 0.082
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1148,
+        "answered": 219,
+        "null_n": 819,
+        "exact": 0.4691,
+        "located": 0.4691,
+        "null_correct": 0.9719,
+        "tok_f1": 0.5909,
+        "contains": 0.6859,
+        "mean_confidence": 0.0,
+        "brier_null": 0.082
+      }
+    }
+  }
+}

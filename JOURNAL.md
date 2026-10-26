@@ -1,3 +1,28 @@
+**23:45 — Does the span tie-break change the external comparison? It changes the COMPARISON, not
+their scores.**
+External results are produced by scripts/external_baseline.py, which locates the model's returned
+STRINGS in the document and scores them - there is no span decoder and no logit-level prior, so
+eps=.25 cannot touch their numbers and nothing needs re-running. But it does introduce an asymmetry
+in our favour: we now apply a boundary prior using logits, while they are scored on verbatim text.
+Updated head-to-head on the 28 common contracts (65k cap):
+  model          exact   tokF1  contains  exact@all
+  gemini-4-argon .5625   .7419   .9048    .5232
+  opus-5.5       .5515   .7317   .8560    .4995
+  gpt-6.1-sol    .5361   .6951   .8522    .5003
+  clarke-2b      .4691   .5909   .6859    .3123   (eps .25; was .4538/.3021 at eps 0)
+  clairic        .0162   .4152   .9526    .0162
+So the tie-break buys us +.0153 exact and +.0102 exact@all on this subset, narrowing the gap to the
+best frontier arm from .221 to .211 - real but not a story-changer. The diagnosis is unchanged and
+still recall-led: we answer 67% of gold fields versus their 91-93%, and our contains (.686) is far
+below theirs (.85-.90), meaning we still locate the region less often even after tightening
+boundaries.
+POLICY (add to how we present external tables): always report contains next to exact, because exact
+is annotation-granularity-sensitive and their failure mode is a boundary mismatch (clairic: .953
+contains, .016 exact). Optionally run a text-side trim sensitivity check - clip their answers to the
+clause containing the gold match and re-score - as the symmetric counterpart of our tie-break. That
+is a sensitivity analysis, NOT a fair model output (it uses gold to locate the match), so it must
+never replace the headline numbers.
+
 **23:40 — Span tie-break generalises across ALL seven backbones; now the default.**
 Owner asked why I only tested Qwen. Ran eps=.25 on every checkpoint with a doc40 baseline:
   model          exact e0   exact .25   delta    exact@all e0 -> .25   delta
