@@ -1,3 +1,19 @@
+**11:05 — COMPARISON DISCIPLINE FIX (owner: "why aren't we doing 1:1 comparisons?").**
+Fair criticism, accepted. The confounds in 2B-vs-9B were: CUAD window size (8k/3,207 vs
+4k/6,199), ACORD variant (8-slot/1,368 vs 48-win/2,736) AND head warm-start - three variables
+plus init. 2B-vs-4B in the current chain IS 1:1 (same files, both fresh heads).
+FIXES APPLIED:
+1. FROZEN BENCH MIX: data/bench/v1/ holds copies of the six training files with a manifest.json
+   recording record counts + sha256 (cuad_8k 56bd5187..., acord_8slot debf2727..., typed
+   dd2e25cc..., train3 5ac8c726..., contract 2ba1713b..., keyphrase bc644ef5...). Nothing may
+   overwrite these; new data goes to bench_v2 or one file is varied at a time.
+2. DATA PROVENANCE IN THE TRAINER: every run now logs {"event":"data", files:[{path,sha256,
+   bytes}]} at startup, so a silent data swap can never invalidate a comparison again.
+3. QUEUED: bench9b_chain.sh = 9B on exactly bench_v1 (fresh head, 2 epochs) = the missing arm
+   of the true triple. Order: 4B (running) -> 2B seed replicate -> 9B bench arm.
+PROTOCOL from now on: one variable per run; frozen mix unless the experiment IS the data change;
+compare only runs whose logged data hashes match.
+
 **10:57 — 2B SURPRISE: beats 9B on CUAD (.4281 vs .4097) with LESS data.**
 Same dense family, 2 epochs, 2B (5.8GB, fresh head). Read:
 - CUAD exact **.4281** (+.0184 vs expDense2's .4097) | null_ok .9853

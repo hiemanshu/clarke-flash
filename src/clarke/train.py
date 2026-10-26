@@ -8,6 +8,7 @@ Pass ``--lora`` to additionally train low-rank adapters in a second phase.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import time
@@ -39,6 +40,18 @@ class Trainer:
         self.log_path = self.run_dir / "train.jsonl"
         self.log(f"run_dir={self.run_dir}")
         self.log(f"watch with: scripts/watch_training.sh   (tail -f {self.log_path})")
+        # DATA PROVENANCE: record exactly which files (and content) this run trained on.
+        # Silent data swaps invalidated comparisons once (2026-10-26); this prevents it.
+        manifest = []
+        for p in self.args.train:
+            path = Path(p)
+            h = hashlib.sha256()
+            with path.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            manifest.append({"path": str(path), "sha256": h.hexdigest()[:32],
+                             "bytes": path.stat().st_size})
+        self.log(json.dumps({"event": "data", "files": manifest}))
 
         print(f"[{time.strftime('%H:%M:%S')}] loading backbone {args.backbone} ...", flush=True)
         self.backbone, self.processor = load_backbone(args.backbone, device=str(self.device))
