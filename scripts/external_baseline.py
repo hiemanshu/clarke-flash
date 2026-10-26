@@ -147,39 +147,109 @@ def _cf_headers() -> dict:
     return headers
 
 
+def _response_text(resp: dict) -> str:
+    """Normalise the several response shapes this gateway hands back."""
+    if "choices" in resp:                                  # OpenAI-compatible
+        c = resp["choices"][0].get("message", {}).get("content")
+        if isinstance(c, list):
+            return "".join(b.get("text", "") for b in c if isinstance(b, dict))
+        return c or ""
+    if isinstance(resp.get("content"), list):               # Anthropic native passthrough
+        return "".join(b.get("text", "") for b in resp["content"] if isinstance(b, dict))
+    if isinstance(resp.get("result"), dict):
+        r = resp["result"]
+        if isinstance(r.get("response"), str):
+            return r["response"]
+        if isinstance(r.get("choices"), list):
+            return _response_text(r)
+    raise RuntimeError(f"unrecognised response shape: {json.dumps(resp)[:300]}")
+
+
+def _post_stream_text(url: str, headers: dict, body: dict, timeout: int = 300) -> str:
+    """SSE fallback: some providers only convert correctly when streamed."""
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers,
+                                 method="POST")
+    out = []
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            for raw in r:
+                line = raw.decode(errors="replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                for ch in obj.get("choices", []):
+                    d = ch.get("delta") or {}
+                    if d.get("content"):
+                        out.append(d["content"])
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.code}: {e.read().decode()[:400]}") from e
+    return "".join(out)
+
+
 def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None):
     acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or sys.exit("set CLOUDFLARE_ACCOUNT_ID")
     url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions"
     body = {"model": model,
             "messages": [{"role": "system", "content": json_instruction(fields)},
                          {"role": "user", "content": "STATE:\n" + record["state"]}]}
-    # OpenAI's newer models reject max_tokens outright; everything else still wants it.
+    # OpenAI's newer models reject max_tokens; everything else still wants it.
     token_key = "max_completion_tokens" if model.startswith("openai/") else "max_tokens"
     body[token_key] = max_tokens
     body.update(extra or {})
-    for _ in range(4):
+
+    resp, use_stream, last_err, applied = None, False, None, set()
+    for _ in range(6):
         try:
             resp = _post_json(url, _cf_headers(), body)
             break
         except RuntimeError as e:
-            msg = str(e)
-            if "max_tokens" in msg and token_key in body:
+            msg = last_err = str(e)
+
+            def once(key: str) -> bool:
+                """Each structural fix may be applied at most once - error texts quote the
+                request's own field names, so naive substring matching can ping-pong."""
+                if key in applied:
+                    return False
+                applied.add(key)
+                return True
+
+            if "Response conversion failed" in msg and once("stream"):
+                use_stream = True                 # provider only converts streamed responses
+                break
+            if "Unsupported field passed: system" in msg and once("fold-system"):
+                sys_txt = body.pop("system", None)
+                if sys_txt is None and body["messages"][0]["role"] == "system":
+                    sys_txt = body["messages"].pop(0)["content"]
+                if sys_txt:
+                    body["messages"][0]["content"] = (sys_txt + "\n\n"
+                                                      + body["messages"][0]["content"])
+            elif ("top-level 'system'" in msg and "fold-system" not in applied
+                  and body["messages"][0]["role"] == "system"):
+                # Anthropic-style: system prompt is a sibling of messages
+                body["system"] = body["messages"][0]["content"]
+                body["messages"] = body["messages"][1:]
+            elif ("max_tokens" in msg and "temperature" not in msg
+                  and "max_completion_tokens" in msg and once("token-key")):
                 body.pop(token_key, None)
                 token_key = "max_completion_tokens" if token_key == "max_tokens" else "max_tokens"
                 body[token_key] = max_tokens
-            elif "temperature" in msg and "temperature" in body:
-                body.pop("temperature")          # belt-and-braces; we no longer send one
-            elif "max_completion_tokens" in msg and "max_completion_tokens" in body:
-                body.pop("max_completion_tokens")
-                body["max_tokens"] = max_tokens
+            elif "does not support" in msg and "temperature" in msg and once("temperature"):
+                body.pop("temperature", None)     # belt-and-braces; we no longer send one
             else:
                 raise
     else:
-        raise RuntimeError("chat call rejected after parameter fallbacks")
+        raise RuntimeError(f"chat call rejected after parameter fallbacks: {last_err}")
+
     time.sleep(sleep_s)
-    if "choices" not in resp:
-        raise RuntimeError(f"unexpected response: {json.dumps(resp)[:400]}")
-    return extract_json_block(resp["choices"][0]["message"]["content"])
+    if use_stream:
+        return extract_json_block(_post_stream_text(url, _cf_headers(), body))
+    return extract_json_block(_response_text(resp))
 
 
 def call_cf_clairic(record, fields, model, sleep_s):
@@ -337,7 +407,8 @@ def run_model(spec, records, args):
             return call_cf_clairic(rec, fields, spec["model"], args.sleep)
         return call_cf_chat(rec, fields, spec["model"], args.sleep,
                             max_tokens=args.max_output_tokens, extra=spec.get("params"))
-    print(f"[external] {label} ({spec.get('kind','chat')}) on {len(records)} records "
+    tag = spec.get("label") or spec["model"]
+    print(f"[{tag}] start {label} ({spec.get('kind','chat')}) on {len(records)} records "
           f"(concurrency {args.concurrency})", flush=True)
 
     def work(idx, rec):
@@ -360,10 +431,10 @@ def run_model(spec, records, args):
             preds[idx] = pred if isinstance(pred, dict) else {}
             if err:
                 failed += 1
-                print(f"  [{idx}] failed: {err}", file=sys.stderr)
+                print(f"[{tag}] [{idx}] failed: {err}", file=sys.stderr, flush=True)
             done += 1
             if done % 10 == 0:
-                print(f"  {done}/{len(records)}", flush=True)
+                print(f"[{tag}] {done}/{len(records)}", flush=True)
     report = score(records, preds, label, args.data)
     report["max_context_tokens"] = args.max_context_tokens
     report["truncated_records"] = args.truncated
@@ -372,10 +443,11 @@ def run_model(spec, records, args):
     out = Path(args.out_dir) / f"{spec.get('label') or spec['model'].replace('/', '-').replace('@', '')}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(body)
+    print(f"[{tag}] done {json.dumps(report['metrics'])}", flush=True)
     with open(out.with_suffix(".preds.jsonl"), "w") as f:
         for rec, pred in zip(records, preds):
             f.write(json.dumps({"id": rec.get("id"), "pred": pred}) + "\n")
-    print(f"-> {out}", flush=True)
+    print(f"[{tag}] -> {out}", flush=True)
     return report
 
 
@@ -424,7 +496,10 @@ def main(argv=None):
     ap.add_argument("--sleep", type=float, default=0.25,
                     help="per-call pause (parallel workers share the provider rate limit)")
     ap.add_argument("--concurrency", type=int, default=8,
-                    help="in-flight requests per model; models still run sequentially")
+                    help="in-flight requests per model")
+    ap.add_argument("--model-concurrency", type=int, default=0,
+                    help="models running at once (0 = all in the file); separate providers "
+                         "have separate rate limits, so this is usually the big win")
     ap.add_argument("--out-dir", default="reports/external")
     ap.add_argument("--max-context-tokens", dest="max_context_tokens", type=int, default=64000)
     ap.add_argument("--tokenizer", default="Qwen/Qwen3.5-9B")
@@ -467,8 +542,22 @@ def main(argv=None):
                           "models": specs}, indent=1))
         return 0
 
-    for spec in specs:
-        run_model(spec, records, args)
+    workers = args.model_concurrency or len(specs)
+    if workers <= 1:
+        for spec in specs:
+            run_model(spec, records, args)
+    else:
+        print(f"[external] {len(specs)} models in parallel, {args.concurrency} records each",
+              flush=True)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(run_model, spec, records, args): spec for spec in specs}
+            for fut in as_completed(futures):
+                spec = futures[fut]
+                try:
+                    fut.result()
+                except Exception as e:                      # noqa: BLE001
+                    print(f"[{spec.get('label')}] MODEL FAILED: {e}", file=sys.stderr,
+                          flush=True)
     return 0
 
 

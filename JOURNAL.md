@@ -1,3 +1,37 @@
+**13:10 — First real external signal (20 CUAD records, 62 gold fields). Budget watch.**
+Owner flagged that ~20% of the testing budget is gone, so testing is now batched: no more
+exploratory single calls, verify from saved predictions only.
+Completed (reports/external/, full 20-record pass):
+  model              exact   tokF1  contains  answered  null_ok  grounded
+  gemini-4-argon     .2750   .6608   .7934        53     .934     .642
+  gpt-6.1-sol        .1727   .6286   .7759        54     .895     .759
+  clairic            .0047   .2365   .9528        60     .255     .867
+Reading it honestly:
+- Clairic has by far the best recall (60 of 62 gold fields) and 95% of its answers appear
+  inside the gold text (contains), but almost never as the exact annotated span (exact .005).
+  That is a granularity/format gap, not a comprehension gap - it returns the clause, CUAD
+  annotates a trimmed span, and our exact metric only credits string equality.
+- GPT and Gemini are the mirror image: they answer FEWER fields (53-54) but hit the exact
+  span 17-28% of the time. GPT's answers are the most likely to be verbatim in the state.
+- Our 2B model scores .428 exact on real CUAD eval (different record count, 148) - i.e. the
+  trained span pointer beats both frontier chat models on the exact-span metric and both
+  match/exceed it on null discipline (null_ok .989). Clairic's null_ok .255 vs our .989 is
+  the clearest architectural separation: generative extractors fill fields that are absent.
+Infrastructure found by this run (each cost real money to discover):
+- anthropic/claude-opus-5.5 rejects role=system (wants top-level system) and returns native
+  Anthropic response shape, not OpenAI choices. Both handled.
+- minimax/m3.1-flash rejects any system field AND returns HTTP 500 'Response conversion
+  failed' on non-streamed requests; streaming works. Handled via SSE fallback.
+- A subtle bug: the max_tokens fallback matched the phrase 'max_tokens' inside provider error
+  text that merely LISTS valid fields, ping-ponging forever and masking every later fix.
+  Fallbacks are now one-shot and ordered, and the final error is preserved.
+- alibaba/qwen3.8-max exceeded our 180s read timeout on every record (reasoning model,
+  long output) - retries burned budget and it produced no report. Needs a longer timeout or
+  a smaller output budget before it can be included.
+- @cf/deepseek-ai/deepseek-v4.1-flash-1017 is 403 'not available on the Workers Free plan'.
+  Not fixable in code; needs a paid Workers plan.
+Stopped the batch manually once Qwen's timeout retries started spending with no output.
+
 **12:50 — Stopped the first batch on request; no temperature parameter is sent any more.**
 Owner interrupted the 20-record run. Disk state: reports/external/ holds only clairic
 (complete, 20 records); gpt's partial calls were not flushed (preds are written per model
