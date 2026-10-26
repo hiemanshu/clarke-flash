@@ -1,3 +1,21 @@
+**14:12 — Seed replicate lands: 2B is reproducible within ~0.005, and the 4B gap is ~4x that.**
+scale-2b-r2 finished (fresh head, identical data, same config, different RNG):
+  run 1 (scale-2b)    exact .4070  tokF1 .5541  answered 380  null_ok .9853
+  run 2 (scale-2b-r2) exact .4023  tokF1 .5458  answered 384  null_ok .9854
+So the run-to-run noise on this benchmark is about +-0.005 exact and +-0.008 tokF1, while
+null_ok is stable to 0.0001 (it is a property of the trained gate, not the sampling).
+Consequences for claims already made:
+- 4B (.3884) vs 2B (.4070) = .0186, roughly 4x the noise band -> the "4B does not help" result
+  survives the replicate.
+- expDense2 (9B, .3884) vs 2B (.4070) -> same gap, also outside noise.
+- The doc-level 4B (.4710) vs 2B (.4407) difference is a SINGLE run per arm and points the
+  other way; treat the ~.03 as unresolved rather than as evidence for 4B (different answered
+  counts make exact@all .2799 vs .2850, i.e. effectively tied).
+- Any future arm needs a replicate before a <0.01 claim is worth recording.
+bench-9b started at 14:10 (hidden 4096, head 118.3M params, 23.0GB, 8,384 steps = 2 epochs
+over 2x16.7M tokens). Expected ~3.5-4h, i.e. finishing around 18:00. This is the final 1:1
+arm and nothing else is scheduled until it completes.
+
 **14:20 — Free-GPU diagnosis of the document-level gap (no API spend). Findings are
 specific, and they kill two of my earlier hypotheses.**
 Ran the 4B on all 40 full contracts, then a failure taxonomy, then threshold sweeps.
