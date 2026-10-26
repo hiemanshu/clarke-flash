@@ -274,73 +274,19 @@ def call_cf_clairic(record, fields, model, sleep_s, timeout=600):
 
 # ---------------------------------------------------------------- scoring (mirrors eval.py)
 
-def _norm(s) -> str:
-    return " ".join(str(s).split()).strip()
+from clarke.textmetrics import as_list as _as_list_shared
+from clarke.textmetrics import contained as _contained
+from clarke.textmetrics import norm as _norm
+from clarke.textmetrics import pair_f1 as _pair_f1
 
 
 def _as_list(v):
-    if v is None:
-        return []
-    if isinstance(v, str):
-        return [v]
-    if isinstance(v, list):
-        out = []
-        for x in v:
-            out.extend(_as_list(x))
-        return out
-    return [str(v)]
+    return _as_list_shared(v)
 
 
 def locate(state: str, value: str):
     i = state.find(value)
     return [i, i + len(value)] if i >= 0 else None
-
-
-def _toks(s) -> list:
-    return _norm(s).lower().split()
-
-
-def _tok_f1(a: str, b: str) -> float:
-    from collections import Counter
-    ca, cb = Counter(_toks(a)), Counter(_toks(b))
-    inter = sum((ca & cb).values())
-    if not inter:
-        return 0.0
-    prec = inter / max(sum(cb.values()), 1)
-    rec = inter / max(sum(ca.values()), 1)
-    return 2 * prec * rec / (prec + rec)
-
-
-def _pair_f1(gset: set, pset: set) -> float:
-    """Token F1 with greedy best pairing; separates 'quoted the right clause but
-    trimmed it differently' from 'wrong clause entirely'."""
-    rem, total = list(pset), 0.0
-    for g in gset:
-        best, bi = 0.0, -1
-        for i, p in enumerate(rem):
-            v = _tok_f1(g, p)
-            if v > best:
-                best, bi = v, i
-        total += best
-        if bi >= 0:
-            rem.pop(bi)
-    return total / max(len(gset), 1)
-
-
-def _contained(gset: set, pset: set) -> float:
-    """Fraction of gold values whose text appears inside some prediction (or vice
-    versa) after whitespace normalisation, case-insensitive."""
-    if not gset:
-        return 0.0
-    hit = 0
-    for g in gset:
-        gl = _norm(g).lower()
-        for p in pset:
-            pl = _norm(p).lower()
-            if gl and (gl in pl or pl in gl):
-                hit += 1
-                break
-    return hit / len(gset)
 
 
 def score(records, preds, label, data):

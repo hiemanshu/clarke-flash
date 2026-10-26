@@ -1,3 +1,32 @@
+**13:35 — Parity fix: our evaluator now reports tok_f1 and contains too, from the SAME
+module as the external harness (src/clarke/textmetrics.py).**
+Owner asked why our row had dashes for those columns. It was an asymmetry I introduced: I
+added tok_f1/contains to the external harness and never to clarke-eval, so the only quote-level
+comparison available was one-sided (and it favoured the way chat models answer). They now share
+one implementation, so the definitions cannot drift: exact = set-F1 over normalised values,
+tok_f1 = token F1 with greedy best pairing, contains = share of gold values whose text appears
+inside a prediction after whitespace/case normalisation.
+Also repaired two bugs my edits introduced, both caught by their own failures:
+- postmortem() referenced max_length without taking it as a parameter (broke the 4B chain's
+  postmortem eval with NameError);
+- my metric-block replacement had deleted `locate()` from the external harness (grounded_rate
+  crashed in the re-score).
+Document-level table now complete on the 28-record common subset (329 gold fields, 65k cap):
+  model            exact   tokF1  contains  answered   null_ok  exact@all
+  gemini-4-argon  .5625   .7419    .9048    306 (93%)  .9255    .5232
+  opus-5.5        .5515   .7317    .8560    298 (91%)  .9072    .4995
+  gpt-6.1-sol     .5361   .6951    .8522    307 (93%)  .8706    .5003
+  clarke-2b       .4538   .5806    .6863    219 (67%)  .9719    .3021
+  clairic         .0162   .4152    .9526    329 (100%) .1612    .0162
+The added columns change the diagnosis: it is NOT only recall. When we do answer, only 68.6% of
+our answers sit inside the gold text versus 85-90% for the frontier models, and our tokF1 is
+.581 vs .695-.742. So we both answer less AND quote the wrong span more often - the second half
+is a pointer/attention problem, not a null-threshold problem. Clairic remains the outlier with
+95% containment but .016 exact: it finds the right text and reports the wrong granularity.
+Reproducibility: scripts/rescore_common.py restricts every model to the records they ALL
+completed and writes reports/external_doc/rescored/*.json; compare_external.py is now
+parameterised (external dir + our report) instead of hardcoded to the 20-record slice.
+
 **13:25 — Full-contract external comparison done (partially: billing ran out mid-run).**
 Ran the 4 working models on the same 40 full contracts our 2B saw (data/doc_eval_40.jsonl,
 65536-token cap, 8k output budget, 600s timeout). 18 calls died with HTTP 402 "Insufficient

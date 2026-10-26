@@ -19,6 +19,7 @@ import torch
 
 from .data import RecordDataset
 from .encoding import collate_records, encode_record
+from .textmetrics import as_list, contained, pair_f1
 from .model import ClarkeModel, load_backbone, load_head
 from .schema import FieldSpec
 
@@ -40,6 +41,7 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
     def stat(dom: str, kind: str) -> dict[str, float]:
         return stats.setdefault((dom, kind), {"n": 0, "exact": 0, "located": 0, "null_correct": 0,
                                        "answered": 0, "conf_sum": 0.0, "coverage": 0,
+                                       "f1_sum": 0.0, "contains_sum": 0.0,
                                        "ape_sum": 0.0, "pinball": 0.0,
                                        "brier_sum": 0.0, "brier_n": 0,
                                        "solved": 0, "exact_solvable": 0})
@@ -82,6 +84,13 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                     pass  # false null: miss, not counted as answered
                 else:
                     bucket["answered"] += 1
+                    gold_vals = set(as_list(gold.get("value") if gold.get("value") is not None
+                                            else gold.get("values")))
+                    pred_vals = set(as_list(got.get("value") if got.get("value") is not None
+                                            else got.get("values")))
+                    if gold_vals:
+                        bucket["f1_sum"] += pair_f1(gold_vals, pred_vals)
+                        bucket["contains_sum"] += contained(gold_vals, pred_vals)
                     if spec.type in ("number", "duration", "date", "time", "datetime"):
                         from .candidates import field_atoms, solve
 
@@ -144,6 +153,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
             "exact": round(b["exact"] / max(answered, 1), 4),
             "located": round(b["located"] / max(answered, 1), 4) if b["located"] else None,
             "null_correct": round(b["null_correct"] / max(b.get("null_n", 0), 1), 4),
+            "tok_f1": round(b.get("f1_sum", 0.0) / max(answered, 1), 4),
+            "contains": round(b.get("contains_sum", 0.0) / max(answered, 1), 4),
             "mean_confidence": round(b["conf_sum"] / max(answered, 1), 4),
             "brier_null": round(b["brier_sum"] / max(b["brier_n"], 1), 4),
         }
@@ -180,7 +191,7 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
 @torch.inference_mode()
 def postmortem(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                device: torch.device, batch_size: int = 4, max_records: int = 96,
-               agg_atoms: bool = False) -> dict:
+               agg_atoms: bool = False, max_length: int = 8192) -> dict:
     """Ranking diagnostics: where does the GOLD atom/token rank in the head's
     own scores? Decides which surgery the failure needs:
       - p@1 decent but exact low          -> decode/render issue, not the pointer
@@ -327,6 +338,7 @@ def main(argv: list[str] | None = None) -> None:
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "postmortem": postmortem(records, model, processor.tokenizer, device,
                                            batch_size=args.batch_size, agg_atoms=args.agg_atoms,
+                                           max_length=args.max_length,
                                            max_records=len(records))}
     else:
         summary = evaluate(records, model, processor.tokenizer, device,

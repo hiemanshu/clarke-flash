@@ -48,24 +48,32 @@ def load_ours(path: Path):
     kind, m = kind_metric(d.get("metrics") or {})
     if m.get("answered") is None and not m.get("n"):
         return None
+    label = path.stem
+    for prefix in ("doc28-65k-", "doc-65k-", "scale2b-", "scale4b-"):
+        if label.startswith(prefix):
+            label = label[len(prefix):]
+            break
     return {
-        "model": f"clarke-{path.stem}",
+        "model": f"clarke-{label}",
         "source": "clarke",
         "exact": m.get("exact"),
-        "tok_f1": None,
-        "contains": None,
+        "tok_f1": m.get("tok_f1"),
+        "contains": m.get("contains"),
         "answered": m.get("answered"),   # None when the report predates the counter
         "null_ok": m.get("null_correct"),
         "n": m.get("n"),
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    argv = argv or []
+    ext_dir = ROOT / (argv[0] if argv else "reports/external")
+    ours_glob = argv[1] if len(argv) > 1 else "reports/head2head/*.json"
     rows, invalid = [], []
-    for path in sorted((ROOT / "reports/external").glob("*.json")):
+    for path in sorted(ext_dir.glob("*.json")):
         row = load_external(path)
         (rows if row else invalid).append(row or path.stem)
-    for path in sorted((ROOT / "reports/head2head").glob("*.json")):
+    for path in sorted(ROOT.glob(ours_glob)):
         row = load_ours(path)
         (rows if row else invalid).append(row or path.stem)
 
@@ -85,4 +93,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
