@@ -1,3 +1,22 @@
+**15:35 — Instrumentation note for the backbone sweep: two arms carry known confounds; 12B-base
+queued as an owner decision.**
+1) GEMMA-4-E2B-IT IS CONFOUNDED, unavoidable: Google publishes no base E2B checkpoint (only -it
+   variants), so this arm bundles THREE variables in one number - 512-token sliding window,
+   Google's pretraining corpus, and chat post-training/representation drift. If it lands
+   low we cannot say which caused it; if it lands high we cannot attribute the win to the
+   recipe. Base everywhere else (Qwen3.5-0.8B/2B, granite-4.2-3b, MiniCPM5-2B, LFM2.5-2.6B,
+   Ministral-3-3B-Base), except Hy-MT2-1.8B where the translation objective IS the hypothesis.
+2) ADOPTION RULE, pre-registered because 7 arms invites multiple-comparison luck: single-run
+   noise is sigma ~= .0033 (seed replicate .4070/.4023), and the max of 7 draws sits ~+.005
+   above the mean by chance. So: best >= .415 -> adopt + replicate; .402-.415 -> tie, take the
+   cheaper backbone and do NOT claim a recipe win; < .402 -> no gain.
+3) 12B-BASE (google/gemma-4-12B, base, Apache-2.0, 23.9GB bf16, 262k ctx, 48 layers, H=3840,
+   8 KV heads, sliding window 1024) is FEASIBLE but tight: frozen backbone means no activation
+   retention, head+grads+Adam ~1.4GB, so ~26GB at both 8k training and 65k inference - batch 1,
+   nothing else on the card, expandable_segments on. ~5-5.5h for 2 epochs. Would be arm 8,
+   last, and ONLY if no cheap arm clears .415. Owner will decide once the seven are in; smoke
+   tests (8k forward + one 65k doc) to run at the next GPU gap before committing the hours.
+
 **15:20 — Pointer-temperature hypothesis tested at 65k: DEAD. Localisation is not a
 sharpness problem.**
 Observation that motivated it: span_scale (the head's learnable pointer temperature) finished
