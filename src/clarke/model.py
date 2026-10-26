@@ -61,7 +61,8 @@ class ClarkeModel(torch.nn.Module):
     def answer(self, batch: dict[str, Any], null_threshold: float = 0.5,
                slot_threshold: float = 0.5, dedupe: bool = True,
                pointer_temp: float = 1.0,
-               span_max_tokens: int | None = None) -> list[dict[str, Any]]:
+               span_max_tokens: int | None = None,
+               span_tiebreak_eps: float = 0.0) -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -78,7 +79,8 @@ class ClarkeModel(torch.nn.Module):
                                             null_threshold=null_threshold,
                                             slot_threshold=slot_threshold, dedupe=dedupe,
                                             pointer_temp=pointer_temp,
-                                            span_max_tokens=span_max_tokens)
+                                            span_max_tokens=span_max_tokens,
+                                            span_tiebreak_eps=span_tiebreak_eps)
                 for encoded, field_logits in zip(record.fields, record_logits)
             })
         return out
@@ -91,7 +93,8 @@ def _probability(mass: torch.Tensor) -> float:
 def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                   null_threshold: float = 0.5, slot_threshold: float = 0.5,
                   dedupe: bool = True, pointer_temp: float = 1.0,
-                  span_max_tokens: int | None = None) -> dict[str, Any]:
+                  span_max_tokens: int | None = None,
+                  span_tiebreak_eps: float = 0.0) -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
 
@@ -99,7 +102,8 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
         span_answer = _decode_span(logits.start, logits.end, record, spec, p_null,
                                    null_threshold=null_threshold,
                                    pointer_temp=pointer_temp,
-                                   span_max_tokens=span_max_tokens)
+                                   span_max_tokens=span_max_tokens,
+                                   span_tiebreak_eps=span_tiebreak_eps)
         answer.update(span_answer)
     elif spec.type == "list" and spec.items == "text":
         values, spans = [], []
@@ -110,7 +114,8 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                     continue
                 part = _decode_span(logits.start[slot], logits.end[slot], record, spec,
                                     torch.tensor(0.0), pointer_temp=pointer_temp,
-                                    span_max_tokens=span_max_tokens)
+                                    span_max_tokens=span_max_tokens,
+                                    span_tiebreak_eps=span_tiebreak_eps)
                 if not part.get("value"):
                     continue
                 span = part["span"]
@@ -240,7 +245,7 @@ def _round_value(value: float, spec: FieldSpec) -> float:
 def _decode_span(
     start: torch.Tensor, end: torch.Tensor, record: EncodedRecord, spec: FieldSpec,
     p_null: torch.Tensor, null_threshold: float = 0.5, pointer_temp: float = 1.0,
-    span_max_tokens: int | None = None,
+    span_max_tokens: int | None = None, span_tiebreak_eps: float = 0.0,
 ) -> dict[str, Any]:
     """Pointer decode: the answer text is a slice of the input, never generated.
 
@@ -282,7 +287,15 @@ def _decode_span(
     # real products are strictly positive.
     ends = torch.cat([end_probs, end_probs.new_zeros(window - 1)])
     scores = start_probs.unsqueeze(1) * ends.unfold(0, window, 1)   # [tokens, window]
-    flat = int(scores.reshape(-1).argmax())
+    if span_tiebreak_eps and span_tiebreak_eps > 0:
+        # Among spans scoring within eps of the best, prefer the SHORTEST. A wide cap then
+        # buys region coverage without paying the over-extension that costs exact.
+        best = scores.max()
+        lengths = torch.arange(1, window + 1, device=scores.device).expand_as(scores)
+        masked = lengths.masked_fill(scores < best * (1.0 - span_tiebreak_eps), window + 1)
+        flat = int(masked.reshape(-1).argmin())
+    else:
+        flat = int(scores.reshape(-1).argmax())
     i, off = divmod(flat, window)
     j = i + off
     score = scores.reshape(-1)[flat]

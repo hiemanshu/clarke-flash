@@ -1,3 +1,31 @@
+**23:28 — OWNER WAS RIGHT: the contains gain was convertible. TIGHT-SPAN TIE-BREAK beats the
+256 default by +.008 to +.010 exact@all. My "keep 256, nothing to gain" conclusion was half wrong.**
+Owner's objection to the span-cap entry: "the contains change means we can optimise exact better".
+Correct. The wide cap raises contains (.679 -> .714) because the decoder finds the right REGION but
+over-extends the boundary. So the region was already found; the fix is a tighter boundary, not a
+wider window. Implemented `--span-tiebreak-eps`: among all spans scoring within eps of the best,
+prefer the SHORTEST. Decode-time only, no training.
+2B, doc40 @65k, cap 256 (unless stated):
+  eps     exact   tokF1  contains  exact@all
+  0       .4407   .5731   .6790     .2850
+  .10     .4460   .5697   .6685     .2884
+  .15     .4455   .5681   .6654     .2881
+  .20     .4491   .5693   .6637     .2904
+  .25     .4535   .5704   .6602     .2932   <- best
+  .30     .4474   .5645   .6488     .2893
+  .35     .4474   .5625   .6499     .2893
+  (cap 512 at eps .20/.35: .4474/.4458 exact -> tight tie-break does NOT rescue the wide cap)
+Qwen0.8B, cap 256: eps 0 .4409/.2435 -> eps .20 .4592/.2536 (+.0183 exact, +.0101 exact@all).
+So the effect is LARGER on the smaller backbone, and the optimum trades contains DOWN (.679->.660)
+while exact goes UP: we are deliberately trimming the extra region the wide cap was buying.
+INTERPRETATION: the model's boundary is systematically over-extended relative to CUAD's annotation
+granularity; a length prior at decode recovers about a third of the gap between exact (.44) and
+contains (.66-.68). It also explains why the wide cap hurt: it amplified exactly the failure mode
+the tie-break fixes.
+STATUS: default stays eps=0 for comparability with all prior numbers; the 65k ladder (A/B/C) will
+use cap 256 + eps .25. Cheap follow-up: check eps .25 on granite42 and lfm12 to confirm the gain is
+general rather than 2B/Qwen-specific.
+
 **23:15 — SPAN-CAP EXPERIMENT: raising the cap HURTS. My "256 is legacy" claim was wrong; the cap
 is doing useful work.** (eval-only, same checkpoints, doc40 @65k, 3 caps each)
   arm       cap        exact   tokF1  contains  answered  null_ok  exact@all
