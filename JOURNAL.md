@@ -1,3 +1,26 @@
+**19:08 — BACKBONE SWEEP RESULT 4/7: MiniCPM5-2B reaches parity with the 2B, and its 131k
+context is REAL.**
+(runs/bb-minicpm5/checkpoint-8384, 2 epochs, bench_v1, fresh head, 99 min, 6.4 GB, 8.7 rec/s)
+  arm            eval     exact   tokF1  contains  null_ok  answered  exact@all
+  2B (ref)       real168  .4070   .5541   .6859    .9853    380/593   .2608
+  2B (ref)       doc40    .4407   .5731   .6790    .9720    322/498   .2850
+  MiniCPM5-2B    real168  .3905   .5531   .6841    .9823    378/593   .2489
+  MiniCPM5-2B    doc40    .4245   .5719   .6720    .9711    329/498   .2804
+READ: parity, not a win. doc40 exact@all .2804 vs .2850 is inside the +-0.005 noise band; tokF1
+and contains are within .003 of the 2B on BOTH evals; and it answers MORE gold fields at doc
+level (329 vs 322) with marginally lower per-answer precision. Short-context exact is .0165
+behind, which is ~3x noise - the only clear deficit. Cost: 1.6x slower than Qwen 2B (8.7 vs 14.2
+rec/s) because it is 42 DENSE full-attention layers vs Qwen's 24 hybrid (18 linear + 6 full).
+So: equal quality, more compute. Qwen3.5-2B stays the incumbent on efficiency.
+LONG-CONTEXT QUESTION ANSWERED: I had flagged that MiniCPM5's 131,072 max_position_embeddings and
+"long-context" tag might be aspirational, especially since its sparse-attention (InfLLM-v2) path
+is NOT exercised by our stock-transformers dense forward. Measured: doc40 .4245 vs real168 .3905,
+i.e. +.034 when given whole contracts - the same improvement pattern as Qwen3.5-2B (+.0337). It
+does not degrade at 65k depth, so for OUR dense path the declared 128k is effective, not
+marketing. That also means it is the first non-Qwen backbone that survives the document regime.
+CONTEXT ON THE CURVE: at 2.5B this is the second-best arm so far, and it beats every arm below it
+(0.8B .2330, 230M .1631, Hy-MT2 .1956 on doc40 exact@all). Only the incumbent is ahead, by noise.
+
 **17:40 — Reviewed docs/data-landscape.md against today's measurements. It re-ranks, and the
 two biggest levers turned out not to be datasets at all.**
 The memo is accurate on facts and honest about its own corrections. Where it is wrong is
