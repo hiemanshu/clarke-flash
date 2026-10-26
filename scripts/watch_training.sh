@@ -30,6 +30,12 @@ done
 
 LOGDIR="${LOGDIR:-/tmp/opencode}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# A real terminal gets the ncurses dashboard (GPU/CPU/RAM/NET panels); pipes, cron
+# and the `status` subcommand keep the old diff-painted output so logs stay readable.
+if (( ! STATUS )) && [[ -t 1 ]] && [[ "${WATCH_TUI:-1}" != "0" ]]; then
+  exec python3 "$ROOT/scripts/watch_tui.py" "$INTERVAL"
+fi
 : "${ROWS:=24}"; : "${COLS:=80}"
 K=$'\033[K'
 CLEAR_EVERY=${CLEAR_EVERY:-30}

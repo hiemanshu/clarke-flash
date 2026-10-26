@@ -4,6 +4,12 @@ This file survives context compaction. If you are an agent resuming with a
 compacted context, READ THIS FIRST, then JOURNAL.md (newest entries at top),
 then PLAN.md.
 
+## Monitoring
+
+`./scripts/watch_training.sh` — TTY: ncurses dashboard (run progress, GPU, per-core CPU,
+RAM/swap/disk, network, all runs, log tail; keys q/space/l/r/?). Non-TTY or `status`: the
+older diff-painted one-frame output. `WATCH_TUI=0` forces the old path.
+
 ## Working rules (non-negotiable)
 
 1. **Journal every substantive event.** One entry per event, fresh entry file per

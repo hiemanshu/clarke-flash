@@ -1,3 +1,24 @@
+**12:06 — Dashboard upgraded to ncurses with GPU / CPU / RAM / disk / NETWORK panels.**
+scripts/watch_tui.py (stdlib curses, no new deps) is now what `./scripts/watch_training.sh`
+execs when stdout is a TTY; non-TTY and the `status` subcommand keep the old diff-painter so
+logs/cron stay stable, and WATCH_TUI=0 forces the old path.
+Layout: header (clock + ACTIVE/DONE), active run (progress bar with eighth-block resolution,
+loss + trend arrow, lr, rec/s, epoch, ETA), GPU (util/VRAM/temp/power with warning colours),
+CPU (total + per-core grid + load + sparkline), MEMORY (mem/swap/DISK free - checkpoints are
+10-20GB each, so free space belongs on this screen), NETWORK (per-interface rates, top 3 by
+traffic), RUNS table (auto-discovered from runs/*/train.jsonl, active row highlighted, capped
+at 8 rows with "… N older runs hidden"), LOG tail (cycle with `l`). Keys: q, space, l, r, ?.
+Two real bugs found while verifying, both from UTF-8:
+- addnstr(n) counts BYTES, not characters, so every box-drawing glyph (3 bytes) truncated
+  frames to roughly a third of their width and could split a glyph. put() now slices by
+  character and uses addstr.
+- the bounds check rejected x == w-1, which silently killed every right-hand border.
+Verification: curses needs a pty, so a real check required either a terminal or an emulator.
+`scr.instr`/`inch` also count bytes and hid the glyphs, which briefly made correct output look
+broken; wrote /tmp/opencode/ansi_view.py (tiny ANSI screen decoder) and captured the actual
+pty stream at 120x40 and 84x26. Both render correctly; the narrow layout drops the log panel
+and shortens the tables instead of spilling over borders.
+
 **12:00 — 20-record head-to-head armed against the 4B arm (owner request).**
 Goal: our own checkpoints scored on the EXACT 20 CUAD records the external baselines used,
 so the comparison stops being directional. Alignment verified offline: the first 20 records
