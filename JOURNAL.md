@@ -1,3 +1,21 @@
+**09:20 — expDense2 VERDICT (4k windows): CUAD .4004 -> .4097. DIMINISHING RETURNS.**
+- CUAD exact .4097 (+.0093; previous doubling gave +.0198) | null_ok .9893
+- pm: p@5 .416 (+.012), med rank 7 (-1), but p@1 .157 (-.012)
+- typed text .1836 (flat), number .0912 (+.003), list-text .6515 (-.165, n=82 -> noisy)
+- ACORD .0342 (-.003; second slightly-negative read for ACORD)
+- contract 1.0000, val3 text/number flat
+READ: density works but is saturating (halving the gain each doubling). Data-as-views of the
+SAME 470 CUAD docs is running out; further CUAD gains need NEW corpora, not more windows.
+LoRA STILL BLOCKED even after the owner installed CUDA/cuDNN: flash-linear-attention 0.6.0
+and causal-conv1d 1.7.0 are installed and import cleanly, yet the backward pass still OOMs at
+the SAME ~30.6GB on BOTH 9B and 4B - i.e. gradient checkpointing is not being applied by this
+hybrid-attention model, so the full 9B graph is unavoidable on 32GB. Documented as blocked
+with evidence (kernels installed, not the cause); would need a 40GB+ card or a
+checkpointing-compatible architecture.
+NEXT: expDense3 launched 09:20 - 2 MORE epochs on the same 4k mix from expDense2-9836
+(lr 7e-5) = pure saturation test. If flat -> the data lever is exhausted for CUAD windows and
+the move is NEW corpora (owner offered datasets) or serving-side changes.
+
 **02:50 — expDense VERDICT: dense data works. CUAD .381 -> .400 (new best).**
 Read (init expReal2-7658, 2 epochs, CUAD 8k-window views 1,714->3,207 + ACORD 684->1,368):
 CUAD exact **.4004** (+.0198), null_ok .9869, pm p@1 .169 (was .157), **p@5 .404** (was .382),
