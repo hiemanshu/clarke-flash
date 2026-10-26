@@ -1,3 +1,32 @@
+**23:15 — SPAN-CAP EXPERIMENT: raising the cap HURTS. My "256 is legacy" claim was wrong; the cap
+is doing useful work.** (eval-only, same checkpoints, doc40 @65k, 3 caps each)
+  arm       cap        exact   tokF1  contains  answered  null_ok  exact@all
+  2B        256        .4407   .5731   .6790    322/498   .9720    .2850
+  2B        512        .4382   .5605   .6813    322/498   .9720    .2833
+  2B        uncapped   .4188   .5164   .7142    322/498   .9720    .2708
+  Qwen0.8B  256        .4409   .5639   .6875    275/498   .9825    .2435
+  Qwen0.8B  512        .4362   .5550   .6914    275/498   .9825    .2409
+  Qwen0.8B  uncapped   .4164   .5201   .7029    275/498   .9825    .2299
+  LFM1.2B   256        .4118   .5515   .6756    275/498   .9501    .2274
+  LFM1.2B   512        .4045   .5429   .6801    275/498   .9501    .2234
+  LFM1.2B   uncapped   .3608   .4770   .7272    275/498   .9501    .1992
+  LFM230M   256        .3343   .4725   .6063    243/498   .9615    .1631
+  LFM230M   512        .3294   .4650   .6236    243/498   .9615    .1607
+  LFM230M   uncapped   .3047   .4152   .7035    243/498   .9615    .1487
+THE PATTERN IS UNIFORM ACROSS FOUR MODELS: exact falls monotonically with the cap (uncapped is
+worst), while contains RISES (.679->.714 for the 2B, .606->.704 for the 230M) and answered is
+unchanged. So a larger cap lets the decoder emit longer spans that OVERLAP the gold text but do not
+match its boundaries - it trades precision for coverage of the right region. The 256 cap is
+therefore acting as a span-length prior learned from the training distribution (median gold span
+38 tokens, p90 107), not as a legacy artefact. The 1.9% of gold spans longer than 256 tokens that
+are structurally unreachable cost less than the precision lost by allowing the decoder to stretch.
+CONCLUSION: keep 256 as the default. The 512/uncapped paths stay in the code as documented-worse
+options (useful if a future head is TRAINED with long-span supervision, which these checkpoints
+were not - training never used a cap, so this is purely a decode-time prior effect).
+METHOD NOTE: this is what the one-variable rule buys. The previous entry called the cap "pure
+legacy" and proposed 512 as a fix; a 12-minute eval on the existing checkpoints showed the
+opposite. No training time was spent to find out.
+
 **23:40 — Post-sweep plan restructured as a ONE-VARIABLE-AT-A-TIME ladder (owner directive: "we
 should do the changes in 1 by 1 steps, so we know what caused a change").**
 Also answered the owner's question about why SPAN_MAX_TOKENS is capped at all: there is no good
