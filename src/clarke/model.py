@@ -233,12 +233,20 @@ def _decode_span(
         return {"value": None, "p_null": _probability(p_null), "confidence": 0.0}
     start_probs = torch.softmax(start.float(), dim=-1)
     end_probs = torch.softmax(end.float(), dim=-1)
-    joint = start_probs.unsqueeze(1) * end_probs.unsqueeze(0)
-    rows = torch.arange(tokens, device=joint.device).unsqueeze(1)
-    cols = torch.arange(tokens, device=joint.device).unsqueeze(0)
-    band = (cols >= rows) & (cols < rows + SPAN_MAX_TOKENS)
-    score, flat = joint.masked_fill(~band, 0.0).flatten().max(0)
-    i, j = int(flat // tokens), int(flat % tokens)
+    # Exact argmax over the allowed band without materialising a T x T joint matrix:
+    # at 65k tokens that matrix is 65k^2 floats (~17 GB) and OOMs the whole eval.
+    # A sliding window of width SPAN_MAX_TOKENS is the same search in O(T * L)
+    # (65k x 24 floats ~ 6 MB), and picks the identical (start, end).
+    window = min(SPAN_MAX_TOKENS, tokens)
+    # pad so EVERY start position gets a full window (otherwise starts in the last
+    # window-1 positions are never considered); zero scores can never win, as all
+    # real products are strictly positive.
+    ends = torch.cat([end_probs, end_probs.new_zeros(window - 1)])
+    scores = start_probs.unsqueeze(1) * ends.unfold(0, window, 1)   # [tokens, window]
+    flat = int(scores.reshape(-1).argmax())
+    i, off = divmod(flat, window)
+    j = i + off
+    score = scores.reshape(-1)[flat]
     char_start = record.char_offsets[i][0]
     char_end = record.char_offsets[j][1]
     text = record.state[char_start:char_end]

@@ -1,3 +1,33 @@
+**13:05 — FULL-DOCUMENT 65k EVAL: the 2B works, zero-shot, on whole contracts. Blocker was
+our own O(T^2) decoder, not the model.**
+Setup: all 40 held-out CUAD contracts (docs[470:510]), full text, --max-length 65536 (Clairic's
+window), batch 1, run on the SAME GPU as the 4B training with a hard 0.38 allocator cap so the
+trainer could never be starved. Dataset data/doc_eval_40.jsonl (rebuild: public.cuad_records
+with window_chars=400_000, doc_start=470, doc_end=510). Token counts: median 6,336, p90 26,639,
+max 64,883; 423k state tokens total, mean 10.6k per contract.
+RESULT (2B, head trained only on <=8k windows):
+  exact .4407 over 322 answered fields   null_ok .9720 over 1142 null fields
+  answered 322/498 gold fields = 64.7%   -> exact over ALL gold = .2850
+  wall 45.2 s for all 40 contracts       torch peak 9.24 GiB
+For reference, the same 2B scored .407 on 148 windowed records at 8k. So single-pass 65k is not
+a degradation - it is at least as good AND removes the window-stitching step.
+PROOF it is really long-range (not a prefix artefact): on the 300k-char Goosehead contract the
+predicted spans sit at 0.7%, 3.7%, 43.9%, 57.8%, 64.1% and 71.3% of the document
+(document_name 2060-2079, anti_assignment 131833-132138, governing_law 192654-192720,
+agreement_date 214385-214404). A head trained at <=8k generalises to 65k positions.
+THE ACTUAL BLOCKER, found by the OOM: _decode_span built a full T x T joint matrix
+(start_probs.unsqueeze(1) * end_probs.unsqueeze(0)) to find the best (start,end). At 65k tokens
+that is 65k^2 floats = ~17 GB, so eval died before the backbone ever mattered. Replaced with the
+band-limited sliding window search (O(T * SPAN_MAX_TOKENS) = 65k x 256 floats ~ 67 MB) which is
+the SAME search; verified identical argmax on T=1,2,5,17,40,129,5k,70k. Caught and fixed an edge
+case in my own first version (starts in the last SPAN_MAX-1 positions were never considered).
+Also added the missing --max-length flag to clarke-eval (it silently inherited 8192 before).
+Truncation at 65536: exactly 1 of 40 docs (Goosehead, 64,883 tokens, keeps 97.3% of chars -
+the ~2.4k-token schema eats part of the budget). Everything else fits whole.
+NEXT: this unblocks the honest document-level comparison. 40 docs = 423k state tokens, so
+feeding all four live external models their full text is ~1.7M input tokens total - single-digit
+dollars, not a big spend. Windowing becomes a fallback for >64k docs only (1 in 40 here).
+
 **12:58 — The backbone's native context is 256k, and the hybrid stack makes it affordable.
 My earlier "16k context is not urgent / long context is expensive" framing was wrong twice.**
 Checked the real configs instead of assuming:

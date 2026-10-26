@@ -34,7 +34,7 @@ def match_scalar(spec: FieldSpec, predicted: Any, gold: Any) -> bool:
 @torch.no_grad()
 def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              device: torch.device, batch_size: int = 8,
-             agg_atoms: bool = False) -> dict[str, Any]:
+             agg_atoms: bool = False, max_length: int = 8192) -> dict[str, Any]:
     stats: dict[tuple[str, str], dict[str, float]] = {}
 
     def stat(dom: str, kind: str) -> dict[str, float]:
@@ -47,7 +47,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
     encoded_records = []
     for record in records:
         try:
-            encoded_records.append(encode_record(tokenizer, record, agg_atoms=agg_atoms))
+            encoded_records.append(encode_record(tokenizer, record, max_length=max_length,
+                                                agg_atoms=agg_atoms))
         except ValueError:
             continue
 
@@ -191,7 +192,8 @@ def postmortem(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any
     encoded = []
     for r in records[:max_records]:
         try:
-            encoded.append(encode_record(tokenizer, r, agg_atoms=agg_atoms))
+            encoded.append(encode_record(tokenizer, r, max_length=max_length,
+                                         agg_atoms=agg_atoms))
         except ValueError:
             continue
 
@@ -281,6 +283,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--head", required=True, help="checkpoint dir with extraction_head.safetensors")
     parser.add_argument("--data", required=True, help="records JSONL to evaluate")
     parser.add_argument("--limit", type=int, default=256)
+    parser.add_argument("--max-length", dest="max_length", type=int, default=8192,
+                        help="token budget for schema+state; raise it for full-contract "
+                             "evaluation (the backbone natively handles 256k)")
     parser.add_argument("--batch-size", dest="batch_size", type=int, default=4,
                         help="records per forward (long CUAD windows need <=4)")
     parser.add_argument("--out", default=None, help="write JSON report here")
@@ -325,7 +330,8 @@ def main(argv: list[str] | None = None) -> None:
                                            max_records=len(records))}
     else:
         summary = evaluate(records, model, processor.tokenizer, device,
-                           batch_size=args.batch_size, agg_atoms=args.agg_atoms)
+                           batch_size=args.batch_size, max_length=args.max_length,
+                           agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "metrics": summary["overall"], "by_domain": summary["by_domain"]}
     print(json.dumps(report, indent=2))
