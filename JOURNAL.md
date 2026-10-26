@@ -1,3 +1,21 @@
+**16:01 — BACKBONE SWEEP RESULT 2/7: LFM2.5-230M establishes the capacity floor.**
+(runs/bb-lfm230/checkpoint-8384, 2 epochs, bench_v1, fresh head, ~20 min, 0.9 GB)
+                 real168 exact   doc40 exact   doc40 answered   doc40 exact@all
+  2B (ref)          .4070          .4407         322/498          .2850
+  Qwen 0.8B         .3914          .4409         275/498          .2435
+  LFM2.5-230M       .3220          .3343         243/498          .1631
+READ: a 0.23B backbone still extracts - .322 at short context, .334 at 65k, answered 243 of
+498 gold fields (75% of what the 2B answers). Not a replacement (far below the .402 tie bar),
+but it quantifies the capacity curve:
+  0.23B -> 0.87B : +.069 real168 exact for +0.64B params
+  0.87B -> 2.0B  : +.016 for +1.13B params
+So the curve is steep at the bottom and already flat above ~1B. That is the "2B is a sweet
+spot" claim with numbers instead of vibes: doubling past 1B buys almost nothing, which is also
+consistent with 4B (.3884) and 9B (.3884) not improving on 2B.
+Serving implication: if doc-level recall is ever fixed, a 230M head-carrier is ~10x cheaper than
+2B and still answers three quarters of the fields - the interesting question becomes what
+breaks first at that size (multi-span? long spans?), not whether it works at all.
+
 **15:58 — Decision trail for reports/ now recorded in three places, not one.**
 Owner asked whether the reports decision is discoverable from the journal AND the reports.
 It was only in the journal + OPERATIONS + commit messages, so a reader opening reports/ had no
