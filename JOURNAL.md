@@ -1,3 +1,27 @@
+**09:22 — GATE CURVE ON THE 65k-TRAINED 2B: the requested operating point (92-93% coverage at
+null_ok .92) does not exist on this model. Coverage/null_ok trade ~linearly.**
+(A-qwen2b/checkpoint-1880, doc40 @65k, eps .25)
+  null  slot  coverage  null_ok   exact  exact@all
+  .70   .10     88.2%   .8975    .4499   .3966
+  .75   .10     90.0%   .8757    .4476   .4027
+  .80   .10     91.8%   .8538    .4431   .4066
+  .85   .10     93.2%   .8214    .4408   .4107
+  .90   .10     95.2%   .7723    .4343   .4134
+  .95   .10     95.8%   .7233    .4326   .4144
+  (slot .20 is uniformly ~.002-.004 worse at the same null; use .10)
+READ: there is no knee. Every +1.5pp of coverage costs ~3pp of null_ok, and the requested pair
+(92-93% coverage WITH .92 null_ok) is simply not on the curve - the best null_ok at 93% coverage is
+.82. That is a CALIBRATION limitation, not a threshold choice: p_null does not separate "absent"
+from "present but hard", so moving the cutoff trades one metric for the other.
+exact@all does keep creeping up (.3966 -> .4144, the best figures the project has produced) but only
+by answering nearly everything (95.8% coverage) at null_ok .72 - i.e. by over-answering, which is
+exactly Clairic's failure mode (100% coverage, null_ok .16, exact@all .016).
+RECOMMENDATION: stop the threshold curve at null .80 / slot .10 (91.8% coverage, null_ok .854,
+exact@all .4066) as the balanced operating point, and move the lever to CALIBRATION so the whole
+curve shifts up instead of sliding along it: Brier loss on p_null (cheap, training-time), decoy-key
+negatives (Kleister) so "absent" is learned from hard negatives, and more data for the rare fields
+still declined at 93% coverage.
+
 **09:09 — LADDER B RESULT 1/3: widening the head (112M -> 371M) buys NOTHING.**
 (B-qwen2b, same 65k doc training/data/epochs as A, only head capacity changed)
   config                     exact   tokF1  contains  null_ok  answered  exact@all
