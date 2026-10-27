@@ -1,3 +1,30 @@
+**16:20 — parties 0/40 IS NOT A CROP PROBLEM AND NOT A NULL PROBLEM. It is ITEM RETRIEVAL: every
+contract has 3-4 parties, the model emits 1.65, and 70% of gold parties are never pointed at by any
+slot.**
+Measured on A-qwen2b/checkpoint-1880 (scripts/parties_probe.py, reports/A-parties-probe.json; one
+forward pass per document, then re-decode the field under different gates):
+  gold items per doc: 4 items in 36 docs, 3 in 4 docs (156 items over 40 docs)
+  default (present .5, overlap-dedupe): 1.65 items/doc, recall .151, precision .439, crop-exact .862
+  text-only dedupe:                     2.48 items/doc, recall .188, precision .364, crop-exact .889
+  slot-mask @ .5:                       3.77 items/doc, recall .297, precision .377, crop-exact .754
+  slot-mask @ .05:                      4.95 items/doc, recall .344, precision .333, crop-exact .758
+TWO THINGS THIS SETTLES:
+1. The PRESENT HEAD IS FINE - mean sigmoid per slot is .995, .932, .821, .707, .493, .315, i.e. it
+   says "four items" correctly. The failure is the SPAN POINTERS: independent slots collapse onto the
+   same party, and overlap-dedupe then deletes the duplicates (that is why dedupe drops the count from
+   4.55 to 1.65). Switching dedupe to exact-text cuts duplicates without deleting adjacent names.
+2. Even with slot-masking forcing distinct text, only 30% of gold parties are ever pointed at, and
+   set-equality is 0/40 in every configuration. With four items to get right, recall .30 and precision
+   .32 cannot coincide - so parties needs a TRAINING fix (or more party supervision), not a decode
+   knob. The crop itself is decent when a slot does find a party (.86 exact at default).
+DECODE GAIN WORTH KEEPING: with the length prior active, slot-mask now helps overall instead of
+hurting (it was -3pp exact before the prior existed):
+  prior .75                  exact .4728  tokF1 .5629  contains .6250  null_ok .9553  409/498  .3883
+  prior .75 + slot mask      exact .4747  tokF1 .5878  contains .6638  null_ok .9553  409/498  .3899
+That is the best doc40 configuration recorded so far (tokF1 +2.5pp, contains +3.9pp, exact +0.2pp).
+ALSO: dedupe_mode was added to decode_answer (overlap | text) because overlap-dedupe is right for
+clauses but wrong for adjacent entity names.
+
 **15:58 — CORRECTION to the D2 entries above: A-qwen2b saw CUAD 4 times, not 16.** The line "470
 docs x 4 epochs at bs1 = 1,880 steps" was right but the pass count was wrong: 4 epochs = 4 passes
 (1,880 record-steps over 470 docs). D2's dilution factor versus A is therefore 4x, not 16x. The

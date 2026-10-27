@@ -106,7 +106,8 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                   slot_mask: bool = False,
                   span_caps: dict[str, int] | None = None,
                   length_prior: torch.Tensor | None = None,
-                  length_prior_alpha: float = 0.0) -> dict[str, Any]:
+                  length_prior_alpha: float = 0.0,
+                  dedupe_mode: str = "overlap") -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
     # Per-field extent cap: score(i,j)=p_start*p_end has no term for how long this
@@ -154,10 +155,22 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                 if not part.get("value"):
                     continue
                 span = part["span"]
-                if dedupe and any(
-                        (span[0] < s[1] and s[0] < span[1])      # overlapping start/end
-                        or part["value"].strip().lower() == v.strip().lower()
-                        for v, s in zip(values, spans)):
+                duplicate = False
+                if dedupe:
+                    for v, s in zip(values, spans):
+                        same_text = part["value"].strip().lower() == v.strip().lower()
+                        # Overlap-dedupe is right for clauses but WRONG for adjacent entity
+                        # names: "Distributor" and "Electric City Corp." can share a few
+                        # characters, and dropping one loses a party. "text" keeps every
+                        # distinct string and only collapses true repeats (2026-10-27).
+                        if dedupe_mode == "text":
+                            duplicate = same_text
+                        else:
+                            duplicate = bool(same_text or (span and s
+                                             and span[0] < s[1] and s[0] < span[1]))
+                        if duplicate:
+                            break
+                if duplicate:
                     continue            # independent slots collapse onto the same text
                 values.append(part["value"])
                 spans.append(span)
