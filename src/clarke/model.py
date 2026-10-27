@@ -62,7 +62,11 @@ class ClarkeModel(torch.nn.Module):
                slot_threshold: float = 0.5, dedupe: bool = True,
                pointer_temp: float = 1.0,
                span_max_tokens: int | None = None,
-               span_tiebreak_eps: float = 0.0) -> list[dict[str, Any]]:
+               span_tiebreak_eps: float = 0.0,
+               slot_mask: bool = False,
+               span_caps: dict[str, int] | None = None,
+               length_priors: dict[str, torch.Tensor] | None = None,
+               length_prior_alpha: float = 0.0) -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -80,7 +84,11 @@ class ClarkeModel(torch.nn.Module):
                                             slot_threshold=slot_threshold, dedupe=dedupe,
                                             pointer_temp=pointer_temp,
                                             span_max_tokens=span_max_tokens,
-                                            span_tiebreak_eps=span_tiebreak_eps)
+                                            span_tiebreak_eps=span_tiebreak_eps,
+                                            slot_mask=slot_mask,
+                                            span_caps=span_caps,
+                                            length_prior=(length_priors or {}).get(encoded.name),
+                                            length_prior_alpha=length_prior_alpha)
                 for encoded, field_logits in zip(record.fields, record_logits)
             })
         return out
@@ -94,28 +102,48 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                   null_threshold: float = 0.5, slot_threshold: float = 0.5,
                   dedupe: bool = True, pointer_temp: float = 1.0,
                   span_max_tokens: int | None = None,
-                  span_tiebreak_eps: float = 0.0) -> dict[str, Any]:
+                  span_tiebreak_eps: float = 0.0,
+                  slot_mask: bool = False,
+                  span_caps: dict[str, int] | None = None,
+                  length_prior: torch.Tensor | None = None,
+                  length_prior_alpha: float = 0.0) -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
+    # Per-field extent cap: score(i,j)=p_start*p_end has no term for how long this
+    # field's answers usually are, so short-span fields (parties ~16 chars) get answered
+    # with whole clauses. A cap from the TRAINING gold length distribution is the cheap
+    # version of that missing term; derived in scripts/field_span_caps.py.
+    field_cap = span_max_tokens
+    if span_caps and spec.name in span_caps:
+        cap = int(span_caps[spec.name])
+        field_cap = cap if span_max_tokens is None else min(cap, int(span_max_tokens))
+    field_prior = length_prior if length_prior is not None and length_prior_alpha > 0 else None
 
     if spec.type == "text":
         span_answer = _decode_span(logits.start, logits.end, record, spec, p_null,
                                    null_threshold=null_threshold,
                                    pointer_temp=pointer_temp,
-                                   span_max_tokens=span_max_tokens,
-                                   span_tiebreak_eps=span_tiebreak_eps)
+                                   span_max_tokens=field_cap,
+                                   span_tiebreak_eps=span_tiebreak_eps,
+                                   length_prior=field_prior,
+                                   length_prior_alpha=length_prior_alpha)
         answer.update(span_answer)
     elif spec.type == "list" and spec.items == "text":
         values, spans = [], []
         present = torch.sigmoid(logits.present.float())
         if float(p_null) <= null_threshold:  # absent list: honor the trained null head
+            used = torch.zeros(logits.start.shape[-1], dtype=torch.bool,
+                               device=logits.start.device)
             for slot in range(LIST_SLOTS):
                 if present[slot] < slot_threshold:
                     continue
                 part = _decode_span(logits.start[slot], logits.end[slot], record, spec,
                                     torch.tensor(0.0), pointer_temp=pointer_temp,
-                                    span_max_tokens=span_max_tokens,
-                                    span_tiebreak_eps=span_tiebreak_eps)
+                                    span_max_tokens=field_cap,
+                                    span_tiebreak_eps=span_tiebreak_eps,
+                                    token_mask=used if slot_mask else None,
+                                    length_prior=field_prior,
+                                    length_prior_alpha=length_prior_alpha)
                 if not part.get("value"):
                     continue
                 span = part["span"]
@@ -126,6 +154,14 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                     continue            # independent slots collapse onto the same text
                 values.append(part["value"])
                 spans.append(span)
+                if slot_mask and span:
+                    # mark the chosen token range (plus a small pad) as used
+                    lo = max(0, span[0] - 1)
+                    hi = min(used.shape[-1], span[1] + 1)
+                    idcs = [i for i, (cs, ce) in enumerate(record.char_offsets)
+                            if ce > lo and cs < hi]
+                    if idcs:
+                        used[idcs[0]:idcs[-1] + 1] = True
         answer["value"] = values or None
         answer["spans"] = spans
         answer["p_null"] = _probability(p_null)
@@ -246,6 +282,8 @@ def _decode_span(
     start: torch.Tensor, end: torch.Tensor, record: EncodedRecord, spec: FieldSpec,
     p_null: torch.Tensor, null_threshold: float = 0.5, pointer_temp: float = 1.0,
     span_max_tokens: int | None = None, span_tiebreak_eps: float = 0.0,
+    token_mask: torch.Tensor | None = None,
+    length_prior: torch.Tensor | None = None, length_prior_alpha: float = 0.0,
 ) -> dict[str, Any]:
     """Pointer decode: the answer text is a slice of the input, never generated.
 
@@ -262,6 +300,10 @@ def _decode_span(
     # pointer_temp sharpens the positional softmax. span_scale stayed at 1.0 through
     # training in every run so far, so at 65k positions the distribution is diluted;
     # this makes that hypothesis testable without retraining.
+    if token_mask is not None:
+        # slots must not reuse text already taken by an earlier slot
+        start = start.float().masked_fill(token_mask, -1e4)
+        end = end.float().masked_fill(token_mask, -1e4)
     start_probs = torch.softmax(start.float() * pointer_temp, dim=-1)
     end_probs = torch.softmax(end.float() * pointer_temp, dim=-1)
     # Exact argmax over the allowed band without materialising a T x T joint matrix:
@@ -287,6 +329,15 @@ def _decode_span(
     # real products are strictly positive.
     ends = torch.cat([end_probs, end_probs.new_zeros(window - 1)])
     scores = start_probs.unsqueeze(1) * ends.unfold(0, window, 1)   # [tokens, window]
+    if length_prior is not None and length_prior_alpha > 0:
+        # The score has no term for how long this field's answers are. A soft prior from
+        # the TRAINING gold length histogram penalises "plausible start, plausible end,
+        # 200 tokens of contract in between" without the hard cliff of a cap.
+        lp = length_prior.to(scores.device).clamp_min(1e-9)
+        if lp.numel() < window:      # field cap beyond the histogram range: hold the tail
+            lp = torch.cat([lp, lp[-1].expand(window - lp.numel())])
+        lp = lp[:window]
+        scores = scores * (lp ** length_prior_alpha).unsqueeze(0)
     if span_tiebreak_eps and span_tiebreak_eps > 0:
         # Among spans scoring within eps of the best, prefer the SHORTEST. A wide cap then
         # buys region coverage without paying the over-extension that costs exact.

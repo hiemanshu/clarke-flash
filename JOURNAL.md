@@ -1,3 +1,37 @@
+**13:05 — SPAN-LENGTH PRIOR AT DECODE IS A REAL WIN: exact .4490 -> .4728 (+2.4pp), exact@all
+.3688 -> .3883 (+2.0pp), and it removes over-extension almost entirely (+38.6% excess chars -> +0.6%).**
+Follow-up to the length decomposition, per the owner's instruction: test a per-field cap first, then
+build a length head. The cap is a dud; the soft prior is not.
+PER-FIELD HARD CAP (reports/A-qwen2b-caps-*.json, keys p90/p95/p99/p995 from
+reports/field_span_caps_train470.json, derived from TRAINING gold token lengths only):
+  none .4490/.3688 | p90 .4427/.3636 | p95 .4503/.3698 | p99 .4535/.3725 | p995 .4511/.3705
+p99 is +0.45pp exact / +0.37pp exact@all - noise-level. Diagnosis: only 1 of 412 predictions ever
+truncated at the cap (0.2%), so the cap almost never binds. Its small effect comes from lowering the
+score maximum that the eps tie-break thresholds against, which lets shorter spans qualify
+(parties exact-bounds 28% -> 38%) - not from clipping long spans.
+SOFT PER-FIELD LENGTH PRIOR (multiply score(i,j) by the smoothed TRAINING gold length histogram of
+that field, reports/field_span_hist_train470.json; alpha = sharpness): the same idea without the
+cliff. Doc40 @65k, A-qwen2b/checkpoint-1880, eps=.25, null .5 / slot .5, one variable at a time:
+  baseline    .4490  tokF1 .5538  contains .6467  null_ok .9553  409/498  exact@all .3688
+  prior .25   .4680  .5616  .6409  .9553  409/498  .3844
+  prior .50   .4691  .5727  .6375  .9553  409/498  .3853
+  prior .75   .4728  .5629  .6250  .9553  409/498  .3883   <- best
+  prior 1.0   .4665  .5560  .6215  .9553  409/498  .3831
+  prior 2.0   .4347  .5367  .6065  .9553  409/498  .3570
+  prior .5 + cap p99  .4675  .5702  .6424  .9553  409/498  .3840  (cap adds nothing once the prior
+  is in - the prior subsumes it)
+MECHANISM (probe, same 40 docs): matched pairs 418 -> 385, boundary-exact 59.1% -> 70.6%, mean IoU
+.772 -> .868, total predicted-vs-gold excess characters +23,760 -> +1,042 (i.e. +38.6% -> +0.6%),
+parties median ratio 1.60x -> 1.00x with boundary-exact 28% -> 53%, insurance 50% -> 64%,
+agreement_date 91% -> 94%, governing_law 71% -> 71%. Over-extension is solved AT DECODE.
+COST: contains .6467 -> .6250 (-2.2pp) and 33 of 418 matched pairs lose overlap entirely - trimming
+gives up some region recall, which is the expected trade and is now visible as a clean dial (alpha).
+The field-level exact only moves 2.4pp because a field is exact only when EVERY item matches, so the
+remaining failure is set completeness (parties is still 0/40 exact), not crop precision.
+NEXT: (a) build the conditioned length head as instructed - the prior is field-only, the head can
+read the start token/text and should beat it; (b) cross-backbone check of alpha=.75 with each
+backbone's own tokenizer histogram before treating .75 as a default.
+
 **12:45 — DECOMPOSITION: the span error is almost entirely LENGTH, not location. A length model has
 +18pp of exact in it.**
 Split every matched pair into (start token correct) x (length correct), same probe, eps=0 and eps=.25:

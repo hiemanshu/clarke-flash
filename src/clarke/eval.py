@@ -39,7 +39,11 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              null_threshold: float = 0.5, slot_threshold: float = 0.5,
              dedupe: bool = True, pointer_temp: float = 1.0,
              span_max_tokens: int | None = None,
-             span_tiebreak_eps: float = 0.0) -> dict[str, Any]:
+             span_tiebreak_eps: float = 0.0,
+             slot_mask: bool = False,
+             span_caps: dict[str, int] | None = None,
+             length_priors: dict[str, Any] | None = None,
+             length_prior_alpha: float = 0.0) -> dict[str, Any]:
     stats: dict[tuple[str, str], dict[str, float]] = {}
 
     def stat(dom: str, kind: str) -> dict[str, float]:
@@ -67,7 +71,11 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                                    slot_threshold=slot_threshold, dedupe=dedupe,
                                    pointer_temp=pointer_temp,
                                    span_max_tokens=span_max_tokens,
-                                   span_tiebreak_eps=span_tiebreak_eps)
+                                   span_tiebreak_eps=span_tiebreak_eps,
+                                   slot_mask=slot_mask,
+                                   span_caps=span_caps,
+                                   length_priors=length_priors,
+                                   length_prior_alpha=length_prior_alpha)
         torch.cuda.empty_cache()  # varying-length long docs + per-field NxN pointer
         # matrices fragment the allocator fast; releasing per batch costs ~nothing
         # next to a 19GB model and prevents the 30GB OOM seen at 02:46
@@ -302,6 +310,19 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--head", required=True, help="checkpoint dir with extraction_head.safetensors")
     parser.add_argument("--data", required=True, help="records JSONL to evaluate")
     parser.add_argument("--limit", type=int, default=256)
+    parser.add_argument("--span-caps", default=None,
+                        help="JSON of per-field span caps from scripts/field_span_caps.py; "
+                             "fields absent from it keep --span-max-tokens (default 256)")
+    parser.add_argument("--span-priors", dest="span_priors", default=None,
+                        help="per-field gold length histogram JSON (scripts/field_span_caps.py "
+                             "--hist-out); multiplies the span score by the prior")
+    parser.add_argument("--span-prior-alpha", dest="span_prior_alpha", type=float, default=0.0,
+                        help="sharpness of that prior; 0 disables, 1 = empirical")
+    parser.add_argument("--span-cap-key", dest="span_cap_key", default="p99",
+                        help="which percentile of that JSON to use (median/p90/p95/p99/p995/max)")
+    parser.add_argument("--slot-mask", dest="slot_mask", action="store_true",
+                        help="mask tokens already used by earlier list slots, so later slots "
+                             "must point at different text instead of being dropped as duplicates")
     parser.add_argument("--span-tiebreak-eps", dest="span_tiebreak_eps", type=float, default=0.25,
                         help="among spans scoring within eps of the best, prefer the shortest. "
                              "Default 0.25: generalises across all 7 backbones tested (+.006 to "
@@ -332,6 +353,25 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--field-groups", dest="field_groups", type=int, default=0,
                         help="serving-strategy diagnostic: evaluate in passes of N schema fields")
     args = parser.parse_args(argv)
+
+    span_caps = None
+    if args.span_caps:
+        table = json.loads(Path(args.span_caps).read_text())
+        span_caps = {name: int(row[args.span_cap_key]) for name, row in table.items()
+                     if isinstance(row, dict) and args.span_cap_key in row}
+        print(f"[eval] per-field span caps ({args.span_cap_key}) for "
+              f"{len(span_caps)} fields: {sorted(span_caps.items(), key=lambda kv: kv[1])[:6]} ...",
+              flush=True)
+
+    length_priors = None
+    if args.span_priors and args.span_prior_alpha > 0:
+        table = json.loads(Path(args.span_priors).read_text())
+        length_priors = {}
+        for name, row in table.items():
+            counts = torch.tensor([float(c) + 1.0 for c in row["hist"]])
+            length_priors[name] = counts / counts.sum()
+        print(f"[eval] length priors for {len(length_priors)} fields, alpha="
+              f"{args.span_prior_alpha}", flush=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     _head_dir = Path(args.head)
@@ -373,6 +413,10 @@ def main(argv: list[str] | None = None) -> None:
                            pointer_temp=args.pointer_temp,
                            span_max_tokens=args.span_max_tokens,
                            span_tiebreak_eps=args.span_tiebreak_eps,
+                           slot_mask=args.slot_mask,
+                           span_caps=span_caps,
+                           length_priors=length_priors,
+                           length_prior_alpha=args.span_prior_alpha,
                            agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "metrics": summary["overall"], "by_domain": summary["by_domain"]}

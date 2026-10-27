@@ -70,6 +70,12 @@ def main(argv: list[str] | None = None) -> None:
                         help="tie-break epsilons to compare (0 = raw argmax)")
     parser.add_argument("--vram-fraction", type=float, default=0.40,
                         help="per-process VRAM cap so a live training run is not starved")
+    parser.add_argument("--span-caps", default=None,
+                        help="per-field cap JSON (scripts/field_span_caps.py)")
+    parser.add_argument("--span-cap-key", dest="span_cap_key", default="p99")
+    parser.add_argument("--span-priors", dest="span_priors", default=None,
+                        help="per-field gold length histogram JSON (--hist-out)")
+    parser.add_argument("--span-prior-alpha", dest="span_prior_alpha", type=float, default=0.0)
     parser.add_argument("--dump-pairs", dest="dump_pairs", action="store_true",
                         help="include the raw matched pairs (field, lengths, ratio, iou)")
     parser.add_argument("--out", default=None)
@@ -91,6 +97,20 @@ def main(argv: list[str] | None = None) -> None:
         p.requires_grad_(False)
     head = load_head(Path(args.head), device=str(device), dtype=torch.float32)
     model = ClarkeModel(backbone, head).eval()
+
+    span_caps = None
+    if args.span_caps:
+        table = json.loads(Path(args.span_caps).read_text())
+        span_caps = {k: int(v[args.span_cap_key]) for k, v in table.items()
+                     if isinstance(v, dict) and args.span_cap_key in v}
+
+    length_priors = None
+    if args.span_priors and args.span_prior_alpha > 0:
+        table = json.loads(Path(args.span_priors).read_text())
+        length_priors = {}
+        for name, row in table.items():
+            counts = torch.tensor([float(c) + 1.0 for c in row["hist"]])
+            length_priors[name] = counts / counts.sum()
 
     tokenizer = processor.tokenizer
     records = RecordDataset([Path(args.data)]).records[: args.limit]
@@ -121,7 +141,10 @@ def main(argv: list[str] | None = None) -> None:
             for eps in args.eps:
                 answers_by_eps[eps] = model.answer(batch, null_threshold=0.5,
                                                    slot_threshold=0.5,
-                                                   span_tiebreak_eps=eps)
+                                                   span_tiebreak_eps=eps,
+                                                   span_caps=span_caps,
+                                                   length_priors=length_priors,
+                                                   length_prior_alpha=args.span_prior_alpha)
         torch.cuda.empty_cache()
 
         # answers_by_eps[eps][idx] is position-aligned with the encoded records
@@ -162,6 +185,8 @@ def main(argv: list[str] | None = None) -> None:
                             "contained_by_gold": p[0] >= g[0] and p[1] <= g[1],
                             "same_boundaries": p[0] == g[0] and p[1] == g[1],
                             "ratio": (p[1] - p[0]) / max(1, g[1] - g[0]),
+                            "hit_cap": bool(span_caps and name in span_caps
+                                            and pt and (pt[1] - pt[0] + 1) >= span_caps[name]),
                             "gold_ratio": (g[1] - g[0]) / max(1, p[1] - p[0]),
                         }
                     if not best:

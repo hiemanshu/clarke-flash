@@ -1,0 +1,371 @@
+{
+  "affiliate_license_licensee": {
+    "n": 102,
+    "median": 104,
+    "p90": 196,
+    "p95": 241,
+    "p99": 415,
+    "p995": 532,
+    "max": 532
+  },
+  "affiliate_license_licensor": {
+    "n": 61,
+    "median": 111,
+    "p90": 241,
+    "p95": 351,
+    "p99": 532,
+    "p995": 532,
+    "max": 532
+  },
+  "agreement_date": {
+    "n": 440,
+    "median": 10,
+    "p90": 12,
+    "p95": 13,
+    "p99": 19,
+    "p995": 22,
+    "max": 31
+  },
+  "anti_assignment": {
+    "n": 605,
+    "median": 43,
+    "p90": 111,
+    "p95": 135,
+    "p99": 202,
+    "p995": 237,
+    "max": 324
+  },
+  "audit_rights": {
+    "n": 561,
+    "median": 49,
+    "p90": 109,
+    "p95": 139,
+    "p99": 261,
+    "p995": 286,
+    "max": 387
+  },
+  "cap_on_liability": {
+    "n": 609,
+    "median": 69,
+    "p90": 155,
+    "p95": 198,
+    "p99": 287,
+    "p995": 321,
+    "max": 397
+  },
+  "change_of_control": {
+    "n": 234,
+    "median": 65,
+    "p90": 160,
+    "p95": 215,
+    "p99": 291,
+    "p995": 302,
+    "max": 553
+  },
+  "competitive_restriction_exception": {
+    "n": 120,
+    "median": 76,
+    "p90": 177,
+    "p95": 222,
+    "p99": 323,
+    "p995": 373,
+    "max": 373
+  },
+  "covenant_not_to_sue": {
+    "n": 155,
+    "median": 60,
+    "p90": 147,
+    "p95": 199,
+    "p99": 267,
+    "p995": 473,
+    "max": 473
+  },
+  "document_name": {
+    "n": 478,
+    "median": 6,
+    "p90": 11,
+    "p95": 14,
+    "p99": 19,
+    "p995": 22,
+    "max": 27
+  },
+  "effective_date": {
+    "n": 407,
+    "median": 10,
+    "p90": 42,
+    "p95": 53,
+    "p99": 89,
+    "p995": 108,
+    "max": 144
+  },
+  "exclusivity": {
+    "n": 386,
+    "median": 59,
+    "p90": 141,
+    "p95": 178,
+    "p99": 323,
+    "p995": 415,
+    "max": 490
+  },
+  "expiration_date": {
+    "n": 434,
+    "median": 42,
+    "p90": 85,
+    "p95": 105,
+    "p99": 153,
+    "p995": 169,
+    "max": 324
+  },
+  "governing_law": {
+    "n": 429,
+    "median": 33,
+    "p90": 65,
+    "p95": 81,
+    "p99": 120,
+    "p995": 134,
+    "max": 147
+  },
+  "insurance": {
+    "n": 442,
+    "median": 45,
+    "p90": 118,
+    "p95": 148,
+    "p99": 312,
+    "p995": 347,
+    "max": 475
+  },
+  "ip_ownership_assignment": {
+    "n": 286,
+    "median": 67,
+    "p90": 150,
+    "p95": 181,
+    "p99": 275,
+    "p995": 291,
+    "max": 400
+  },
+  "irrevocable_or_perpetual_license": {
+    "n": 153,
+    "median": 102,
+    "p90": 208,
+    "p95": 295,
+    "p99": 415,
+    "p995": 532,
+    "max": 532
+  },
+  "joint_ip_ownership": {
+    "n": 106,
+    "median": 56,
+    "p90": 121,
+    "p95": 149,
+    "p99": 273,
+    "p995": 280,
+    "max": 280
+  },
+  "license_grant": {
+    "n": 685,
+    "median": 72,
+    "p90": 155,
+    "p95": 208,
+    "p99": 382,
+    "p995": 412,
+    "max": 532
+  },
+  "liquidated_damages": {
+    "n": 115,
+    "median": 63,
+    "p90": 142,
+    "p95": 172,
+    "p99": 303,
+    "p995": 313,
+    "max": 313
+  },
+  "minimum_commitment": {
+    "n": 364,
+    "median": 58,
+    "p90": 151,
+    "p95": 204,
+    "p99": 408,
+    "p995": 435,
+    "max": 453
+  },
+  "most_favored_nation": {
+    "n": 36,
+    "median": 78,
+    "p90": 173,
+    "p95": 202,
+    "p99": 221,
+    "p995": 221,
+    "max": 221
+  },
+  "no_solicit_of_customers": {
+    "n": 51,
+    "median": 49,
+    "p90": 113,
+    "p95": 130,
+    "p99": 208,
+    "p995": 208,
+    "max": 208
+  },
+  "no_solicit_of_employees": {
+    "n": 84,
+    "median": 71,
+    "p90": 139,
+    "p95": 156,
+    "p99": 267,
+    "p995": 267,
+    "max": 267
+  },
+  "non_compete": {
+    "n": 233,
+    "median": 63,
+    "p90": 155,
+    "p95": 244,
+    "p99": 381,
+    "p995": 506,
+    "max": 542
+  },
+  "non_disparagement": {
+    "n": 60,
+    "median": 50,
+    "p90": 280,
+    "p95": 340,
+    "p99": 385,
+    "p995": 385,
+    "max": 385
+  },
+  "non_transferable_license": {
+    "n": 271,
+    "median": 74,
+    "p90": 155,
+    "p95": 203,
+    "p99": 379,
+    "p995": 382,
+    "max": 486
+  },
+  "notice_period_to_terminate_renewal": {
+    "n": 113,
+    "median": 59,
+    "p90": 90,
+    "p95": 117,
+    "p99": 156,
+    "p995": 202,
+    "max": 202
+  },
+  "parties": {
+    "n": 2193,
+    "median": 4,
+    "p90": 12,
+    "p95": 20,
+    "p99": 28,
+    "p995": 33,
+    "max": 110
+  },
+  "post_termination_services": {
+    "n": 390,
+    "median": 70,
+    "p90": 182,
+    "p95": 234,
+    "p99": 323,
+    "p995": 328,
+    "max": 355
+  },
+  "price_restrictions": {
+    "n": 25,
+    "median": 56,
+    "p90": 175,
+    "p95": 192,
+    "p99": 217,
+    "p995": 217,
+    "max": 217
+  },
+  "renewal_term": {
+    "n": 186,
+    "median": 57,
+    "p90": 102,
+    "p95": 148,
+    "p99": 492,
+    "p995": 603,
+    "max": 603
+  },
+  "revenue_profit_sharing": {
+    "n": 368,
+    "median": 61,
+    "p90": 141,
+    "p95": 202,
+    "p99": 331,
+    "p995": 371,
+    "max": 452
+  },
+  "rofr_rofo_rofn": {
+    "n": 267,
+    "median": 66,
+    "p90": 146,
+    "p95": 185,
+    "p99": 366,
+    "p995": 387,
+    "max": 436
+  },
+  "source_code_escrow": {
+    "n": 61,
+    "median": 49,
+    "p90": 187,
+    "p95": 245,
+    "p99": 758,
+    "p995": 758,
+    "max": 758
+  },
+  "termination_for_convenience": {
+    "n": 230,
+    "median": 34,
+    "p90": 87,
+    "p95": 108,
+    "p99": 186,
+    "p995": 209,
+    "max": 268
+  },
+  "third_party_beneficiary": {
+    "n": 34,
+    "median": 43,
+    "p90": 74,
+    "p95": 133,
+    "p99": 158,
+    "p995": 158,
+    "max": 158
+  },
+  "uncapped_liability": {
+    "n": 155,
+    "median": 94,
+    "p90": 181,
+    "p95": 222,
+    "p99": 296,
+    "p995": 360,
+    "max": 360
+  },
+  "unlimited_all_you_can_eat_license": {
+    "n": 25,
+    "median": 60,
+    "p90": 185,
+    "p95": 221,
+    "p99": 232,
+    "p995": 232,
+    "max": 232
+  },
+  "volume_restriction": {
+    "n": 153,
+    "median": 50,
+    "p90": 111,
+    "p95": 139,
+    "p99": 214,
+    "p995": 557,
+    "max": 557
+  },
+  "warranty_duration": {
+    "n": 167,
+    "median": 53,
+    "p90": 110,
+    "p95": 125,
+    "p99": 224,
+    "p995": 475,
+    "max": 475
+  }
+}
