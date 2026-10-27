@@ -1,3 +1,28 @@
+**13:20 — D2 APPEARED STOPPED FOR 9.5 MINUTES; IT WAS ONE PATHOLOGICAL RECORD. Root cause: an O(n^2)
+CSV-block detector. Fixed: 220s -> 0.01s, whole corpus now scans in 81s with zero slow records.**
+Symptom: D2 logged step 4440 at 12:49:22 and nothing until 12:58:52. Main process asleep in poll
+waiting for a batch, one dataloader worker pinned at 100% CPU, GPU idle at 0%. Not a crash.
+CAUSE: candidates._csv_aggregates scans "header + >=3 same-column rows" CSV blocks by advancing one
+line at a time. On data/ledgar_split_cuad.jsonl[10313] - a 240k-char loan tape whose lines are
+almost all 0-comma numeric values (56551 lines, 56416 with no comma) - every candidate header
+re-scanned the same multi-thousand-line run, so cost was quadratic in the run length: 696s to encode
+ONE record. With 6 workers and in-order batch delivery, one record stalls the entire pipeline.
+FIX (src/clarke/candidates.py): (a) cap the row scan at 4096; (b) a run with <3 columns can never be
+a header block, so skip it in one step; (c) when a block is rejected because the header line is
+itself numeric, skip to the first non-numeric row instead of advancing one line and re-scanning.
+VERIFIED: pathological doc 219.9s -> 0.01s (still 0 atoms, same answer); three legitimate CSV cases
+(small aggregate table, 2-column block, no-header numeric block) produce byte-identical atoms
+before/after; full 19,516-record scan finds ZERO records over 2s (previous worst after this one:
+7.9s, all in the same document family).
+IMPACT: D2 resumed on its own and is at 7,820/19,516 (40%) - no data lost, but the stall cost ~10 min.
+The running process still holds the OLD code in memory; the fix applies to D2+length-head and every
+later run. Corpus scan is now part of the pre-flight for any new data file.
+ALSO COMMITTED (not yet trained, per the owner's sequencing): the length head. JointExtractionHead
+gains `length_head=True` -> per-slot distribution over span extent (LENGTH_BINS=257: bins 1..256 plus
+overflow), supervised from the gold span length in build_loss, and multiplied into the decode score
+(score = p_start * p_end * p_length) in place of the histogram prior. save/load carries the flag, so
+old checkpoints still load. Torch-free args default off: no existing run changes.
+
 **13:05 — SPAN-LENGTH PRIOR AT DECODE IS A REAL WIN: exact .4490 -> .4728 (+2.4pp), exact@all
 .3688 -> .3883 (+2.0pp), and it removes over-extension almost entirely (+38.6% excess chars -> +0.6%).**
 Follow-up to the length decomposition, per the owner's instruction: test a per-field cap first, then

@@ -62,6 +62,9 @@ class FieldTargets:
     dist: list[int] = dataclass_field(default_factory=list)                       # estimate/forecast bins
 
 
+LENGTH_BINS = 257          # bin k -> span length k+1 tokens; last bin = 257+
+
+
 @dataclass
 class FieldLogits:
     null: torch.Tensor | None = None                # [] scalar logit
@@ -74,6 +77,7 @@ class FieldLogits:
     number_heads: list[torch.Tensor] = dataclass_field(default_factory=list)  # legacy digit path (lists)
     components: list[torch.Tensor] = dataclass_field(default_factory=list)     # legacy
     dist: torch.Tensor | None = None                # [horizon, MAX_GRID_BINS + 2]
+    length: torch.Tensor | None = None              # [slots, LENGTH_BINS] span extent
 
 
 def spec_features(spec: FieldSpec) -> list[float]:
@@ -129,6 +133,7 @@ class JointExtractionHead(nn.Module):
         rerank: bool = False,
         query_pool: str = "mean",
         span_rerank: bool = False,
+        length_head: bool = False,
     ):
         super().__init__()
         self.rerank = bool(rerank)
@@ -159,6 +164,11 @@ class JointExtractionHead(nn.Module):
         self.slot_embedding = nn.Embedding(LIST_SLOTS, width)
         self.present_head = nn.Linear(width, 1)
         self.span_scale = nn.Parameter(torch.zeros(()))
+        # Span EXTENT: score(i,j)=p_start*p_end has no term for how long a field's answers
+        # are (parties: 4 tokens, governing_law: 33, insurance: 45). Measured at 65k, the
+        # start token is right 72% of the time but the length only 56% - so a conditioned
+        # length distribution is the missing factor in the span score.
+        self.length_head = nn.Linear(width, LENGTH_BINS) if length_head else None
 
         self.value_heads = nn.ModuleList([
             nn.Linear(width, SIGN_BINS), nn.Linear(width, EXP_BINS),
@@ -267,6 +277,8 @@ class JointExtractionHead(nn.Module):
                     logits.start = (self.start_projection(slots) @ state_memory.T) * scale
                     logits.end = (self.end_projection(slots) @ state_memory.T) * scale
                     logits.present = self.present_head(slots).squeeze(-1)
+                    if self.length_head is not None:
+                        logits.length = self.length_head(slots)
                 elif spec.type in ("number", "duration", "date", "time", "datetime"):
                     emb = self._candidate_embeddings(record, state_memory, spec)
                     if emb is not None:
@@ -423,6 +435,9 @@ class JointExtractionHead(nn.Module):
         targets: list[list[FieldTargets]],
         label_smoothing: float = 0.1,
         dist_neighbor: float = 0.1,
+        brier_null: float = 0.0,
+        field_weights: dict[str, float] | None = None,
+        slot_mask_train: bool = False,
     ) -> dict[str, torch.Tensor]:
         sums: dict[str, torch.Tensor] = {}
         counts: dict[str, float] = {}
@@ -446,10 +461,26 @@ class JointExtractionHead(nn.Module):
         for record_logits, record, record_targets in zip(outputs, records, targets):
             for encoded, logits, target in zip(record.fields, record_logits, record_targets):
                 spec = encoded.spec
+                w = float(field_weights.get(spec.name, 1.0)) if field_weights else 1.0
+
+                def addf(key: str, value: torch.Tensor, weight: float = 1.0) -> None:
+                    """Weighted mean: rare fields must not be averaged into oblivion."""
+                    if w != 1.0:
+                        add(key, value * w, weight * w)
+                    else:
+                        add(key, value, weight)
+
                 if spec.type not in ("estimate", "forecast"):
-                    add("null", F.binary_cross_entropy_with_logits(
-                        logits.null.float().reshape(1), torch.tensor([float(target.null)],
-                        device=logits.null.device)))
+                    target_null = torch.tensor([float(target.null)],
+                                               device=logits.null.device)
+                    addf("null", F.binary_cross_entropy_with_logits(
+                        logits.null.float().reshape(1), target_null))
+                    if brier_null > 0:
+                        # Brier is a proper scoring rule: it penalises over/under-confidence
+                        # itself, not just ranking. Added as its own weighted head so the
+                        # component stays visible in the training report.
+                        p_null = torch.sigmoid(logits.null.float().reshape(1))
+                        add("brier", ((p_null - target_null) ** 2).mean() * brier_null)
 
                 if target.null:
                     # a null LIST must still train the present head toward the
@@ -470,40 +501,44 @@ class JointExtractionHead(nn.Module):
                     items = target.spans[:LIST_SLOTS]
                     present = torch.zeros(LIST_SLOTS, device=logits.present.device)
                     present[: len(items)] = 1.0
-                    add("present", F.binary_cross_entropy_with_logits(logits.present.float(), present))
+                    addf("present", F.binary_cross_entropy_with_logits(logits.present.float(), present))
                     for slot, (start, end) in enumerate(items):
                         add("span", F.cross_entropy(logits.start[slot].view(1, -1),
                             torch.tensor([start], device=logits.start.device)))
                         add("span", F.cross_entropy(logits.end[slot].view(1, -1),
                             torch.tensor([end], device=logits.end.device)))
+                        if logits.length is not None:
+                            bin_idx = min(int(end) - int(start) + 1, LENGTH_BINS) - 1
+                            add("span", F.cross_entropy(logits.length[slot].view(1, -1),
+                                torch.tensor([bin_idx], device=logits.length.device)))
                 elif target.cand is not None and logits.cand_a is not None and spec.type != "list":
                     a, b, op = target.cand
-                    add("cand", F.cross_entropy(logits.cand_a.view(1, -1),
+                    addf("cand", F.cross_entropy(logits.cand_a.view(1, -1),
                         torch.tensor([a], device=logits.cand_a.device),
                         label_smoothing=label_smoothing))
                     if b >= 0:
-                        add("cand", F.cross_entropy(logits.cand_b.view(1, -1),
+                        addf("cand", F.cross_entropy(logits.cand_b.view(1, -1),
                             torch.tensor([b], device=logits.cand_b.device),
                             label_smoothing=label_smoothing))
                     # op is supervised on EVERY solved scalar, including
                     # single-atom "id" answers — an untrained op head turns
                     # read answers into random arithmetic (duration 0% bug)
-                    add("op", F.cross_entropy(logits.op.view(1, -1),
+                    addf("op", F.cross_entropy(logits.op.view(1, -1),
                         torch.tensor([op], device=logits.op.device), label_smoothing=0.05))
                 elif spec.type == "list" and spec.items in ("number", "date", "time") \
                         and logits.cand_a is not None:
                     items = target.cands[:LIST_SLOTS]
                     present = torch.zeros(LIST_SLOTS, device=logits.present.device)
                     present[: len(items)] = 1.0
-                    add("present", F.binary_cross_entropy_with_logits(logits.present.float(), present))
+                    addf("present", F.binary_cross_entropy_with_logits(logits.present.float(), present))
                     for slot, idx in enumerate(items):
                         if idx >= 0:
-                            add("cand", F.cross_entropy(logits.cand_a[slot].view(1, -1),
+                            addf("cand", F.cross_entropy(logits.cand_a[slot].view(1, -1),
                                 torch.tensor([idx], device=logits.cand_a.device),
                                 label_smoothing=label_smoothing))
                 elif spec.type in ("estimate", "forecast") and target.dist:
                     steps = len(target.dist)
-                    add("dist", cross_entropy_rows(logits.dist[:steps], target.dist, dist_neighbor),
+                    addf("dist", cross_entropy_rows(logits.dist[:steps], target.dist, dist_neighbor),
                         float(steps))
 
         total = sum((sums[key] / max(counts[key], 1.0)) for key in sums) if sums else torch.tensor(0.0)

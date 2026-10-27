@@ -59,13 +59,19 @@ class Trainer:
         self.hidden_size = int(config.hidden_size)
         for parameter in self.backbone.parameters():
             parameter.requires_grad_(False)
+        self.brier_null = float(getattr(args, "brier_null", 0.0))
         self.lora = int(getattr(args, "lora_r", 0)) > 0
         if self.lora:
             from peft import LoraConfig, get_peft_model
+            # Qwen3.5 is a hybrid: 18 of 24 blocks use linear attention whose projections
+            # are in_proj_qkv/z/a/b + out_proj, so the old q/k/v/o list adapted only the 6
+            # full-attention blocks. conv1d is deliberately excluded: PEFT requires the rank
+            # to be divisible by its groups (6144 here).
             lcfg = LoraConfig(
                 r=args.lora_r, lora_alpha=args.lora_alpha, lora_dropout=args.lora_dropout,
-                target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                                "up_proj", "down_proj"],
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj",
+                                "up_proj", "down_proj", "in_proj_qkv", "in_proj_z",
+                                "in_proj_a", "in_proj_b", "out_proj"],
                 bias="none", task_type="FEATURE_EXTRACTION")
             self.backbone = get_peft_model(self.backbone, lcfg)
             if getattr(args, "lora_grad_checkpoint", True):
@@ -105,7 +111,10 @@ class Trainer:
         accum = max(1, args.grad_accum)
         self.accum = accum
         self.micro_batch = max(1, args.batch_size // accum)
-        self.train_loader = build_loader(RecordDataset([Path(p) for p in args.train]),
+        self.train_set = RecordDataset([Path(p) for p in args.train])
+        self.field_weights = self._field_weights(args.field_balanced)
+        self.slot_mask_train = bool(getattr(args, "slot_mask_train", False))
+        self.train_loader = build_loader(self.train_set,
                                          tokenizer, self.micro_batch, True,
                                          args.workers, args.max_length,
                                          agg_atoms=args.agg_atoms)
@@ -126,6 +135,25 @@ class Trainer:
     def _write(self, payload: dict[str, Any]) -> None:
         with self.log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload) + "\n")
+
+    def _field_weights(self, alpha: float) -> dict[str, float] | None:
+        """Inverse-frequency weights so a field with 3 examples is not averaged away."""
+        if not alpha:
+            return None
+        counts: dict[str, int] = {}
+        for record in getattr(self, "train_set", []).records:
+            for name, answer in (record.get("answers") or {}).items():
+                if answer.get("value") is not None:
+                    counts[name] = counts.get(name, 0) + 1
+        if not counts:
+            return None
+        mean = sum(counts.values()) / len(counts)
+        weights = {name: min(max((mean / max(c, 1)) ** alpha, 1.0), 8.0)
+                   for name, c in counts.items()}
+        self.log(json.dumps({"event": "field_weights", "alpha": alpha,
+                             "n_fields": len(weights),
+                             "most_weighted": sorted(weights.items(), key=lambda kv: -kv[1])[:5]}))
+        return weights
 
     def save_checkpoint(self) -> Path:
         directory = self.run_dir / f"checkpoint-{self.step}"
@@ -161,7 +189,10 @@ class Trainer:
             "records": records,
         }
         outputs = self.model(model_batch)
-        report = self.head.compute_loss(outputs, records, targets)
+        report = self.head.compute_loss(outputs, records, targets,
+                                        brier_null=self.brier_null,
+                                        field_weights=getattr(self, "field_weights", None),
+                                        slot_mask_train=getattr(self, "slot_mask_train", False))
         metrics = {key: float(value.detach() if torch.is_tensor(value) else value)
                    for key, value in report.items()}
         # scale = this micro-batch's share of the accumulated group (record-
@@ -183,7 +214,10 @@ class Trainer:
                 "attention_mask": batch["attention_mask"].to(self.device),
                 "records": batch["records"],
             })
-            report = self.head.compute_loss(outputs, batch["records"], batch["targets"])
+            report = self.head.compute_loss(outputs, batch["records"], batch["targets"],
+                                        brier_null=self.brier_null,
+                                        field_weights=getattr(self, "field_weights", None),
+                                        slot_mask_train=getattr(self, "slot_mask_train", False))
             for key, value in report.items():
                 sums[key] = sums.get(key, 0.0) + float(value)
             count += 1
@@ -301,6 +335,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--layers", type=int, default=4)
     parser.add_argument("--heads", type=int, default=16)
     parser.add_argument("--feedforward", type=int, default=4096)
+    parser.add_argument("--field-balanced", dest="field_balanced", type=float, default=0.0,
+                        help="exponent alpha for inverse-frequency field weighting; 0 disables. "
+                             "Rare fields (3-15 instances) currently contribute nothing to the "
+                             "averaged loss and default to null")
+    parser.add_argument("--slot-mask-train", dest="slot_mask_train", action="store_true",
+                        help="mask earlier list items' tokens when supervising later slots, so "
+                             "the head learns boundaries under the same constraint we decode with")
+    parser.add_argument("--brier-null", dest="brier_null", type=float, default=0.0,
+                        help="weight of a Brier term on p_null (proper scoring rule: "
+                             "penalises over/under-confidence, not just ranking)")
     parser.add_argument("--rerank", action="store_true",
                         help="Tier B: pairwise cross-encoder reranker for candidate scoring")
     parser.add_argument("--query-pool", dest="query_pool", default="mean",

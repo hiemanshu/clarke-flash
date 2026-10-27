@@ -84,7 +84,7 @@ def _csv_aggregates(state: str, cap: int = 48) -> list[tuple[float, tuple[int, i
         ncols = len(cells)
         j = i + 1
         rows: list[list[str]] = []
-        while j < len(lines):
+        while j < len(lines) and len(rows) < 4096:
             rc = lines[j][1].split(",")
             if len(rc) != ncols:
                 break
@@ -121,6 +121,21 @@ def _csv_aggregates(state: str, cap: int = 48) -> list[tuple[float, tuple[int, i
                 if len(out) >= cap:
                     break
             i = j if rows else i + 1
+        elif rows and ncols < 3:
+            # A run with fewer than 3 columns can never be a header block, and every
+            # line inside it has the same column count - re-examining them one by one
+            # is pure waste (240k-char loan tape: 56551 lines, mostly 0 commas).
+            i = j
+        elif rows:
+            # A rejected block must not be re-scanned from the next line: on a loan
+            # tape whose "header" line is itself numeric, advancing by one re-read the
+            # same multi-thousand-row run each time - O(rows^2), 220s for one document
+            # (data/ledgar_split_cuad.jsonl[10313], 2026-10-27). Rows that look numeric
+            # can never become a valid header, so skip to the first line in the run
+            # that does not start with a number (or past the run entirely).
+            skip = next((t for t, rc in enumerate(rows)
+                         if parse_number(rc[0].strip().strip('"')) is None), len(rows))
+            i += 1 + skip
         else:
             i += 1
     return out[:cap]
