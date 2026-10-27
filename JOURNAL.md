@@ -1,3 +1,22 @@
+**09:09 — LADDER B RESULT 1/3: widening the head (112M -> 371M) buys NOTHING.**
+(B-qwen2b, same 65k doc training/data/epochs as A, only head capacity changed)
+  config                     exact   tokF1  contains  null_ok  answered  exact@all
+  A-qwen2b current  gates    .4504   .5716   .6644    .9273    432/498   .3907
+  B-qwen2b wide     gates    .4487   .5793   .6707    .9396    427/498   .3847   (-.0060)
+  A-qwen2b current  default  .4365   .5549   .6611    .9553    409/498   .3585
+  B-qwen2b wide     default  .4395   .5578   .6614    .9597    409/498   .3610   (+.0025)
+READ: no gain. At the tuned gates the wide head is .006 WORSE, at default gates +.0025 - both
+inside the +-0.005 noise band - while running 2.6x slower (0.87 vs 2.3 rec/s) and needing 20 GB.
+The only systematic change is null_ok rising (.9273 -> .9396, .9553 -> .9597): the bigger head
+became slightly more conservative without converting that into coverage. tokF1 and contains move
+in the wide head's favour by ~.005, so it may be marginally better at quoting the right region
+while being worse at exact boundaries - but nothing that justifies 2.6x the compute.
+CONSISTENT WITH THE CAPACITY PICTURE: 4B/9B backbones did not help, 230M-2B brackets a flat curve
+above ~1B, and now the head's own capacity is also not the lever. The 112M head is not
+under-provisioned; the remaining error is in targets/data/decoding, not model size.
+STILL RUNNING: B-minicpm5 (started 09:08), then B-ministral. Expect the same null result; if one
+of them diverges it would be interaction with that backbone's representations, not head capacity.
+
 **08:12 — LADDER A RESULT 2/3: MiniCPM5 also gains hugely from 65k document training, but stays behind
 Qwen 2B.**
 (runs/A-minicpm5, 2 epochs? no - 4 epochs/1,880 updates, 39 min, 6.3 GB, 1.5 rec/s)
