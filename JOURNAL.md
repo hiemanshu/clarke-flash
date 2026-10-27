@@ -1,3 +1,27 @@
+**07:40 — LADDER A RESULT 1/3: 65k document training is a LARGE win. Coverage 65% -> 87%, exact@all
+.2932 -> .3907.**
+(runs/A-qwen2b, Qwen2B, doc_train_470, 4 epochs = 1,880 updates, batch 1, current 112M head, ~25 min)
+  config                        exact   tokF1  contains  null_ok  answered  exact@all
+  2B @8k windows, default       .4535   .5704   .6602    .9720    322/498   .2932
+  2B @8k windows, tuned gates   .4536   .6601*  .6601    .9571    357/498   .3252
+  2B @65k docs,  default        .4365   .5549   .6611    .9553    409/498   .3585
+  2B @65k docs,  tuned gates    .4504   .5716   .6644    .9273    432/498   .3907
+(*the .6601 in the 8k tuned row is contains, not tokF1 - typo in the table above, tokF1 was .5566)
+READ: training at document granularity moved COVERAGE from 322 to 409 answered fields at DEFAULT
+gates (65% -> 82%) and to 432 (87%) with gates tuned - i.e. it fixed most of the coverage deficit
+WITHOUT needing the aggressive null threshold. Per-answer exact fell slightly (.4535 -> .4365
+default) and null_ok dropped (.9720 -> .9553), which is exactly the prior shift we predicted: the
+head now expects fields to be present at document base rates (~24%) instead of window base rates
+(~8%), so it stops declining so much.
+exact@all .3907 is the best document-level result ANY model has produced in this project - the best
+previous was .2932 (2B @8k) and .3252 with tuned gates. That is +.065 over the best previous, an
+order of magnitude beyond our +-0.005 noise floor.
+IMPLICATION FOR THE SWEEP: the entire backbone comparison was run on heads trained at 8k, which
+floored coverage at ~65%. The backbone ranking may not survive re-testing in this richer regime -
+which is precisely why ladder A is being run on all three backbones rather than assuming the 2B.
+Also note the acceptance bar: null_ok .9273 is above the .90 requirement, so the tuned-gate
+configuration is usable as-is.
+
 **07:10 — BACKBONE SWEEP COMPLETE (9 measurable arms + 2 Gemma arms without doc40).**
 All doc40 numbers below use the CURRENT decoder (span tie-break eps .25, default gates); real168
 is also eps .25 where it was re-run, otherwise flagged.
