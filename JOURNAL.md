@@ -1,3 +1,31 @@
+**12:35 — MEASURED WHY THE ARGMAX SPAN IS WRONG: it is a LENGTH error, and it is concentrated in
+`parties` (median 3.2x too long). The eps tie-break is a real length fix, but only a partial one.**
+The owner asked whether a higher span score means a correct span. It does not: the score is
+p_start[i] x p_end[j] from two INDEPENDENT marginal softmaxes, so it rewards "an endpoint here and an
+endpoint there" and never penalises excess length. Measured directly on A-qwen2b checkpoint-1880,
+doc40 @65k, decoding the same 40 documents at eps=0 (raw argmax) and eps=0.25 (shortest within eps),
+pairing every gold span with the predicted span it overlaps most (scripts/span_length_probe.py,
+reports/A-qwen2b-span-lengths.json). 498 list-text fields had gold spans; 428 pairs matched at
+eps=0, 418 at eps=.25.
+GLOBAL: total predicted characters 120,524 vs 86,929 gold = +38.6% excess at eps=0, +27.9% at
+eps=.25. 230/428 (54%) spans land on the exact boundaries and 59% at eps=.25. Of the 198 mismatches
+at eps=0, 157 (79%) are too LONG and only 26 (13%) too short - a 6:1 long:short error ratio - and
+when it overshoots it overshoots hard: median 3.10x the gold length (+189 chars on a 107-char gold).
+BY FIELD (eps=0, fields with n>=5): `parties` is the outlier - n=90, median 3.21x, 54% over 2x,
+IoU .454, gold median only 16 chars. Every other field sits at median 1.00x with a 5-35% tail over
+2x (insurance 1.22x, non_compete 1.70x). Short gold spans (<=40 chars) are over-extended 2x+ in 31%
+of cases vs 18% for gold >200 chars: the failure is short answers being answered with whole clauses.
+EFFECT OF THE TIE-BREAK, same decode, same data: exact boundaries 53.7% -> 59.1%, mean IoU .727 ->
+.772, excess +38.6% -> +27.9%, pairs over 2x 27.7% -> 20.6%, and `parties` specifically median
+3.21x -> 1.60x, exact bounds 20% -> 28%, IoU .454 -> .527. So the +.006-.025 exact that
+--span-tiebreak-eps earns is mostly short-span fields being trimmed, and `parties` is where it pays.
+BUT it cannot finish the job: median ratio among still-over-extended pairs stays ~3.0x, because the
+score surface prefers the long span by more than 25%. The remaining fix has to make the SCORE
+boundary-aware during training (length/end-shift supervision), not post-hoc trimming.
+Implication for the acceptance bar: `parties` at 0/40 exact with 90% overlap is not a set-
+completeness problem, it is an over-extension problem - the right text is found, the wrong crop is
+returned. Short-span fields are the lever this run quantifies.
+
 **12:15 — FOUND AND FIXED A LABEL-NOISE BUG IN THE NEW CORPUS: long documents were truncated, and
 spans beyond the cut were silently trained as NULL.**
 The owner asked whether we split documents longer than 65k tokens. We did not - encode_record
