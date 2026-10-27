@@ -1,3 +1,30 @@
+**11:05 — DECODE LEVERS EXHAUSTED: Brier is neutral, slot-mask is a dial. Both answered.
+Time to move to data/adaptation.**
+1) BRIER ON p_null (same 65k doc training, identical recipe, lambda .25):
+   null   no-brier exact@all   brier exact@all   null_ok shift
+   .70        .3966               .3984            +.004
+   .80        .4066               .4044            +.010
+   .85        .4107               .4084            +.001
+   .90        .4134               .4122            -.002
+   Null_ok improves by ~.01 at low thresholds, exact@all is flat. CONCLUSION: p_null is not
+   MISCALIBRATED, it is UNDER-INFORMATIVE - the features do not separate absent from
+   present-but-hard. Better losses on the same features cannot fix that; better features (decoys,
+   more data) or a better representation can.
+2) SLOT-MASK (force later list slots onto unused text instead of dropping duplicates):
+   config              exact   contains  null_ok  coverage  exact@all
+   plain s.10          .4431   .6551     .8538    91.8%     .4066
+   mask  s.10          .4101   .7185     .8538    91.8%     .3763   <- max contains
+   mask  s.20/e.35     .4389   .6821     .8538    91.6%     .4019
+   mask  s.30/e.35     .4470   .6737     .8687    90.6%     .4048
+   mask  s.40/e.40     .4593   .6708     .8967    88.0%     .4040   <- best exact + null_ok
+   So diversity does buy a LARGE contains gain (+.063) - the multi-item recall problem is real and
+   addressable at decode - but the extra items cost boundary precision, and raising the slot
+   threshold to recover precision also gives back coverage. exact@all never beats plain.
+   The right fix is not a decode dial: it is training the head so the 2nd..8th slots learn to
+   place boundaries correctly (slot-diversity in the LOSS, not just the decode).
+WHAT IS LEFT: data (decoys/CORD/more contracts) and representation adaptation (LM LoRA). Decode and
+calibration are done.
+
 **10:50 — LADDER A + 4B @65k: scale is FLAT in the document regime too. 4B ties the 2B, at 2.2x the
 cost.**
 (runs/A-4b/checkpoint-1880, doc_train_470, 4 epochs/1,880 updates, batch 1, current 112M head,
