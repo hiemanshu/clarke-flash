@@ -66,7 +66,9 @@ class ClarkeModel(torch.nn.Module):
                slot_mask: bool = False,
                span_caps: dict[str, int] | None = None,
                length_priors: dict[str, torch.Tensor] | None = None,
-               length_prior_alpha: float = 0.0) -> list[dict[str, Any]]:
+               length_prior_alpha: float = 0.0,
+               pool_decode: bool = False, pool_starts: int = 4,
+               dedupe_mode: str = "overlap") -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -88,7 +90,10 @@ class ClarkeModel(torch.nn.Module):
                                             slot_mask=slot_mask,
                                             span_caps=span_caps,
                                             length_prior=(length_priors or {}).get(encoded.name),
-                                            length_prior_alpha=length_prior_alpha)
+                                            length_prior_alpha=length_prior_alpha,
+                                            dedupe_mode=dedupe_mode,
+                                            pool_decode=pool_decode,
+                                            pool_starts=pool_starts)
                 for encoded, field_logits in zip(record.fields, record_logits)
             })
         return out
@@ -107,7 +112,9 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                   span_caps: dict[str, int] | None = None,
                   length_prior: torch.Tensor | None = None,
                   length_prior_alpha: float = 0.0,
-                  dedupe_mode: str = "overlap") -> dict[str, Any]:
+                  dedupe_mode: str = "overlap",
+                  pool_decode: bool = False,
+                  pool_starts: int = 4) -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
     # Per-field extent cap: score(i,j)=p_start*p_end has no term for how long this
@@ -140,6 +147,49 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
         if float(p_null) <= null_threshold:  # absent list: honor the trained null head
             used = torch.zeros(logits.start.shape[-1], dtype=torch.bool,
                                device=logits.start.device)
+            if pool_decode:
+                # The gold items are RANKED well (81.8% of party starts sit in some slot's top-5)
+                # but every slot's argmax lands on the same item, and dedupe deletes the
+                # duplicates. So build one candidate pool from the top starts of every slot,
+                # then take as many items as the (well calibrated) present head asks for.
+                cands: list[tuple[float, int, int]] = []
+                import torch as _torch
+                for pslot in range(LIST_SLOTS):
+                    sp = _torch.softmax(logits.start[pslot].float() * pointer_temp, dim=-1)
+                    k = min(pool_starts, int(sp.numel()))
+                    vals, idcs = _torch.topk(sp, k)
+                    ep = _torch.softmax(logits.end[pslot].float() * pointer_temp, dim=-1)
+                    from .schema import SPAN_MAX_TOKENS as _SPAN_DEFAULT
+                    win = int(span_max_tokens or _SPAN_DEFAULT)
+                    for pv, si in zip(vals.tolist(), idcs.tolist()):
+                        lo, hi = si, min(si + win, int(ep.numel()))
+                        jj = lo + int(_torch.argmax(ep[lo:hi]))
+                        cands.append((pv * float(ep[jj]), si, jj))
+                cands.sort(reverse=True)
+                want = max(1, int((present >= slot_threshold).sum()))
+                seen_spans: list[tuple[int, int]] = []
+                seen_text: list[str] = []
+                for _score, ci, cj in cands:
+                    part = _span_from_indices(record, ci, cj, torch.tensor(0.0), 1.0,
+                                              torch.tensor(_score))
+                    text = (part.get("guess") or "").strip()
+                    if not text:
+                        continue
+                    lo_c, hi_c = part["span"]
+                    if any(lo_c < hi_s and hi_c > lo_s for lo_s, hi_s in seen_spans):
+                        continue
+                    if dedupe_mode == "text" and text.lower() in seen_text:
+                        continue
+                    seen_spans.append((lo_c, hi_c))
+                    seen_text.append(text.lower())
+                    values.append(part["guess"])
+                    spans.append(part["span"])
+                    if len(values) >= want or len(values) >= LIST_SLOTS:
+                        break
+                answer["value"] = values or None
+                answer["spans"] = spans
+                answer["p_null"] = _probability(p_null)
+                return answer
             for slot in range(LIST_SLOTS):
                 if present[slot] < slot_threshold:
                     continue

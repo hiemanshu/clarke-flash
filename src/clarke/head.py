@@ -502,11 +502,35 @@ class JointExtractionHead(nn.Module):
                     present = torch.zeros(LIST_SLOTS, device=logits.present.device)
                     present[: len(items)] = 1.0
                     addf("present", F.binary_cross_entropy_with_logits(logits.present.float(), present))
+                    # Slots are independent heads, so nothing stops them from all pointing
+                    # at the SAME item - which is exactly what happens on parties (every slot
+                    # lands on one party, dedupe deletes the copies, recall collapses to .15
+                    # even though .82 of gold starts are inside some slot's top-5).
+                    # Masking the text already consumed by earlier slots trains the spread
+                    # that decode-time masking only borrows. This flag used to be accepted and
+                    # ignored (no-op until 2026-10-27).
+                    consumed: list[tuple[int, int]] = []
                     for slot, (start, end) in enumerate(items):
-                        add("span", F.cross_entropy(logits.start[slot].view(1, -1),
+                        slot_start, slot_end = logits.start[slot], logits.end[slot]
+                        if slot_mask_train and slot > 0 and consumed:
+                            # fresh mask per slot: mutating one shared tensor in place makes
+                            # autograd report "variable modified by an inplace operation"
+                            mask = torch.zeros(logits.start.shape[-1], dtype=torch.bool,
+                                               device=logits.start.device)
+                            for s0, e0 in consumed:
+                                mask[s0:e0 + 1] = True
+                            # never mask the item this slot must predict: CUAD party
+                            # annotations nest ("Company" inside "Electric City Company"),
+                            # so a hard mask over an earlier item can cover the next gold
+                            # span and blow the CE up to ~10k (diverge guard fired at step 37).
+                            mask[start:end + 1] = False
+                            slot_start = slot_start.masked_fill(mask, -1e4)
+                            slot_end = slot_end.masked_fill(mask, -1e4)
+                        add("span", F.cross_entropy(slot_start.view(1, -1),
                             torch.tensor([start], device=logits.start.device)))
-                        add("span", F.cross_entropy(logits.end[slot].view(1, -1),
+                        add("span", F.cross_entropy(slot_end.view(1, -1),
                             torch.tensor([end], device=logits.end.device)))
+                        consumed.append((int(start), int(end)))
                         if logits.length is not None:
                             bin_idx = min(int(end) - int(start) + 1, LENGTH_BINS) - 1
                             add("span", F.cross_entropy(logits.length[slot].view(1, -1),

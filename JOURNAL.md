@@ -1,3 +1,32 @@
+**17:00 — G: REAL SLOT-MASK TRAINING IS THE BEST DOC40 RESULT SO FAR (.4826 exact / .3954 exact@all),
+and parties goes 0/40 -> 1/40 exact for the first time.**
+The flag --slot-mask-train existed since the list-head work but was NEVER USED by the loss (accepted,
+plumbed to compute_loss, ignored). Ladder C's "slot-mask training is neutral" therefore measured
+nothing. Implemented it for real: when scoring slot k, mask the token ranges consumed by slots
+0..k-1 (fresh mask tensor per slot, target range excluded).
+Two bugs on the way, both instructive:
+  (a) IN-PLACE MASK VS AUTOGRAD. Mutating one shared `used` tensor after masked_fill() made torch
+      raise "variable needed for gradient computation has been modified by an inplace operation".
+      Fix: build a fresh mask per slot from a list of consumed ranges.
+  (b) MASKING THE TARGET'S OWN TOKENS. With a hard -1e4 mask, the loss exploded to 272 -> 341 and the
+      diverge guard fired at step 37. Cause: CUAD party annotations NEST ("Company" inside "Electric
+      City Company"), so an earlier item's range can cover the next item's gold span, making the
+      target unreachable. Fix: mask[start:end+1] = False for the item being predicted.
+Run: exact A recipe (470 CUAD, 4 epochs = 1,880 steps, 65k, lr 1e-4, rerank/attn/agg-atoms) + that
+one flag. doc40 @65k, eps .25, histogram prior alpha .75, slot-mask DECODE:
+  A (baseline, default decode)                 exact .4490  tokF1 .5538  contains .6467  null_ok .9553  409/498  exact@all .3688
+  A + prior + slot mask (previous best)        exact .4747  .5878  .6638  .9553  409/498  .3899
+  G + prior + slot mask                        exact .4826  .6029  .6792  .9597  408/498  .3954
+  G at default decode                          exact .4579  .5665  .6552  .9597  408/498  .3751
+So training the spread is worth +0.8pp exact / +1.5pp tokF1 / +1.6pp contains over the best decode-only
+configuration, and +3.4pp exact over the baseline, with null_ok slightly better (.9597) and coverage
+unchanged (408/498).
+PARTIES SPECIFICALLY (slot .50 mask decode): items/doc 3.77 -> 3.62, recall .297 -> .312, precision
+.377 -> .414, set-exact 0/40 -> 1/40. The mechanism now moves the field; the remaining gap is that
+gold items are still assigned to slots in ANNOTATION ORDER, so the slots learn order plus set.
+Ceiling check measured earlier: 66% of gold items sit fully inside some slot's top-5, so a perfect
+assigner is worth roughly 0.66^4 = 19% set-exact -> about +1.6pp exact@all overall.
+
 **16:40 — F-DENSE (dense contracts, full 41-field schema) RECOVERS EVERYTHING D2 LOST, BUT DOES NOT
 BEAT THE SPARSE MODEL. The shape diagnosis was right; the data still adds no accuracy.**
 Ladder F: CUAD x4 (the exact A recipe, 1,880 steps) + 1,170 dense ledgar records (>=3 matched clauses,

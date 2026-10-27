@@ -43,7 +43,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              slot_mask: bool = False,
              span_caps: dict[str, int] | None = None,
              length_priors: dict[str, Any] | None = None,
-             length_prior_alpha: float = 0.0) -> dict[str, Any]:
+             length_prior_alpha: float = 0.0,
+             pool_decode: bool = False, pool_starts: int = 4) -> dict[str, Any]:
     stats: dict[tuple[str, str], dict[str, float]] = {}
 
     def stat(dom: str, kind: str) -> dict[str, float]:
@@ -75,7 +76,9 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                                    slot_mask=slot_mask,
                                    span_caps=span_caps,
                                    length_priors=length_priors,
-                                   length_prior_alpha=length_prior_alpha)
+                                   length_prior_alpha=length_prior_alpha,
+                                   pool_decode=pool_decode,
+                                   pool_starts=pool_starts)
         torch.cuda.empty_cache()  # varying-length long docs + per-field NxN pointer
         # matrices fragment the allocator fast; releasing per batch costs ~nothing
         # next to a 19GB model and prevents the 30GB OOM seen at 02:46
@@ -313,6 +316,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--span-caps", default=None,
                         help="JSON of per-field span caps from scripts/field_span_caps.py; "
                              "fields absent from it keep --span-max-tokens (default 256)")
+    parser.add_argument("--pool-decode", dest="pool_decode", action="store_true",
+                        help="list fields: build one candidate pool from every slot's top starts and "
+                             "take as many items as the present head asks for (parties fix)")
+    parser.add_argument("--pool-starts", dest="pool_starts", type=int, default=4,
+                        help="top start positions per slot to pool (default 4)")
     parser.add_argument("--span-priors", dest="span_priors", default=None,
                         help="per-field gold length histogram JSON (scripts/field_span_caps.py "
                              "--hist-out); multiplies the span score by the prior")
@@ -417,6 +425,8 @@ def main(argv: list[str] | None = None) -> None:
                            span_caps=span_caps,
                            length_priors=length_priors,
                            length_prior_alpha=args.span_prior_alpha,
+                           pool_decode=args.pool_decode,
+                           pool_starts=args.pool_starts,
                            agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "metrics": summary["overall"], "by_domain": summary["by_domain"]}
