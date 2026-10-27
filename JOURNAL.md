@@ -1,3 +1,33 @@
+**11:15 — PER-FIELD DIAGNOSIS ON THE 65k MODEL: failures split into two mechanisms, and neither is
+calibration.**
+Failure taxonomy over 498 gold-present fields (A-qwen2b, doc40 @65k, eps .25, null gate disabled):
+  ok_reported 156 (31.3%) | ok_rejected 1 (0.2%) | wrong_reported 261 (52.4%) | wrong_rejected 80
+  (16.1%). p_null on gold-present: p50 .051, only 4.6% above .9 - so the gate is NOT the problem
+  (consistent with the Brier null).
+Versus the 8k-trained model (24.9% / 0.4% / 43.2% / 31.5%): document training nearly HALVED true
+misses (31.5% -> 16.1%) and raised correct answers 24.9% -> 31.3%, while the wrong-span share rose
+43.2% -> 52.4% (because many more fields are now answered). So the remaining error is
+LOCALISATION and SET COMPLETENESS, not presence.
+Per-field split (exact / tokF1 / overlap = did any prediction overlap gold):
+  CLASS A - finds it, returns the wrong SET (overlap high, exact 0):
+    parties 0% / .217 / 90%  (40 gold)   <- the single biggest single-field failure
+    audit_rights 17% / .356 / 67% | license_grant 22% / .391 / 72% | cap_on_liability 24% / .417 / 67%
+    insurance 7% / .250 / 57% | revenue_profit_sharing 7% / .189 / 47%
+  CLASS B - never finds it (overlap ~0):
+    change_of_control 0% / 0% (n=8) | volume_restriction 0% / 0% (n=5) | non_disparagement 0% / 0%
+    (n=3) | third_party_beneficiary 0% / 0% (n=3) | post_termination_services 0% / 13% (n=15)
+    | minimum_commitment 0% / 23% (n=13) | exclusivity 0% / 25% (n=12)
+  CLASS B fields are RARE (3-15 instances each). The loss averages per head over all fields, so a
+  field with 3 examples contributes almost nothing and the head defaults to null for it.
+CONSEQUENCE - two concrete, cheap experiments, one per class:
+  (A) SLOT COMPLETENESS: train slots to be distinct AND complete (diversity in the LOSS, not the
+      decode; the decode-only mask proved the head can find the extra items - contains +.063 - but
+      never learned where their boundaries are).
+  (B) FIELD-BALANCED LOSS: weight each field's null/span terms by inverse frequency (or sample
+      fields uniformly rather than records). This directly targets the rare-field null default
+      without needing new data - and new data for 3-example fields is not realistic anyway.
+Both are ~25 min runs at 2B on doc_train_470 with the current head. Neither needs new corpora.
+
 **11:05 — DECODE LEVERS EXHAUSTED: Brier is neutral, slot-mask is a dial. Both answered.
 Time to move to data/adaptation.**
 1) BRIER ON p_null (same 65k doc training, identical recipe, lambda .25):
