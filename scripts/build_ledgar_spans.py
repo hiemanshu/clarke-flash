@@ -72,6 +72,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default="data/ledgar_spans.jsonl")
     ap.add_argument("--raw-dir", default="data/raw/sec", dest="raw_dir")
     ap.add_argument("--max-per-field", type=int, default=0, dest="max_per_field")
+    ap.add_argument("--window-chars", type=int, default=240_000, dest="window_chars",
+                    help="split documents longer than this (240k chars ~ 51k tokens, safely "
+                         "inside the 65,536 budget); 0 disables splitting")
+    ap.add_argument("--stride-chars", type=int, default=220_000, dest="stride_chars")
     args = ap.parse_args(argv)
 
     from datasets import load_dataset
@@ -133,17 +137,35 @@ def main(argv: list[str] | None = None) -> int:
                     continue
                 for k in fields:
                     field_counts[k] = field_counts.get(k, 0) + 1
-                fh.write(json.dumps({
-                    "id": f"ledgar-{shard.stem}-{kept}",
-                    "domain": "contract",
-                    "state": text,
-                    "fields": {k: {"type": "list", "items": "text",
-                                   "instructions": f"Extract the {k.replace('_', ' ')} clause."}
-                               for k in fields},
-                    "answers": {k: {"value": v["value"], "spans": v["spans"]}
-                                for k, v in fields.items()},
-                }) + "\n")
-                kept += 1
+                win = args.window_chars
+                if not win or len(text) <= win:
+                    chunks = [(0, text)]
+                else:
+                    chunks = [(a, text[a:a + win])
+                              for a in range(0, len(text), max(1, args.stride_chars))]
+                for offset, chunk in chunks:
+                    local = {}
+                    for name, v in fields.items():
+                        vals, sps = [], []
+                        for value, (s0, s1) in zip(v["value"], v["spans"]):
+                            if s0 < offset or s1 > offset + len(chunk):
+                                continue          # span sits outside this window
+                            vals.append(value)
+                            sps.append([s0 - offset, s1 - offset])
+                        if vals:
+                            local[name] = {"value": vals, "spans": sps}
+                    if not local:
+                        continue
+                    fh.write(json.dumps({
+                        "id": f"ledgar-{shard.stem}-{kept}",
+                        "domain": "contract",
+                        "state": chunk,
+                        "fields": {k: {"type": "list", "items": "text",
+                                       "instructions": f"Extract the {k.replace('_', ' ')} clause."}
+                                   for k in local},
+                        "answers": local,
+                    }) + "\n")
+                    kept += 1
             print(f"[ledgar] {shard.name}: docs kept {kept}, fields {field_counts}", flush=True)
 
     print(json.dumps({"docs": kept, "by_field": field_counts}, indent=2))

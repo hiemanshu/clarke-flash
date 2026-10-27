@@ -1,3 +1,22 @@
+**12:15 — FOUND AND FIXED A LABEL-NOISE BUG IN THE NEW CORPUS: long documents were truncated, and
+spans beyond the cut were silently trained as NULL.**
+The owner asked whether we split documents longer than 65k tokens. We did not - encode_record
+truncates `state_ids` at max_length, and build_targets maps spans through the truncated
+char_offsets, so a span past the cut returns None and `if pair:` silently skips it. For list<text>
+fields that leaves target.spans empty, which trains the head to say "no list" for a field that IS
+present - a false negative, not merely missing data.
+SCOPE (measured on ledgar_spans_cuad): 280 of 18,600 records (1.51%) had at least one span beyond
+the cut; 630 of 30,762 spans (2.05%) were lost. The 4/470 truncated CUAD docs are negligible in
+comparison, but the same mechanism applies.
+FIX: the builder now windows documents longer than --window-chars (default 240k chars ~51k tokens,
+safely inside the 65,536 budget) with a --stride-chars overlap (220k), re-basing each span into its
+window and dropping only spans that genuinely straddle a boundary. Rebuilt: 19,046 records (446
+extra windows), max state 240,000 chars, 31,091 spans, ZERO spans outside their window. Instructions
+re-applied from CUAD so field identity is unchanged.
+DATA SWITCH: the running D arm was killed at step 2,120/19,070 (12 min) and relaunched as D2 on the
+clean corpus (19,516 steps, 1 epoch, ~2h). Same cost, no false-null labels, slightly more
+long-context records - no reason to keep a knowingly-noisy run.
+
 **11:40 — NEW DATA BUILT: 18,600 real contracts with rare-clause spans, derived from LEDGAR + the
 SEC corpus we already had. This is the Class B fix.**
 Method (scripts/build_ledgar_spans.py): LexGLUE-LEDGAR gives 60k clause excerpts with 100 category
