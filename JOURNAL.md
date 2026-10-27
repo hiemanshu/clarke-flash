@@ -1,3 +1,30 @@
+**11:40 — NEW DATA BUILT: 18,600 real contracts with rare-clause spans, derived from LEDGAR + the
+SEC corpus we already had. This is the Class B fix.**
+Method (scripts/build_ledgar_spans.py): LexGLUE-LEDGAR gives 60k clause excerpts with 100 category
+labels but NO document pointer and NO offsets; the HF mirror of Kleister-NDA turned out to be
+labels-only too (254 rows, no document text - the landscape memo was wrong about that). We already
+hold 1.14M SEC material contracts (37GB). LEDGAR provisions ARE clause excerpts from such
+contracts, so: index the provisions (Aho-Corasick over the first 80 normalised chars), scan the
+contract text with a whitespace-collapsing offset map back to original characters, and every
+verbatim hit yields (field, exact char span) for free.
+RESULT: 18,600 documents, 1.2GB, 26k field instances over 9 fields that map to our schema:
+  governing_law 15,643 | anti_assignment 6,669 | insurance 975 | termination_for_convenience 763
+  | warranty_duration 757 | cap_on_liability 594 | change_of_control 386 | effective_date 218
+  | non_disparagement 110
+Compare to CUAD: change_of_control 8 -> 386, non_disparagement 3 -> 110, insurance 14 -> 975,
+warranty_duration 4 -> 757. The fields that were structurally unlearnable now have hundreds to
+thousands of real examples. Instructions were rewritten to CUAD's exact phrasing
+(data/ledgar_spans_cuad.jsonl) so the field identity is the same, otherwise the model would learn
+two different "insurance" fields.
+Installed pyahocorasick (pip lib inside the project, per the standing allowance) - pure-Python
+multi-pattern matching over 45k documents was not viable.
+LADDER D (queued): 2B @65k on doc_train_470 + these 18.6k records, ONE epoch (~19k steps, ~2-3h).
+Single variable vs A-qwen2b: the training data gains rare-field supervision. Evaluated on the same
+three decode configs plus a per-field diagnostic, so we can check the Class B fields specifically
+(change_of_control, non_disparagement, insurance were 0-7% exact).
+Also running: ladder C (field-balanced loss, then slot-mask training) - if those two work they
+attack the same class from the loss side; whichever wins becomes the recipe.
+
 **11:15 — PER-FIELD DIAGNOSIS ON THE 65k MODEL: failures split into two mechanisms, and neither is
 calibration.**
 Failure taxonomy over 498 gold-present fields (A-qwen2b, doc40 @65k, eps .25, null gate disabled):
