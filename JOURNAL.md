@@ -1,3 +1,28 @@
+**18:00 — SECOND GPU0 FULL-CHIP RESET IN 40 MINUTES. Stopping GPU work; this is now a hardware
+reliability problem, not a training problem.**
+Timeline: H died at 17:20 (step 780, 5 min into the run). After a power cycle, H2 was relaunched at
+17:44 and GPU0 reset again at 17:59:30 - 15 minutes in, at roughly step 1660/1880, and the eval pass
+that followed failed with "CUDA unknown error". Kernel log again:
+  NVRM: GPU0 nvAssertFailedNoLog: ... (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET)
+  @ rs_client.c:844, rs_server.c:263, rs_server.c:1387
+  NVRM: GPU0 _deviceTeardown: Disable of Cuda limit activation failed
+SURVIVING STATE: runs/H2-assign/checkpoint-250/500/.../1500 (3 kept: 1000, 1250, 1500) - i.e. 80% of
+the epoch is trained and evaluable once the GPU returns. The dead runs are runs/H-assign (step 780, no
+checkpoint) and runs/H2-assign (step ~1660). No results were produced by either H run.
+PATTERN: both failures happened under sustained 65k-token training (long-sequence attention, ~5.7 GB,
+full GPU utilisation), at 37 C idle before start. The interval is shortening (5 min -> 15 min), which
+points at power delivery or thermal/VRM rather than a driver edge case. Nothing in the training code
+changed between G (which ran 1,880 steps cleanly earlier today) and H/H2 apart from --slot-assign, and
+the fault surfaces in the backbone forward / eval, not in the new code.
+RECOMMENDED BEFORE ANY MORE GPU WORK (owner action, needs root or hands):
+  - cap the power limit, e.g. `sudo nvidia-smi -pl 450` on a 575 W card - transient spikes are the
+    usual cause of NV_ERR_GPU_IN_FULLCHIP_RESET on RTX 50-series;
+  - reseat the 12V-2x6 / 12VHPWR connector, no daisy-chained adapters;
+  - watch `nvidia-smi dmon -s pucvmet` during the next run for power and temp excursions;
+  - if it resets again at reduced power, the card needs an RMA.
+MITIGATION ADDED: training now checkpoints every 250 steps (--save-every 250), which is why H2 has
+usable weights at all; G-style end-only saving would have lost the whole run twice.
+
 **17:22 — GPU0 FELL OFF THE BUS during ladder H at step 780/1880. Hardware/driver event, not a code
 bug. No results; run lost (no checkpoint had been written yet).**
 Symptom: torch.AcceleratorError "CUDA error: unspecified launch failure" inside the backbone's rotary
