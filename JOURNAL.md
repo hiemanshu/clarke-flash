@@ -1,3 +1,20 @@
+**12:45 — DECOMPOSITION: the span error is almost entirely LENGTH, not location. A length model has
++18pp of exact in it.**
+Split every matched pair into (start token correct) x (length correct), same probe, eps=0 and eps=.25:
+  eps=0   start 72.0%  length 56.1%  exact 53.7%  |  start right but length wrong 18.2% (median +10
+          tokens, 1.87x)  |  length right but start wrong 2.3%
+  eps=.25 start 75.6%  length 61.5%  exact 59.1%  |  start right but length wrong 16.5% (median +2
+          tokens after trimming)  |  length right but start wrong 2.4%
+So: if the length were predicted perfectly and the start left untouched, exact would be 72.0% (eps=0)
+/ 75.6% (eps=.25) vs 53.7% / 59.1% today. Wrong-start-right-length is 2.3% - a rounding error. The
+start pointer is largely fine; the span extent is the bug. The eps tie-break buys 5.4pp of the
+available 18.3pp by trimming blindly, which is why it helps but plateaus.
+This makes the fix concrete rather than speculative: a conditioned span-length prediction (per field,
+from the field query) is the missing term in score(i,j) = p_start[i] * p_end[j]. Cheap versions in
+order of cost: (1) per-field length cap at decode from the gold length distribution - no training;
+(2) a length/end-offset head trained jointly and multiplied into decode; (3) softened end targets
+(localised label smoothing) so p_end concentrates without a new head.
+
 **12:35 — MEASURED WHY THE ARGMAX SPAN IS WRONG: it is a LENGTH error, and it is concentrated in
 `parties` (median 3.2x too long). The eps tie-break is a real length fix, but only a partial one.**
 The owner asked whether a higher span score means a correct span. It does not: the score is
