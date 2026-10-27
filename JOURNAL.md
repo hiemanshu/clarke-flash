@@ -1,3 +1,26 @@
+**07:55 — TOKENIZER CEILING MEASURED: 94.4% of gold spans are reachable with Qwen's tokenizer, 94.1%
+with a contract-trained BPE. The tokenizer is NOT our bottleneck, and a custom one would not help.**
+Owner's point: the head points at TOKEN boundaries, so the tokenizer defines the finest span it can
+express - my earlier "6% better compression" framing ignored that. Measured properly (a span is
+achievable if some token start is at or just before the gold start with only whitespace between,
+and likewise for the end, because _decode_span strips whitespace):
+  Qwen3.5 (4.74 chars/token)           94.4% of 1022 gold spans achievable
+  contract-trained BPE 32k (5.02)      94.1%
+  character-level (reference)         100%
+So:
+1. 5.6% of CUAD gold spans START OR END MID-TOKEN and are unreachable with ANY BPE vocabulary. That
+   is an irreducible loss for this architecture, not a defect of our tokenizer.
+2. Our per-answer exact (.45) is ~48% of the .944 ceiling, so the remaining gap is model/data, not
+   token granularity.
+3. A contract-specific tokenizer BUYS 6% text density and LOSES 0.3 points of boundary resolution -
+   a wash. Building our own backbone for the tokenizer is not justified by this.
+4. The three-backbone comparison is safe: tokenizers differ by 1-6% compression and 0.3 points of
+   achievable ceiling, so differences between arms are real rather than tokenization artefacts.
+5. If we ever want the last 5.6%, the lever is a byte/character-level pointer head (an architecture
+   change), not a better vocabulary.
+Implication for "own backbone": owning the weights would buy contract-tuned representations, but
+neither the tokenizer nor span granularity argues for it.
+
 **07:40 — LADDER A RESULT 1/3: 65k document training is a LARGE win. Coverage 65% -> 87%, exact@all
 .2932 -> .3907.**
 (runs/A-qwen2b, Qwen2B, doc_train_470, 4 epochs = 1,880 updates, batch 1, current 112M head, ~25 min)
