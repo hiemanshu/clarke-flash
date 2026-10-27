@@ -1,3 +1,23 @@
+**17:22 — GPU0 FELL OFF THE BUS during ladder H at step 780/1880. Hardware/driver event, not a code
+bug. No results; run lost (no checkpoint had been written yet).**
+Symptom: torch.AcceleratorError "CUDA error: unspecified launch failure" inside the backbone's rotary
+embedding, then every subsequent CUDA call failing. nvidia-smi now reports
+"Unable to determine the device handle for GPU0: 0000:01:00.0: Unknown Error / No devices were found".
+Kernel log at 17:20:33 shows NVRM assertions consistent with a full-chip reset:
+  NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET)
+  @ vaspace_api.c:577, rs_client.c:844, rs_server.c:263, rs_server.c:1387
+State when it happened: ladder H (A recipe + --slot-mask-train + --slot-assign), 2.3-3.9 rec/s, 5.7 GB,
+step 780 of 1,880 (epoch 1), loss normal right before the fault (2.4-3.4). No prior thermal or OOM
+warning in the training log. The trainer had not yet written a checkpoint (first save is at step 1000),
+so nothing is recoverable; the run must be repeated once the device is back.
+Recovery needs root (reboot is the reliable path; `nvidia-smi -r` may fail while a display manager is
+active on this GPU - display-manager is active, so a reset could disturb the desktop session). NOT
+attempted: no sudo commands were run.
+CODE STATE: --slot-assign is implemented and smoke-tested (40 steps clean) and is committed, so the
+rerun is one command. The assignment logic itself is not implicated: it ran 780 steps, including the
+smoke test, and the fault surfaced first inside the backbone forward, with the kernel reporting a
+chip-level reset.
+
 **17:00 — G: REAL SLOT-MASK TRAINING IS THE BEST DOC40 RESULT SO FAR (.4826 exact / .3954 exact@all),
 and parties goes 0/40 -> 1/40 exact for the first time.**
 The flag --slot-mask-train existed since the list-head work but was NEVER USED by the loss (accepted,

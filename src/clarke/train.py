@@ -115,6 +115,7 @@ class Trainer:
         self.train_set = RecordDataset([Path(p) for p in args.train])
         self.field_weights = self._field_weights(args.field_balanced)
         self.slot_mask_train = bool(getattr(args, "slot_mask_train", False))
+        self.slot_assign = bool(getattr(args, "slot_assign", False))
         self.train_loader = build_loader(self.train_set,
                                          tokenizer, self.micro_batch, True,
                                          args.workers, args.max_length,
@@ -193,7 +194,8 @@ class Trainer:
         report = self.head.compute_loss(outputs, records, targets,
                                         brier_null=self.brier_null,
                                         field_weights=getattr(self, "field_weights", None),
-                                        slot_mask_train=getattr(self, "slot_mask_train", False))
+                                        slot_mask_train=getattr(self, "slot_mask_train", False),
+                                        slot_assign=getattr(self, "slot_assign", False))
         metrics = {key: float(value.detach() if torch.is_tensor(value) else value)
                    for key, value in report.items()}
         # scale = this micro-batch's share of the accumulated group (record-
@@ -218,7 +220,8 @@ class Trainer:
             report = self.head.compute_loss(outputs, batch["records"], batch["targets"],
                                         brier_null=self.brier_null,
                                         field_weights=getattr(self, "field_weights", None),
-                                        slot_mask_train=getattr(self, "slot_mask_train", False))
+                                        slot_mask_train=getattr(self, "slot_mask_train", False),
+                                        slot_assign=getattr(self, "slot_assign", False))
             for key, value in report.items():
                 sums[key] = sums.get(key, 0.0) + float(value)
             count += 1
@@ -340,6 +343,9 @@ def main(argv: list[str] | None = None) -> None:
                         help="exponent alpha for inverse-frequency field weighting; 0 disables. "
                              "Rare fields (3-15 instances) currently contribute nothing to the "
                              "averaged loss and default to null")
+    parser.add_argument("--slot-assign", dest="slot_assign", action="store_true",
+                        help="match gold list items to slots by the model's current confidence "
+                             "instead of annotation order, then compact to slots 0..n-1")
     parser.add_argument("--slot-mask-train", dest="slot_mask_train", action="store_true",
                         help="mask earlier list items' tokens when supervising later slots, so "
                              "the head learns boundaries under the same constraint we decode with")

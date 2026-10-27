@@ -438,6 +438,7 @@ class JointExtractionHead(nn.Module):
         brier_null: float = 0.0,
         field_weights: dict[str, float] | None = None,
         slot_mask_train: bool = False,
+        slot_assign: bool = False,
     ) -> dict[str, torch.Tensor]:
         sums: dict[str, torch.Tensor] = {}
         counts: dict[str, float] = {}
@@ -499,6 +500,31 @@ class JointExtractionHead(nn.Module):
                         torch.tensor([target.end], device=logits.end.device)))
                 elif spec.type == "list" and spec.items == "text":
                     items = target.spans[:LIST_SLOTS]
+                    if slot_assign and len(items) > 1:
+                        # Gold items are annotated in DOCUMENT order, but a list field is a
+                        # SET: slot k has no reason to own the k-th annotation. Match items to
+                        # slots by the model's own current confidence (greedy one-to-one,
+                        # i.e. a Hungarian approximation), then compact to slots 0..n-1 so the
+                        # present head keeps a dense target. Discrete, so no gradient flows here.
+                        with torch.no_grad():
+                            ls = torch.log_softmax(logits.start.float(), dim=-1)
+                            le = torch.log_softmax(logits.end.float(), dim=-1)
+                            starts_t = torch.tensor([a for a, _ in items],
+                                                    device=logits.start.device)
+                            ends_t = torch.tensor([b for _, b in items],
+                                                  device=logits.end.device)
+                            cost = -(ls[:, starts_t] + le[:, ends_t])      # [slots, items]
+                            free_items, free_slots, pairs = (set(range(len(items))),
+                                                             set(range(cost.shape[0])), [])
+                            while free_items:
+                                best = min((float(cost[sl, it]), it, sl)
+                                           for it in free_items for sl in free_slots)
+                                _, it, sl = best
+                                pairs.append((sl, it))
+                                free_items.discard(it)
+                                free_slots.discard(sl)
+                            pairs.sort()
+                            items = [items[it] for _sl, it in pairs]
                     present = torch.zeros(LIST_SLOTS, device=logits.present.device)
                     present[: len(items)] = 1.0
                     addf("present", F.binary_cross_entropy_with_logits(logits.present.float(), present))
