@@ -1,3 +1,44 @@
+**07:10 — BACKBONE SWEEP COMPLETE (9 measurable arms + 2 Gemma arms without doc40).**
+All doc40 numbers below use the CURRENT decoder (span tie-break eps .25, default gates); real168
+is also eps .25 where it was re-run, otherwise flagged.
+  model            params  real168   doc40   tokF1  contains  null_ok   ans    exact@all
+  Qwen 2B           2.27    .4195    .4535   .5704   .6602    .9720    322/498  .2932
+  MiniCPM5 2B       2.52    .3905    .4434   .5805   .6680    .9711    329/498  .2929
+  Qwen 4B           3.86    .3990    .4749   .5823   .6901    .9877    296/498  .2823
+  Ministral-Base    3.85    .4442    .4582   .5767   .6764    .9650    301/498  .2769
+  granite-4.2-3b    3.66    .4087    .4545   .5810   .6939    .9834    278/498  .2537
+  Qwen 0.8B         0.87    .3914    .4592   .5752   .6771    .9825    275/498  .2536
+  LFM2.5-1.2B       1.17    .3847    .4182   .5565   .6722    .9501    275/498  .2309
+  LFM2.5-2.6B       2.70    .3289    .3615   .5047   .6078    .9562    314/498  .2279
+  Hy-MT2-1.8B       2.04    .3259    .3946   .5536   .6634    .9615    259/498  .2052
+  LFM2.5-230M       0.23    .3220    .3594   .4895   .6106    .9615    243/498  .1754
+  Gemma-4-E2B       5.12    .3129    OOM
+  Gemma-4-12B      11.96    .4393    OOM
+(With doc-level gates null .6 / slot .2 the two largest arms gain about +.03 exact@all: 2B
+ .2932 -> .3252, 4B .2823 -> .3122. Not yet run for the rest.)
+CONCLUSIONS:
+1. NO BACKBONE BEATS THE 2B on the combined metric. MiniCPM5-2B ties it (.2929 vs .2932, inside
+   noise) and is the only arm that also answers more fields (329 vs 322).
+2. PER-ANSWER PRECISION PEAKS AT ~4B, NOT AT 2B: 4B .4749, Ministral .4582, granite .4545, 2B
+   .4535. But every one of those answers fewer gold fields (296/301/278 vs 322), so the extra
+   precision never converts into more correct fields overall.
+3. SHORT-CONTEXT BEST IS MINISTRAL (.4442) THEN GEMMA-12B (.4393) - neither reaches the top on
+   documents. Mistral's recipe sharpens spans; it does not widen coverage.
+4. THE LFM FAMILY CURVE DOES NOT HOLD: 230M -> 1.2B improved (.3343 -> .4118 doc40), but 2.6B
+   REGRESSED (.3615) and on real168 fell .3847 -> .3289. So within-family scaling is not monotonic
+   either; capacity buys nothing past ~1.2B in that recipe.
+5. GEMMA ARMS CANNOT BE MEASURED AT 65k ON THIS CARD: transformers materialises a DENSE
+   sliding-window causal mask (65k^2 bools ~ 4-8GB per call) because the config declares
+   sliding_window=1024. flash-attn (which implements windowed attention without a mask) is NOT
+   installed, so both E2B and 12B OOM at doc40 even at caps .85/.95 on an idle card. Their real168
+   numbers are valid; their document-level behaviour is UNKNOWN. Installing flash-attn is an owner
+   decision (new package, heavy CUDA build).
+6. WHAT THE SWEEP ACTUALLY BOUGHT: not a better backbone, but a much better understanding - the
+   decoder (span tie-break) is worth +.006-.025 exact everywhere, the null/slot gates are worth
+   +.03 exact@all, and both are backbone-independent. The backbone is a second-order choice at this
+   data scale.
+STATUS: sweep closed. Owner will pick the model and next steps; nothing further is queued.
+
 **00:25 — YES: "answered" is a head/decode property, not a capacity one, and loosening the gates is
 worth +.03 exact@all on BOTH backbones.**
 Owner asked whether the lower answered count could be tweaked through a head change. Short answer:
