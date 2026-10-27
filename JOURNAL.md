@@ -1,3 +1,25 @@
+**08:12 — LADDER A RESULT 2/3: MiniCPM5 also gains hugely from 65k document training, but stays behind
+Qwen 2B.**
+(runs/A-minicpm5, 2 epochs? no - 4 epochs/1,880 updates, 39 min, 6.3 GB, 1.5 rec/s)
+  arm / config                   exact   tokF1  contains  null_ok  answered  exact@all
+  Qwen2B  @65k default           .4365   .5549   .6611    .9553    409/498   .3585
+  Qwen2B  @65k gates(.6/.2)      .4504   .5716   .6644    .9273    432/498   .3907
+  CPM5    @65k default           .4218   .5379   .6440    .9553    403/498   .3413
+  CPM5    @65k gates(.6/.2)      .4327   .5589   .6452    .9177    427/498   .3710
+READ: the document-training effect REPLICATES on a different backbone (coverage 202->403 default,
+329->427 with gates; exact@all .2929 -> .3413/.3710, i.e. +.048/+.048), which is the main thing
+this arm had to establish. But Qwen 2B remains ahead by .017-.020 exact@all in both configurations,
+and it is ahead on EVERY metric except wall-clock: exact, tokF1, contains, and null_ok (.9273 vs
+.9177 at the tuned gates). So the 2B-class arms do NOT collapse into one another in the document
+regime - the earlier 8k-regime tie (.2932 vs .2929) becomes a consistent Qwen advantage once the
+head is trained at length.
+COST: CPM5 took 39 min vs Qwen's ~25 min for the same 4 epochs (42 dense attention layers vs 24
+hybrid), so Qwen also wins on throughput - roughly 1.6x.
+NOTE: CPM5's tuned-gate null_ok .9177 is close to the .90 acceptance bar; the default-gate config
+(.9553, exact@all .3413) is the safer operating point for this backbone.
+NEXT: gate grid (null .5/.6/.7 x slot .5/.2) on the two A checkpoints, to pick each arm's own
+optimum rather than reusing the 8k-derived thresholds.
+
 **07:55 — TOKENIZER CEILING MEASURED: 94.4% of gold spans are reachable with Qwen's tokenizer, 94.1%
 with a contract-trained BPE. The tokenizer is NOT our bottleneck, and a custom one would not help.**
 Owner's point: the head points at TOKEN boundaries, so the tokenizer defines the finest span it can
