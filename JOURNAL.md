@@ -1,3 +1,31 @@
+**14:45 — D2 (LEDGAR/SEC rare-field data) FINISHED AND LOST TO THE SPARSE MODEL ON EVERY AXIS. The
+data arm failed, and the failure is the SHAPE of the data, not the number of examples.**
+Full 1 epoch (19,516 steps) at 65k, 2B, frozen backbone, head-only. doc40 @65k, eps=.25:
+  A-qwen2b sparse .5/.5   exact .4490  tokF1 .5538  contains .6467  null_ok .9553  409/498  exact@all .3688
+  D2        .5/.5         exact .4196  tokF1 .5556  contains .6758  null_ok .9291  291/498  exact@all .2452
+  D2        .6/.2         exact .4013  tokF1 .5355  contains .6258  null_ok .8914  323/498  exact@all .2603
+  D2        .8/.1         exact .3272  tokF1 .4600  contains .5162  null_ok .6191  439/498  exact@all .2884
+No gate setting rescues it: the best exact@all D2 can reach (.2884 at 439/498 answered) is far below
+the sparse model's .3688 at 409/498. Even the fields the new data was built for went backwards:
+ledgar-covered fields 36.0% -> 32.0% correct, other CUAD fields 29.6% -> 22.4%; nulling on non-ledgar
+fields 17% -> 50%. Per field, governing_law collapsed 73.3% -> 36.7% (D2 answers it but with the wrong
+crop/extent), insurance 7.1% -> 14.3%, effective_date 40.6% -> 43.8% were the only movers, both tiny.
+WHY (measured, not inferred): (1) SCHEMA-COMPOSITION MISMATCH. A CUAD record presents 41 fields and
+answers 13; a ledgar record presents 1.39 fields on average and answers ALL of them (0% null). D2 is
+therefore dominated by "short schema, everything present", while evaluation is 41 fields, 68% null.
+The null head drifted exactly as that predicts: on gold-present fields mean p_null .199 -> .515,
+share above 0.5 16.3% -> 54.2%. (2) DOMAIN DILUTION. CUAD became 2.4% of steps, so each CUAD
+document was seen ONCE instead of the ~16 passes A got (470 docs x 4 epochs at bs1 = 1,880 steps).
+(3) The low training loss (1.55 vs 3.47) is an artifact of the easy mix - 1.39 present fields per
+record vs 13 of 41 - not evidence of better contracts modelling. Loss fell while doc40 got worse.
+TRAJECTORY: within D2 it was still improving (9k .3309/.1508 -> 11k .3921/.1795 -> final .4196/.2452),
+so it is not diverging; it simply started from a much worse place and one epoch is not enough to
+recover the diluted domain.
+WHAT THIS RULES OUT: more rare-field examples alone, mixed at natural frequency into a 1-epoch run.
+WHAT IT POINTS AT: (a) give ledgar records the FULL 41-field schema with explicit nulls so the task
+shape matches evaluation, (b) oversample CUAD (or mix per-field present/null ratio) so the eval domain
+is not 2.4% of steps. Both are data-shape fixes, cheap to build, and independent of the length head.
+
 **13:20 — D2 APPEARED STOPPED FOR 9.5 MINUTES; IT WAS ONE PATHOLOGICAL RECORD. Root cause: an O(n^2)
 CSV-block detector. Fixed: 220s -> 0.01s, whole corpus now scans in 81s with zero slow records.**
 Symptom: D2 logged step 4440 at 12:49:22 and nothing until 12:58:52. Main process asleep in poll
