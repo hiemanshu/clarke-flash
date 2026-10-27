@@ -1,3 +1,25 @@
+**15:58 — CORRECTION to the D2 entries above: A-qwen2b saw CUAD 4 times, not 16.** The line "470
+docs x 4 epochs at bs1 = 1,880 steps" was right but the pass count was wrong: 4 epochs = 4 passes
+(1,880 record-steps over 470 docs). D2's dilution factor versus A is therefore 4x, not 16x. The
+direction of the diagnosis is unchanged - D2 still saw the 41-field eval shape only once while the
+winning model saw it four times - but the magnitude is smaller than stated in the 14:45 entry.
+
+**15:58 — DENSE-CONTRACT CORPUS BUILT (owner's direction: rebuild from contracts with more values
+per document, i.e. fewer nulls).**
+Two structural problems were fixed at once in the new file:
+1. FULL 41-FIELD SCHEMA. ledgar records now carry every CUAD field with its instruction; the ones
+that did not match are explicit nulls. D2's records carried 1.39 fields and answered all of them,
+which taught "short schema => answer everything" (confirmed by the --field-groups 8 collapse).
+2. DENSITY FILTER. only records with >=3 matched clauses are kept: 1,170 of 19,046 (6.1%). They
+average 3.23 present fields per record versus D2's 1.39, so each step carries ~2.3x more supervision.
+Mix used for the run: CUAD x4 (the exact A recipe: 470 x 4 = 1,880 steps) + the 1,170 dense records
+= 3,050 steps, ~30 min at current throughput.
+WHY THIS SHOULD FIX THE CALIBRATION: the training mix is now 22.9% present fields, against 26% in
+doc40 and 71% in D2's mix (D2's short all-present schemas are why p_null on present fields drifted
+.199 -> .515). Schema LENGTH now matches evaluation (41 fields always) as well as the present/null
+ratio. Data: data/ledgar_dense_cuad.jsonl (1,170 records) and data/train_dense_mix.jsonl (3,050).
+LADDER F running (runs/F-dense), auto-eval default/eps0/gates/bal + per-field diagnostic at the end.
+
 **15:20 — D2's failure is a SCHEMA-LENGTH CALIBRATION error, confirmed without retraining.**
 Evaluated both models with --field-groups 8 (the same 40 documents, schema split into passes of 8
 fields) against the normal 41-field schema:
