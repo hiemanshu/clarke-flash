@@ -1,3 +1,26 @@
+**15:20 — D2's failure is a SCHEMA-LENGTH CALIBRATION error, confirmed without retraining.**
+Evaluated both models with --field-groups 8 (the same 40 documents, schema split into passes of 8
+fields) against the normal 41-field schema:
+  A  full 41   .4490 exact  null_ok .9553  409/498  exact@all .3688
+  A  8 passes  .4393        .8389          420/498  .3705   <- unaffected by the split
+  D2 full 41   .4196        .9291          291/498  .2452
+  D2 8 passes  .2380        .3573          479/498  .2289   <- collapses
+A is stable under schema splitting; D2 is not. With short schemas D2 answers 479/498 fields and is
+right 23.8% of the time - it has learned "short schema => everything is present", because every
+ledgar training record presented ~1.4 fields and answered all of them. With the 41-field schema it
+swings the other way and over-nulls (p_null on present fields .515 vs A's .199). So D2's null
+behaviour is a function of SCHEMA LENGTH rather than of the text, and the 41-field shape it is
+evaluated on appeared only 470 times in 19,516 steps.
+TWO CAUSES, both now measured rather than assumed: (1) SHAPE - ledgar records teach the wrong
+schema-length -> answer-propensity mapping; (2) FREQUENCY - CUAD is 2.4% of steps, so the shape the
+eval uses is barely trained (A saw it 16x, D2 once).
+WHAT THIS RULES OUT: "more rare-field examples at natural frequency" (D2) and any fix that only pads
+the volume. WHAT IT POINTS AT: ledgar records carrying the FULL 41-field schema (explicit nulls) so
+the eval shape is the trained shape, plus enough CUAD exposure that the 41-field pattern is not a
+rarity.
+NOTE for the record: D2's per-answer exact (.4196) is not catastrophic - coverage and calibration
+are what collapsed, and no null/slot gate recovers it (.2884 exact@all at 439/498).
+
 **15:05 — LENGTH HEAD TRAINED ON THE SPARSE BASE: it MATCHES the free histogram prior and no more.
 It cannot beat it, because it sees the same information.**
 Ladder E = exactly the A-qwen2b recipe (470 CUAD, 4 epochs = 1,880 steps, 65k, lr 1e-4, rerank/attn/
