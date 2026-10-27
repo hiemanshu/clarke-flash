@@ -1,3 +1,31 @@
+**18:47 — THIRD GPU FAULT: the display hypothesis is FALSIFIED. The panel was ON for the whole run.**
+H3 (slot-mask + slot-assign, screen-blank inhibitor held, idle-reset keeper running every 45 s) died at
+18:47:06 at step 1580/1880, ~12 minutes into training. Evidence that rules the display out:
+  - /sys/class/drm DPMS log sampled every 10 s shows every output ON at 18:47:01 and 18:47:31;
+  - the ScreenSaver inhibitor cookie was held and SimulateUserActivity was resetting the idle timer;
+  - the monitor is on the AMD iGPU (HDMI-A-2 = card2), so the 5090's display outputs were never in play;
+  - kernel: NVRM NV_ERR_GPU_IN_FULLCHIP_RESET at 18:47:06, followed by "no devices found".
+The earlier correlation with screen lock was coincidence: lock time 17:18 vs crash 17:20, lock 17:52 vs
+crash 17:59, and now a crash with no lock at all.
+WHAT THE THREE FAULTS HAVE IN COMMON, and the stress test does not:
+  H1  step 780   ~5 min   65k training
+  H2  step 1660  ~15 min  65k training
+  H3  step 1580  ~12 min  65k training
+  matmul stress  10 min at 84 C / 535 W / 100%  -> SURVIVED
+So the trigger is workload-specific, not "the GPU under load": 65-65k-token forward+backward with
+attention, ~5.7 GB, bursty power, versus a steady dense matmul. Candidates, in order of cost:
+  1. POWER TRANSIENTS. Long-sequence attention produces fast power swings; the card is capped at 575 W
+     and transient spikes above that are the classic cause of NV_ERR_GPU_IN_FULLCHIP_RESET. Test:
+     `sudo nvidia-smi -pl 450`, rerun.
+  2. LONG-SEQUENCE KERNEL / DRIVER. Test: identical training at --max-length 8192 (much lower power and
+     different attention kernel paths). If 8k is stable for an hour, 65k is the trigger.
+  3. PCIe ASPM / link power management. Test: `pcie_aspm=off` kernel parameter (needs reboot).
+  4. Hardware (VRM/memory). If 1-3 all fail, RMA territory.
+STATE: checkpoints survive (H3: 1000/1250/1500; H2: 1000/1250/1500) thanks to --save-every 250, so the
+slot-mask + assignment model is 80% trained and evaluable on the next boot. No H result yet.
+ACTION TAKEN: killed the screen keeper and the DPMS logger - they are useless now and were suppressing
+the owner's lock screen.
+
 **18:00 — SECOND GPU0 FULL-CHIP RESET IN 40 MINUTES. Stopping GPU work; this is now a hardware
 reliability problem, not a training problem.**
 Timeline: H died at 17:20 (step 780, 5 min into the run). After a power cycle, H2 was relaunched at
