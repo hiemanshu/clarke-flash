@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/F-dense/checkpoint-3050",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 400,
+      "null_n": 1142,
+      "exact": 0.4366,
+      "located": 0.4366,
+      "null_correct": 0.9475,
+      "tok_f1": 0.5533,
+      "contains": 0.6687,
+      "mean_confidence": 0.0,
+      "brier_null": 0.073
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 400,
+        "null_n": 1142,
+        "exact": 0.4366,
+        "located": 0.4366,
+        "null_correct": 0.9475,
+        "tok_f1": 0.5533,
+        "contains": 0.6687,
+        "mean_confidence": 0.0,
+        "brier_null": 0.073
+      }
+    }
+  }
+}

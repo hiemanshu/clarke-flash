@@ -1,3 +1,27 @@
+**16:40 — F-DENSE (dense contracts, full 41-field schema) RECOVERS EVERYTHING D2 LOST, BUT DOES NOT
+BEAT THE SPARSE MODEL. The shape diagnosis was right; the data still adds no accuracy.**
+Ladder F: CUAD x4 (the exact A recipe, 1,880 steps) + 1,170 dense ledgar records (>=3 matched clauses,
+averaging 3.23 present fields, all 41 fields present in the schema with explicit nulls) = 3,050 steps.
+Same 65k/2B/head-only setup, one variable versus A: the dense records were added.
+SAME DECODE for all rows below (eps .25, histogram prior alpha .75, slot mask):
+  A sparse               exact .4747  tokF1 .5878  contains .6638  null_ok .9553  409/498  exact@all .3899
+  F dense                exact .4692  tokF1 .5922  contains .6753  null_ok .9475  400/498  exact@all .3769
+  D2 (1.39-field shape)  (no prior/mask row)   null_ok .9291  291/498  exact@all .2452 at default decode
+At F's own default decode (.5/.5, eps .25, no prior): .4483 exact / .3601 exact@all, versus A's
+.4490 / .3688 - dead level on exact, 0.9pp behind on exact@all, but +1.4pp tokF1 and +2.1pp contains.
+WHAT WORKED: the calibration collapse is gone. D2 answered 291/498 with null_ok .9291 and exact@all
+.2452; F answers 400/498 with null_ok .9475 and exact@all .3601 at the same decode. Giving ledgar
+records the 41-field eval shape fixed both the schema-length mapping and the present/null prior, which
+is exactly what the --field-groups 8 experiment predicted.
+WHAT DID NOT WORK: the rare-field data still does not improve exactness. F's best exact@all (.3951 at
+bal .8/.1) matches the length-head model (.3977) and the sparse model with prior+mask (.3899) rather
+than beating them. tokF1 and contains are the only metrics that improve, i.e. the model finds slightly
+better regions but does not convert them into more exact answers.
+BOTTOM LINE on the data arm: two rebuilds, one diagnosis confirmed, zero accuracy gain over 470 CUAD
+documents. The 19k LEDGAR/SEC corpus is not worth its training cost in this form. If data work
+continues it should target a SPECIFIC field's failure (parties retrieval, below) rather than "more
+clauses".
+
 **16:20 — parties 0/40 IS NOT A CROP PROBLEM AND NOT A NULL PROBLEM. It is ITEM RETRIEVAL: every
 contract has 3-4 parties, the model emits 1.65, and 70% of gold parties are never pointed at by any
 slot.**
