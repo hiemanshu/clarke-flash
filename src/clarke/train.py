@@ -86,6 +86,7 @@ class Trainer:
             routing_layers=args.routing_layers, layers=args.layers,
             heads=args.heads, feedforward=args.feedforward,
             rerank=args.rerank, query_pool=args.query_pool, span_rerank=args.span_rerank,
+            length_head=args.length_head,
         ).to(self.device, dtype=torch.float32)
         if args.init_head:
             prior = load_head(Path(args.init_head), device=str(self.device),
@@ -350,6 +351,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--query-pool", dest="query_pool", default="mean",
                         choices=["mean", "last", "attn"],
                         help="Tier A: field-query pooling over the instruction span")
+    parser.add_argument("--length-head", dest="length_head", action="store_true",
+                        help="predict each span's extent (a length distribution per slot) and "
+                             "multiply it into the span score at decode; the score otherwise has "
+                             "no term for how long this field's answers usually are")
     parser.add_argument("--span-rerank", dest="span_rerank", action="store_true",
                         help="pair-net correction over base pointer top-k for text spans")
     parser.add_argument("--agg-atoms", dest="agg_atoms", action="store_true",

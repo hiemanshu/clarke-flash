@@ -118,6 +118,11 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
         cap = int(span_caps[spec.name])
         field_cap = cap if span_max_tokens is None else min(cap, int(span_max_tokens))
     field_prior = length_prior if length_prior is not None and length_prior_alpha > 0 else None
+    if getattr(logits, "length", None) is not None:
+        # Trained span-extent distribution: the same multiplicative term as the histogram
+        # prior, but conditioned on the field query and learned from the data.
+        field_prior = torch.softmax(logits.length.float(), dim=-1)
+        length_prior_alpha = 1.0
 
     if spec.type == "text":
         span_answer = _decode_span(logits.start, logits.end, record, spec, p_null,
@@ -137,13 +142,15 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
             for slot in range(LIST_SLOTS):
                 if present[slot] < slot_threshold:
                     continue
+                slot_prior = (torch.softmax(logits.length[slot].float(), dim=-1)
+                              if getattr(logits, "length", None) is not None else field_prior)
                 part = _decode_span(logits.start[slot], logits.end[slot], record, spec,
                                     torch.tensor(0.0), pointer_temp=pointer_temp,
                                     span_max_tokens=field_cap,
                                     span_tiebreak_eps=span_tiebreak_eps,
                                     token_mask=used if slot_mask else None,
-                                    length_prior=field_prior,
-                                    length_prior_alpha=length_prior_alpha)
+                                    length_prior=slot_prior,
+                                    length_prior_alpha=1.0 if slot_prior is not None else 0.0)
                 if not part.get("value"):
                     continue
                 span = part["span"]
@@ -542,6 +549,7 @@ def save_head(head: JointExtractionHead, directory: Path,
         "rerank": bool(getattr(head, "rerank", False)),
         "query_pool": getattr(head, "query_pool", "mean"),
         "span_rerank": bool(getattr(head, "span_rerank", False)),
+        "length_head": getattr(head, "length_head", None) is not None,
     }
     if backbone:
         config["backbone"] = backbone  # so eval/reload use the RIGHT backbone

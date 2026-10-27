@@ -1,3 +1,29 @@
+**15:05 — LENGTH HEAD TRAINED ON THE SPARSE BASE: it MATCHES the free histogram prior and no more.
+It cannot beat it, because it sees the same information.**
+Ladder E = exactly the A-qwen2b recipe (470 CUAD, 4 epochs = 1,880 steps, 65k, lr 1e-4, rerank/attn/
+agg-atoms) + --length-head only. One variable. doc40 @65k:
+  A sparse, no length term        .4490  tokF1 .5538  contains .6467  null_ok .9553  409/498  exact@all .3688
+  A + histogram prior .75 (free)  .4728  .5629  .6250  .9553  409/498  .3883
+  E length head, eps .25          .4554  .5605  .6219  .9518  408/498  .3731
+  E length head, eps 0            .4711  .5661  .6333  .9518  408/498  .3860
+  E length head, gates .6/.2      .4571  .5735  .6321  .9291  424/498  .3892
+  E length head, bal .8/.1        .4382  .5775  .6237  .8678  452/498  .3977
+READING: the head gives +2.2pp exact over the sparse baseline (.4711 at eps 0) and reaches the same
+place as the hand-built prior (.4728) - not better. That was predictable in hindsight: the head
+conditions on `field + slot embedding` only, which is EXACTLY the information the per-field histogram
+already encodes. Field identity is all it can see, so it can only re-learn the same distribution.
+Two real findings at the margin: (a) with a length prior present, the eps tie-break now HURTS
+(.4554 at eps .25 vs .4711 at eps 0) - they are substitutes, not complements, so the tie-break should
+be off whenever a length term is active; (b) the head's best operating point is bal .8/.1 at
+exact@all .3977, the highest exact@all recorded on doc40, but at null_ok .868 (below the .90 bar).
+PER FIELD: overall 31.5% -> 32.1% correct, i.e. neutral. document_name 70->75%, agreement_date
+80.6->83.3%, governing_law 73.3->70.0%, insurance 7.1->0.0%, parties still 0/40 (set completeness, not
+extent - the head fixes crops, and parties' crops are already fixed by the prior).
+CONCLUSION: a field-conditioned extent head is not worth its training cost over a histogram built in
+one minute. To beat the prior it must condition on the TEXT at the candidate start (the start-token
+hidden state), which is a different, larger change. Deferred: the remaining doc40 error is dominated by
+set completeness, not extent.
+
 **14:45 — D2 (LEDGAR/SEC rare-field data) FINISHED AND LOST TO THE SPARSE MODEL ON EVERY AXIS. The
 data arm failed, and the failure is the SHAPE of the data, not the number of examples.**
 Full 1 epoch (19,516 steps) at 65k, 2B, frozen backbone, head-only. doc40 @65k, eps=.25:
