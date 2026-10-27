@@ -1,3 +1,26 @@
+**10:50 — LADDER A + 4B @65k: scale is FLAT in the document regime too. 4B ties the 2B, at 2.2x the
+cost.**
+(runs/A-4b/checkpoint-1880, doc_train_470, 4 epochs/1,880 updates, batch 1, current 112M head,
+~29 min at 0.89 rec/s, 10.1 GB)
+  config                        exact   contains  null_ok  answered  exact@all
+  2B default (n.5/s.5)          .4365   .6611     .9553    409/498   .3585
+  4B default                    .4368   .6649     .9562    424/498   .3719   (+.0134)
+  2B tuned (n.6/s.2)            .4504   .6644     .9273    432/498   .3907
+  4B tuned                      .4459   .6749     .9387    436/498   .3904   (-.0003)
+  2B balanced (n.8/s.1)         .4431   .6551     .8538    457/498   .4066
+  4B balanced                   .4301   .6632     .8835    475/498   .4102   (+.0036)
+READ: this was the last cheap chance for a scale win - every earlier 4B/9B null came from 8k-window
+training, where coverage was floored for all models. Now 4B trains at 65k on the same documents and
+the result is a TIE: -.0003 at the tuned point, +.004 at the balanced point, +.013 at default (the
+only one above noise, and not our operating point). 4B is systematically less conservative - it
+answers more fields at every config (424/436/475 vs 409/432/457) with equal or better null_ok at the
+balanced point (.8835 vs .8538) - so its profile is slightly more willing to commit, not more
+capable.
+COST: 0.89 rec/s vs 2.3 rec/s (2.6x slower), 10.1 GB vs 5.7 GB, 29 min vs 25 min per 4-epoch pass
+(the wall-clock gap is smaller than the rate gap because 4B converges in fewer effective steps).
+CONCLUSION: 2B stays the working backbone. The capacity question is now closed in BOTH regimes
+(8k windows and 65k documents) and on both axes (backbone 0.23B-9B, head 112M-371M).
+
 **09:22 — GATE CURVE ON THE 65k-TRAINED 2B: the requested operating point (92-93% coverage at
 null_ok .92) does not exist on this model. Coverage/null_ok trade ~linearly.**
 (A-qwen2b/checkpoint-1880, doc40 @65k, eps .25)
