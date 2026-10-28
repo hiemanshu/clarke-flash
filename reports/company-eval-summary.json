@@ -1,0 +1,30 @@
+{
+  "surface": "company-heldout-commercial-contracts",
+  "private_source": true,
+  "use": "eval-only",
+  "contracts": 39,
+  "fields": [
+    "effective_date",
+    "expiration_date",
+    "governing_law",
+    "termination_for_convenience",
+    "anti_assignment",
+    "non_compete",
+    "cap_on_liability",
+    "parties"
+  ],
+  "gold_present_fields": 112,
+  "annotation_caveat": "partial annotation: 161 yes of 819 slots, and 'no' appears to mean 'not annotated' rather than 'absent' (e.g. governing_law is marked absent in 19 of 39 real contracts). Read gold-present metrics; null_ok is not comparable to CUAD's.",
+  "models": {
+    "clarke-L41": {
+      "exact": 0.2063,
+      "tok_f1": 0.7464,
+      "contains": 0.8702,
+      "null_ok": 0.7,
+      "answered": 95,
+      "gold": 112,
+      "exact_at_all": 0.175
+    }
+  },
+  "note": "Only aggregate numbers are public. Source documents and per-record predictions stay under data/ and reports/company-eval/ (both gitignored)."
+}

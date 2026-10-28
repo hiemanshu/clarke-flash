@@ -33,3 +33,8 @@ keys.json
 
 # --- transient logs ---
 logs/
+
+# --- private company eval (owner decision 2026-10-29: eval-only, data private, results only) ---
+# Contract text and per-record predictions must never be committed.
+reports/company-eval/
+reports/company-*.preds.jsonl

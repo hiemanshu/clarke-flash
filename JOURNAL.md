@@ -1,3 +1,30 @@
+**00:12 — RUN N WINS: exact@all .4089 (L41 .4252) -> .4373, +1.21pp, above the pre-registered adopt
+threshold of .4352. Adapter preamble supervision + CUAD&LEDGAR 41-field head.**
+  model      exact@all  exact   tokF1   contains null_ok answered
+  L41         .4252     .5139   .6346    .6997   .9606   412/498
+  N           .4373     .5299   .6418    .7012   .9562   411/498
+  delta      +1.21pp    +1.60   +0.72    +0.15   -0.44    -1
+One fewer answer, null_ok 0.44pp lower - inside noise, and the gain is on precision and token overlap, so
+this is not a coverage/abstention trade. N is now the best checkpoint: runs/N-mix41 (decode baked by
+the chain). Attribution is NOT claimed: N changed the adapter diet (preamble snippets) and the head
+data (CUAD + 507 labelled LEDGAR) together. Run P's CUAD-only-head controls at matched steps are queued
+for exactly that.
+COMPANY EVAL (private, eval-only, aggregate-only; reports/company-eval-summary.json):
+39 hand-labelled commercial services contracts, 8 schema fields, 112 gold-present fields (73 clause +
+39 parties). L41 scores exact .2063 | tokF1 .7464 | contains .8702 | null_ok .7000 | answered 95/112 |
+exact@all .1750.
+READ IT CAREFULLY:
+  - contains .87 vs exact .21 is a span-granularity gap: the company citation is the whole clause, our
+    model returns the core phrase. `contains` (substring either direction) is the meaningful number
+    here; strict `exact` demands the full annotated clause verbatim.
+  - null_ok .70 is NOT comparable to CUAD: the export has 161 yes of 819 slots, and 'no' looks like
+    'not annotated' rather than 'absent' - governing_law is marked absent in 19 of 39 real contracts.
+    Treat absent labels as missing, score gold-present only.
+  - 4 citations could not be grounded (3 effective_date, 1 governing_law) and were dropped.
+PRIVACY: raw contracts and derived records live under data/company_eval (gitignored); per-record
+predictions and full reports under reports/company-eval/ (gitignored). Only the aggregate summary is
+committed.
+
 **00:10 — PRE-REGISTRATION: RUN P, THE ATTRIBUTION CONTROLS FOR N AND O.**
 WHY: N and O-2 each change the adapter diet/length AND the head data versus L41, so neither can say
 which change did the work. P repeats each pipeline's **backbone** with a **CUAD-only head at matched
