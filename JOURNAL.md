@@ -1,3 +1,20 @@
+**23:05 — SELECTION RULE CORRECTED: parties + document_name are REQUIRED, agreement_date MAY BE NULL.
+This supersedes the "all three fields" condition in the 22:55 entry.**
+WHY: agreement_date is frequently absent from the 12k-char preamble even in contracts that clearly
+name the parties and title, so requiring it threw away good records over a field the schema can
+represent as null. Owner's rule: a record qualifies if the label row has `parties` and
+`document_name`; `agreement_date` is taken when present and null otherwise.
+MEASURED EFFECT (data/llm_preambles.jsonl at 23:05, while the run continues):
+  K3 this run          207 successes -> 197 (95%) have parties+name -> 168 of those also have a date
+  k3.1-pro (old)       316 successes -> 311 (98%) have parties+name -> 271 of those also have a date
+So the eligible fraction rises from ~81-87% to ~95-98% of successful rows; the date simply becomes a
+third of the fields with real supervision rather than a gate.
+ALSO NOTED: quantity is not the constraint right now. Owner's framing - "picking the best, not the
+most; we are limited by our adapter size on the GPU" - so ~4.4 present fields per record is fine and
+the 29% markerless tail stays excluded rather than chased with a larger --chars.
+UNCHANGED: merge still waits for the run to stop; expansion to the full schema with explicit nulls
+still required (records average 1.39 LEDGAR fields); rule-7 leak audit before any mix.
+
 **22:55 — MERGE DEFERRED UNTIL THE LABELLING RUN STOPS, AND THE CORPUS IS SELECTED, NOT PATCHED:
 only records whose label row has ALL THREE fields AND whose source record has at least one
 LEDGAR-derived field enter the training corpus.**
