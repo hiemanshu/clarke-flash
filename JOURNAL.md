@@ -1,3 +1,29 @@
+**16:32 — FOURTH GPU FULL-CHIP RESET. L41 DIED AT STEP ~790/1880, FIVE MINUTES IN, WITH NO CODE
+CHANGE BEYOND THE BACKBONE. Owner notified (critical: ntfy + Signal). Checkpoints 250/500/750 survive.**
+WHAT HAPPENED: L41-mild started 16:26, loss@500 = 2.32 (below H4's 3.44, so the gentle adapter was
+behaving exactly as in K2), 2.2-2.9 rec/s, 5.7 GB. At 16:30:15 the kernel logged
+NV_ERR_GPU_IN_FULLCHIP_RESET (rs_server.c:1387), at 16:31:35 the card left the bus
+(NV_ERR_GPU_IS_LOST), the trainer died with CUDA_ERROR_LAUNCH_FAILED inside head.py forward, and
+nvidia-smi now reports "No devices were found".
+FOURTH OCCURRENCE (all during 65k training, none during eval or stress):
+  10-27 17:20  H1  step 780   ~5 min   after a long day of runs
+  10-27 17:59  H2  step ~1660 ~15 min  after a power cycle
+  10-27 18:47  H3  step 1580  ~12 min  panel on, idle-keeper running (display hypothesis falsified)
+  10-28 16:30  L41 step ~790  ~5 min   9h42m uptime, GPU idle most of the day, one 40-doc eval before
+The previous 10-min full-power matmul stress survived 84 C / 535 W, and H4 completed a full 1,880-step
+65k run on 10-28 07:06 after the machine had been off for 12 hours. Time-to-failure is not monotonic
+in uptime or temperature, which keeps pointing at power delivery (transient spikes under long-sequence
+attention) rather than thermals; the power limit is still uncapped because that needs root.
+L41 STATE: no verdict - the pre-registered rules do not apply to an incomplete run. The drift gate
+itself passed (loss@500 2.32 vs 3.44 H4 / 2.91 K2), so the adapter is not the suspect. Resume is
+supported (`--resume runs/L41-mild/checkpoint-750`); at 2.5 rec/s the remaining 1,130 steps are the
+same shape of run that has now failed four times.
+OPTIONS FOR THE OWNER, in cost order: (1) power cycle, then resume from checkpoint-750; (2) power
+limit 450 W (`sudo nvidia-smi -pl 450`) before the resume - the untested, cheapest hardware theory;
+(3) rerun the identical recipe at --max-length 8192 to test whether 65k is the trigger, accepting it
+is a different regime; (4) RMA if (1)+(2) fail again.
+Nothing else is running. Per rule 9 the push went out before this entry was written.
+
 **16:30 — PRE-REGISTRATION: 41-FIELD GENTLE-ADAPTER TRANSFER (L41), THEN AN ADAPTER-STRENGTH SWEEP.
 Notifying on completion per OPERATIONS rule 9; no judgment will be improvised mid-run.**
 WHY: K2 showed backbone adaptation helps on the 12-field bed (exact@all .5615 -> .5729) but the
