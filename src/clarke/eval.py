@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,57 @@ def match_scalar(spec: FieldSpec, predicted: Any, gold: Any) -> bool:
 
 
 @torch.no_grad()
+def _pct(values: list[float], q: float) -> float | None:
+    """Linear-interpolated percentile (q in [0,1]); None on empty input."""
+    if not values:
+        return None
+    s = sorted(values)
+    if len(s) == 1:
+        return s[0]
+    pos = (len(s) - 1) * q
+    lo = int(pos)
+    hi = min(lo + 1, len(s) - 1)
+    return s[lo] + (s[hi] - s[lo]) * (pos - lo)
+
+
+def timing_report(encode_s: list[float], infer_calls: list[tuple[int, float]],
+                  n_fields: int) -> dict[str, Any]:
+    """End-to-end per-document latency: encoding + one answer() call.
+
+    Model/backbone loading is excluded (callers time only the eval loop). With
+    batch_size=1 every answer() call is one document, so per-document times are
+    exact; at batch>1 a call's seconds are split evenly across its documents and
+    `batched` is set, because batching changes the per-document cost.
+    """
+    if not infer_calls:
+        return {}
+    batched = any(n != 1 for n, _ in infer_calls)
+    infer_per_doc: list[float] = []
+    for n, secs in infer_calls:
+        infer_per_doc.extend([secs / n] * n)
+    n_docs = min(len(encode_s), len(infer_per_doc))
+    per_doc = [encode_s[i] + infer_per_doc[i] for i in range(n_docs)]
+    total = sum(per_doc)
+    return {
+        "per_document_s": {
+            "n": n_docs,
+            "mean": round(sum(per_doc) / max(n_docs, 1), 3),
+            "p50": round(_pct(per_doc, 0.50) or 0.0, 3),
+            "p90": round(_pct(per_doc, 0.90) or 0.0, 3),
+            "p99": round(_pct(per_doc, 0.99) or 0.0, 3),
+            "min": round(min(per_doc), 3) if per_doc else None,
+            "max": round(max(per_doc), 3) if per_doc else None,
+        },
+        "encode_s": round(sum(encode_s), 3),
+        "infer_s": round(sum(secs for _, secs in infer_calls), 3),
+        "total_s": round(total, 3),
+        "records_per_s": round(n_docs / total, 3) if total else None,
+        "fields_per_s": round(n_fields / total, 1) if total else None,
+        "batched": batched,
+        "batch_size_max": max(n for n, _ in infer_calls),
+    }
+
+
 def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              device: torch.device, batch_size: int = 8,
              agg_atoms: bool = False, max_length: int = 8192,
@@ -61,17 +113,22 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                                        "solved": 0, "exact_solvable": 0})
 
     encoded_records = []
+    encode_s: list[float] = []
     for record in records:
         try:
+            _t0 = time.perf_counter()
             encoded_records.append(encode_record(tokenizer, record, max_length=max_length,
                                                 agg_atoms=agg_atoms))
+            encode_s.append(time.perf_counter() - _t0)
         except ValueError:
             continue
 
     torch.cuda.empty_cache()
+    infer_calls: list[tuple[int, float]] = []
     for start in range(0, len(encoded_records), batch_size):
         batch_records = encoded_records[start:start + batch_size]
         batch = collate_records(batch_records, tokenizer.pad_token_id, device)
+        _t0 = time.perf_counter()
         with torch.inference_mode():
             answers = model.answer(batch, null_threshold=null_threshold,
                                    slot_threshold=slot_threshold, dedupe=dedupe,
@@ -91,6 +148,7 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                                    candidate_ranker=candidate_ranker,
                                    ranker_alpha=ranker_alpha,
                                    field_null_thresholds=field_null_thresholds)
+        infer_calls.append((len(batch_records), time.perf_counter() - _t0))
         torch.cuda.empty_cache()  # varying-length long docs + per-field NxN pointer
         # matrices fragment the allocator fast; releasing per batch costs ~nothing
         # next to a 19GB model and prevents the 30GB OOM seen at 02:46
@@ -216,7 +274,9 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
         dk = sorted({k for (d, k) in stats if d == dom})
         by_domain[dom] = {k: fmt(rollup(lambda d, kk, dom=dom, k=k: d == dom and kk == k))
                           for k in dk}
-    return {"overall": overall, "by_domain": by_domain}
+    n_fields = sum(len(r.fields) for r in encoded_records)
+    return {"overall": overall, "by_domain": by_domain,
+            "timing": timing_report(encode_s, infer_calls, n_fields)}
 
 
 @torch.inference_mode()
@@ -503,7 +563,8 @@ def main(argv: list[str] | None = None) -> None:
                            field_null_thresholds=field_null,
                            agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
-                  "metrics": summary["overall"], "by_domain": summary["by_domain"]}
+                  "metrics": summary["overall"], "by_domain": summary["by_domain"],
+                  "timing": summary.get("timing")}
     print(json.dumps(report, indent=2))
     if args.out:
         Path(args.out).write_text(json.dumps(report, indent=2))
