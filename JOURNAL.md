@@ -1,3 +1,30 @@
+**16:30 — PRE-REGISTRATION: 41-FIELD GENTLE-ADAPTER TRANSFER (L41), THEN AN ADAPTER-STRENGTH SWEEP.
+Notifying on completion per OPERATIONS rule 9; no judgment will be improvised mid-run.**
+WHY: K2 showed backbone adaptation helps on the 12-field bed (exact@all .5615 -> .5729) but the
+product setup is 41 fields, where the only evidence is that harsh adaptation destroys the backbone
+(.0801, null_ok 0.000). Whether the gentle adapter transfers is untested.
+STEP 1 — L41-mild (runs/L41-mild): fresh head, data/doc_train_470.jsonl, 65k, 4 epochs = 1,880 steps,
+batch 1, lr 1e-4, --rerank --query-pool attn --agg-atoms --slot-mask-train --slot-assign, and the ONLY
+change vs H4 is --backbone runs/bb-snip-lora-mild. Decode finalized exactly as H4 (eps .25, prior .75,
+candidates parties, ranker alpha 2.0, extra 0) and evaluated with ZERO decode flags.
+  reference: H4 baked  exact .4943  tokF1 .6184  contains .6797  null_ok .9536  412/498  .4089
+  ADOPT if exact@all >= .4189 (+1.0pp) or exact >= .5043 (+1.0pp) with null_ok within .01
+  NEUTRAL if |d exact@all| < .005
+  REJECT otherwise, and do not spend the sweep on this backbone
+  EARLY WARNING: H4's head loss at step 500 was 3.44 (K2's 12-field bed: 3.44 original, 2.91 gentle,
+  9.01 harsh). If loss@500 >= 6.0 the adapter has drifted: record it, let --diverge-stop 18 guard the
+  rest, and read the result as a drift failure rather than a null result.
+STEP 2 — strength sweep, on the 12-field bed first because it is the cheap, lower-variance bench
+(K2 reference .6103/.7311/.7994/.8824/291 of 310/.5729). One variable away from K2 (r=32, lr=2e-5,
+800 steps on data/snippets_4k.jsonl):
+  r=16 | r=64 | lr=1e-5 | lr=4e-5 | steps=400 | steps=1200
+Each arm = adapter on snippets -> merge -> fresh 12-field head at 65k (1,880 steps) -> eval.
+FILTER: head loss at step 500 (2.91 = K2, 3.44 = original); discard arms >= 6.0 before paying for a full
+eval. Score the best two on the 12-field eval; only if the winner beats K2 by >= 1.0pp exact@all does it
+get applied to the 41-field setup, which is then evaluated against L41/H4.
+COST NOTE: step 2 is ~6 arms x (snippet adapter + 1,880-step head) on one 32GB card; the early-loss
+filter exists so a bad adapter is not carried through a full eval.
+
 **16:12 — EXTERNALS REMEASURED WITH FULL COVERAGE AND LATENCY. THE "WITHIN 0.7 pp" CLAIM WAS AN
 ARTIFACT OF THEIR FAILED CALLS: WITH COMPLETE COVERAGE WE ARE 4.1 pp BEHIND OPUS AND 11 pp BEHIND
 GEMINI. All four rows now carry latency; gpt/opus run at effort=low by owner choice.**
