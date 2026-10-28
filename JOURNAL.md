@@ -1,3 +1,26 @@
+**23:15 — FIRST RUN ON THE LABELLED CORPUS IS NEGATIVE, AND THE CONTROL THAT WOULD EXPLAIN IT WAS
+STOPPED BY THE OWNER BEFORE ITS FIRST CHECKPOINT. NO CONCLUSION ABOUT THE CORPUS IS DRAWN.**
+L42-mix1: backbone runs/bb-snip-lora-mild, init-head runs/L41-mild-r3/checkpoint-1880, 1 epoch over
+data/doc_train_470.jsonl + data/ledgar_labelled_cuad.jsonl (977 records = 977 steps), lr 1e-4, 65k,
+then finalized and evaluated with zero flags on doc40.
+  model      exact@all  exact   tokF1   contains null_ok answered
+  L41         .4252     .5139   .6346    .6997   .9606   412/498
+  L42 mix1    .4085     .5011   .6228    .6689   .9623   406/498
+  delta      -1.67pp    -1.28   -1.18    -3.08   +0.17    -6
+WHY THIS IS NOT A VERDICT ON THE CORPUS: L42 is continual training from L41 at lr 1e-4, and it also
+halves CUAD's exposure (CUAD appears once in the mix, where L41 saw it four times). A drop can come
+from the corpus or from high-LR drift on the base model; the journal has already recorded one
+catastrophic high-LR drift case (harsh LoRA, exact .0801). The 1-variable control was CUAD-only for
+the same 977 steps, same LR, same init and backbone. **Owner stopped that control at ~180 steps, so
+no checkpoint exists and the confound remains open.**
+STATE: GPU idle (56 MiB, 0%), no jobs. runs/L42-mix1/checkpoint-977 and
+reports/L42-mix1-finalized.json exist; runs/L42-cuad-ctrl has no checkpoint.
+WHAT THE NEXT RUN HAS TO DO, WHICHEVER DIRECTION IS CHOSEN: separate LR/continual-effect from
+corpus-effect before any corpus verdict - either the CUAD-only control at the same 977 steps and
+lr 1e-4, or the same mix at a fine-tuning LR (~2e-5) so the base is not rewritten. The corpus itself
+is verified (507 docs, full-schema nulls, 0 bad spans, 0 leaks, 1 doc over budget, 4.35 present
+fields each); what is unverified is whether this training recipe can add it without hurting doc40.
+
 **23:30 — GROUNDING BUG FOUND AND REPAIRED; FIRST LABELLED CORPUS BUILT (507 docs, 4.35 present
 fields each, 0 leaks, 1 doc too long). Every span in the 523 existing label rows was WRONG.**
 THE BUG (scripts/llm_label_preambles.py ground()): it searched a whitespace-collapsed string but
