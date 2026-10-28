@@ -1,3 +1,27 @@
+**07:10 — H4 (slot-mask training + order-free slot assignment) COMPLETED CLEANLY (1,880/1,880, no GPU
+fault) AND THE ASSIGNMENT IS NEUTRAL. G remains the best model. parties is still not fixed.**
+doc40 @65k, standard decode (eps .25 + histogram prior .75 + slot mask):
+  A baseline            exact .4490  tokF1 .5538  contains .6467  null_ok .9553  409/498  exact@all .3688
+  G  slot-mask train    exact .4826  .6029  .6792  .9597  408/498  .3954
+  H4 + assignment       exact .4753  .6060  .6815  .9536  412/498  .3932
+  H4 default decode     exact .4619  .5753  .6713  .9536  412/498  .3821
+Assignment costs .7pp exact and .2pp exact@all, buys +.3pp tokF1, +.2pp contains and 4 more answers -
+inside noise, and it does not beat doing nothing. The earlier H3@1500 reading (.4705/.6108/.3855) was
+just a mid-schedule checkpoint, not a signal.
+parties (slot .50 mask decode), three variants:
+  A   items/doc 3.77  recall .297  precision .377  set-exact 0/40
+  G   items/doc 3.62  recall .312  precision .414  set-exact 1/40
+  H4  items/doc 3.85  recall .318  precision .396  set-exact 0/40
+Recall moves a little (.297 -> .318) but precision pays for it and the set-exact count stays at noise
+level (0-1 of 40). Two training fixes aimed at the measured failure (slots duplicating instead of
+assigning) have now been tried: masking consumed text (real gain, +3.4pp exact overall) and order-free
+assignment (no gain). The remaining gap is that only ~32% of gold parties are ever pointed at, while
+the measured ceiling says 66% of items sit inside some slot's top-5 - so the slot SELECTION is still
+leaving half the reachable items on the table, and neither of our two mechanisms addresses that.
+GPU NOTE: this was the first full 65k run since the three full-chip resets; the machine had been off
+for 12 hours. No fault, 45 C idle after. Consistent with a transient power/thermal condition rather
+than a deterministic code problem, but the power limit is still uncapped for lack of root.
+
 **18:47 — THIRD GPU FAULT: the display hypothesis is FALSIFIED. The panel was ON for the whole run.**
 H3 (slot-mask + slot-assign, screen-blank inhibitor held, idle-reset keeper running every 45 s) died at
 18:47:06 at step 1580/1880, ~12 minutes into training. Evidence that rules the display out:

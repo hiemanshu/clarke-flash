@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/H3-assign/checkpoint-1500",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 408,
+      "null_n": 1142,
+      "exact": 0.4705,
+      "located": 0.4705,
+      "null_correct": 0.9553,
+      "tok_f1": 0.6108,
+      "contains": 0.6756,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0663
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 408,
+        "null_n": 1142,
+        "exact": 0.4705,
+        "located": 0.4705,
+        "null_correct": 0.9553,
+        "tok_f1": 0.6108,
+        "contains": 0.6756,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0663
+      }
+    }
+  }
+}
