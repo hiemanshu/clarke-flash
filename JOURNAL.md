@@ -1,3 +1,31 @@
+**07:35 — CANDIDATE-CONSTRAINED DECODE FIXES HALF OF parties: 0/40 -> 6/40, and the WHOLE doc40 score
+hits a new best (.4952 exact / .6157 tokF1 / .4097 exact@all) with NO retraining.**
+Diagnosis first. The pointer is the wrong instrument for `parties`: it invents spans over 65k tokens,
+while the answers are NAME mentions. Cheap rules (quoted defined terms, capitalised runs, operands of
+"by and between") cover 191/192 CUAD party items (99.5%) and 39/40 whole documents - so the job is
+RANKING ~221 names down to 3-4, not span selection.
+Progression on parties (H4 checkpoint, slot .50 mask decode):
+  slot-mask decode                 items 3.85  recall .318  precision .396  crop .839  set-exact 0/40
+  candidate decode (v1)            items 4.53  recall .453  precision .481  crop .690  set-exact 1/40
+  candidate + legal-suffix crop    items 4.53  recall .615  precision .652  crop .771  set-exact 6/40
+THE SUFFIX RULE WAS THE BIG ONE: candidates stopped at the comma, so "YOU ON DEMAND HOLDINGS, INC."
+was emitted as "YOU ON DEMAND HOLDINGS" - right entity, wrong boundary, scored as a miss. Absorbing
+", Inc|LLC|Ltd|Corp|S.A|L.P|GmbH|Holdings" after the run lifted recall .453 -> .615 and set-exact
+1/40 -> 6/40. (This is also why crop-exact had fallen from .839 to .690.)
+FULL doc40 (candidate decode gated to the parties field only; clause fields must not use it):
+  G  (slot-mask train)         exact .4826  tokF1 .6029  contains .6792  null_ok .9597  408/498  .3954
+  H4 (+ assignment)            exact .4753  .6060  .6815  .9536  412/498  .3932
+  H4 + candidate parties       exact .4952  .6157  .6785  .9536  412/498  .4097
++2.0pp exact and +1.7pp exact@all over H4, +1.3pp/+1.4pp over the previous best G, at the same
+coverage and null discipline. Decode-only, so it stacks on any future model.
+WHAT 40/40 WOULD TAKE (measured, so the target can be set honestly): gold party items are 45.8% short
+terms, 43.2% legal names, 6.2% aggregate phrases ("Athlete" and together with...), 2.1% pronoun
+definitions ('"we," "us," or "our"'), 2.6% other. Only 23/40 documents consist entirely of name-like
+items, and 16 documents list 5-8 mentions (CUAD records several mentions of the same party). A
+name-extraction system therefore cannot reach 40/40; the structural target is the 23-name-like-doc
+subset, i.e. roughly 15-20/40. Remaining levers: ranker precision (.652) via a trained candidate
+scorer, and K estimation (present head emits ~4.5 items; gold is 3-8).
+
 **07:10 — H4 (slot-mask training + order-free slot assignment) COMPLETED CLEANLY (1,880/1,880, no GPU
 fault) AND THE ASSIGNMENT IS NEUTRAL. G remains the best model. parties is still not fixed.**
 doc40 @65k, standard decode (eps .25 + histogram prior .75 + slot mask):

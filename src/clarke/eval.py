@@ -44,7 +44,9 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              span_caps: dict[str, int] | None = None,
              length_priors: dict[str, Any] | None = None,
              length_prior_alpha: float = 0.0,
-             pool_decode: bool = False, pool_starts: int = 4) -> dict[str, Any]:
+             pool_decode: bool = False, pool_starts: int = 4,
+             candidate_decode: bool = False, candidate_region: float = 1.0,
+             candidate_fields: set[str] | None = None) -> dict[str, Any]:
     stats: dict[tuple[str, str], dict[str, float]] = {}
 
     def stat(dom: str, kind: str) -> dict[str, float]:
@@ -78,7 +80,10 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                                    length_priors=length_priors,
                                    length_prior_alpha=length_prior_alpha,
                                    pool_decode=pool_decode,
-                                   pool_starts=pool_starts)
+                                   pool_starts=pool_starts,
+                                   candidate_decode=candidate_decode,
+                                   candidate_region=candidate_region,
+                                   candidate_fields=candidate_fields)
         torch.cuda.empty_cache()  # varying-length long docs + per-field NxN pointer
         # matrices fragment the allocator fast; releasing per batch costs ~nothing
         # next to a 19GB model and prevents the 30GB OOM seen at 02:46
@@ -316,6 +321,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--span-caps", default=None,
                         help="JSON of per-field span caps from scripts/field_span_caps.py; "
                              "fields absent from it keep --span-max-tokens (default 256)")
+    parser.add_argument("--candidate-decode", dest="candidate_decode", action="store_true",
+                        help="list<text> fields: restrict spans to name-like candidates (quoted "
+                             "terms, capitalised runs, by-and-between operands) and rank them; "
+                             "measured ceiling 191/192 CUAD party items, 39/40 documents")
+    parser.add_argument("--candidate-fields", dest="candidate_fields", default="parties",
+                        help="comma-separated fields that may use candidate-constrained decode "
+                             "(default parties; clause fields must not)")
+    parser.add_argument("--candidate-region", dest="candidate_region", type=float, default=1.0,
+                        help="fraction of the document to take name candidates from (parties are "
+                             "defined in the preamble; 0.25 restricts to the first quarter)")
     parser.add_argument("--pool-decode", dest="pool_decode", action="store_true",
                         help="list fields: build one candidate pool from every slot's top starts and "
                              "take as many items as the present head asks for (parties fix)")
@@ -427,6 +442,10 @@ def main(argv: list[str] | None = None) -> None:
                            length_prior_alpha=args.span_prior_alpha,
                            pool_decode=args.pool_decode,
                            pool_starts=args.pool_starts,
+                           candidate_decode=args.candidate_decode,
+                           candidate_region=args.candidate_region,
+                           candidate_fields={f.strip() for f in args.candidate_fields.split(",")
+                                             if f.strip()},
                            agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "metrics": summary["overall"], "by_domain": summary["by_domain"]}

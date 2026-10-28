@@ -141,6 +141,63 @@ def _csv_aggregates(state: str, cap: int = 48) -> list[tuple[float, tuple[int, i
     return out[:cap]
 
 
+# ---------------------------------------------------------------- text candidates
+# Party-like name mentions: quoted defined terms, capitalised runs, and the operands of
+# "by and between X and Y". Measured on doc40: 191/192 CUAD party items (99.5%) and 39/40
+# whole documents are covered by these rules, so the pointer does not have to invent the
+# span - it only has to RANK ~221 candidates down to the 3-4 real parties.
+_QUOTED = re.compile(r"[\"\u201c\u201d']([A-Z][^\"\u201c\u201d']{0,60})[\"\u201c\u201d']")
+_CAP_RUN = re.compile(r"\b(?:[A-Z][A-Za-z&.\-]*)(?:\s+(?:[A-Z][A-Za-z&.\-]*|of|the|and|&))*")
+_INTRO = re.compile(r"(?:by and between|between)\s+([^.;]{5,200})", re.IGNORECASE)
+
+
+def text_candidates(state: str) -> list[tuple[str, tuple[int, int]]]:
+    """(value, char span) candidates for name-like fields such as `parties`."""
+    seen: set[tuple[int, int]] = set()
+    out: list[tuple[str, tuple[int, int]]] = []
+
+    suffix = re.compile(
+        r"\s*,?\s*(?:Inc|LLC|L\.L\.C|Ltd|Corp|Corporation|Company|Co|S\.A|L\.P|PLC|N\.V|"
+        r"GmbH|Limited|Partners|Holdings)\.?", re.IGNORECASE)
+
+    def add(start: int, end: int) -> None:
+        # Legal suffixes sit after a COMMA ("YOU ON DEMAND HOLDINGS, INC."), which the
+        # capitalised-run rule stops at. Without this the crop is right but the boundary is
+        # wrong, and exact-match scores it as a miss (crop-exact fell .84 -> .69 in the first
+        # candidate-decode measurement). Absorb the suffix, then trim trailing punctuation.
+        tail = state[end:end + 40]
+        m = suffix.match(tail)
+        if m:
+            end = end + m.end()
+        text = " ".join(state[start:end].split()).strip("\"\u201c\u201d' ,")
+        if not (2 <= len(text) <= 90):
+            return
+        key = (start, end)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append((text, (start, end)))
+
+    for m in _QUOTED.finditer(state):
+        add(m.start(1), m.end(1))
+    for m in _CAP_RUN.finditer(state):
+        add(m.start(), m.end())
+    for m in _INTRO.finditer(state):
+        chunk = m.group(1)
+        cursor = m.start(1)
+        for part in re.split(r"(,|\band\b|&)", chunk):
+            if part not in (",", " and ", "&") or part is None:
+                pass
+            if part and part not in (",", "&") and part.strip().lower() != "and":
+                stripped = part.strip()
+                if stripped:
+                    off = chunk.find(part, max(0, cursor - m.start(1)))
+                    if off >= 0:
+                        add(m.start(1) + off, m.start(1) + off + len(part))
+            cursor += len(part or "")
+    return out
+
+
 class Pool:
     """Candidate atoms for one record: (value, char_span) per extracted form.
 

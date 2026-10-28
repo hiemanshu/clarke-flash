@@ -68,7 +68,10 @@ class ClarkeModel(torch.nn.Module):
                length_priors: dict[str, torch.Tensor] | None = None,
                length_prior_alpha: float = 0.0,
                pool_decode: bool = False, pool_starts: int = 4,
-               dedupe_mode: str = "overlap") -> list[dict[str, Any]]:
+               dedupe_mode: str = "overlap",
+               candidate_decode: bool = False,
+               candidate_region: float = 1.0,
+               candidate_fields: set[str] | None = None) -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -93,7 +96,10 @@ class ClarkeModel(torch.nn.Module):
                                             length_prior_alpha=length_prior_alpha,
                                             dedupe_mode=dedupe_mode,
                                             pool_decode=pool_decode,
-                                            pool_starts=pool_starts)
+                                            pool_starts=pool_starts,
+                                            candidate_decode=candidate_decode,
+                                            candidate_region=candidate_region,
+                                            candidate_fields=candidate_fields)
                 for encoded, field_logits in zip(record.fields, record_logits)
             })
         return out
@@ -114,7 +120,10 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                   length_prior_alpha: float = 0.0,
                   dedupe_mode: str = "overlap",
                   pool_decode: bool = False,
-                  pool_starts: int = 4) -> dict[str, Any]:
+                  pool_starts: int = 4,
+                  candidate_decode: bool = False,
+                  candidate_region: float = 1.0,
+                  candidate_fields: set[str] | None = None) -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
     # Per-field extent cap: score(i,j)=p_start*p_end has no term for how long this
@@ -147,6 +156,48 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
         if float(p_null) <= null_threshold:  # absent list: honor the trained null head
             used = torch.zeros(logits.start.shape[-1], dtype=torch.bool,
                                device=logits.start.device)
+            if candidate_decode and (candidate_fields is None or spec.name in candidate_fields):
+                # Party-like fields are NAME mentions, not clauses. Cheap rules recover 191/192
+                # CUAD party items and 39/40 whole documents, so instead of asking the pointer to
+                # invent a span, restrict it to name candidates and let it RANK them. K comes from
+                # the present head, which is well calibrated for counted lists.
+                from .candidates import text_candidates
+                from .encoding import token_span_for_chars
+                cands = text_candidates(record.state)
+                if candidate_region < 1.0:      # parties are defined in the preamble
+                    limit = int(len(record.state) * candidate_region)
+                    cands = [c for c in cands if c[1][0] < limit]
+                keep: list[tuple[float, str, list[int]]] = []
+                if cands:
+                    starts, ends, texts, spans_c = [], [], [], []
+                    for text_c, (cs, ce) in cands:
+                        pair = token_span_for_chars(record, cs, ce)
+                        if pair is None:
+                            continue
+                        starts.append(pair[0]); ends.append(pair[1])
+                        texts.append(text_c); spans_c.append([cs, ce])
+                    if starts:
+                        st = torch.tensor(starts, device=logits.start.device)
+                        en = torch.tensor(ends, device=logits.start.device)
+                        sp = torch.softmax(logits.start.float() * pointer_temp, dim=-1)
+                        ep = torch.softmax(logits.end.float() * pointer_temp, dim=-1)
+                        scores = (sp[:, st] * ep[:, en]).max(dim=0).values
+                        want = max(1, int((present >= slot_threshold).sum()))
+                        order = torch.argsort(scores, descending=True).tolist()
+                        taken: set[str] = set()
+                        for idx_c in order:
+                            key = texts[idx_c].strip().lower()
+                            if key in taken:
+                                continue
+                            taken.add(key)
+                            keep.append((float(scores[idx_c]), texts[idx_c], spans_c[idx_c]))
+                            if len(keep) >= min(want, LIST_SLOTS):
+                                break
+                if keep:
+                    answer["value"] = [t for _sc, t, _sp in keep]
+                    answer["spans"] = [sp_ for _sc, _t, sp_ in keep]
+                    answer["p_null"] = _probability(p_null)
+                    return answer
             if pool_decode:
                 # The gold items are RANKED well (81.8% of party starts sit in some slot's top-5)
                 # but every slot's argmax lands on the same item, and dedupe deletes the
