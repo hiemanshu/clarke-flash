@@ -1,3 +1,32 @@
+**07:50 — THE parties METRIC WAS THE PROBLEM, NOT (ONLY) THE MODEL. Scored by ENTITY instead of by
+annotated string, we are 21/40 doc-exact with recall .883 / precision .842 - BETTER recall and precision
+than Opus 5.5 (.783/.768).**
+The owner asked why we cannot approach 90% on parties and whether the measure is at fault. Both halves
+are right. CUAD `parties` gold is a list of annotated MENTIONS, not a canonical entity set: the same
+party appears twice, once with and once without its legal suffix, and ~10% of items are not names at
+all (6.2% aggregate phrases like '"Athlete" and together with...', 2.1% pronoun definitions like
+'"we," "us," or "our"', 2.6% other). Exact set equality on those strings marks a substantively correct
+answer wrong.
+NEW SCORER (scripts/parties_semantic.py): normalise, strip legal suffixes (Inc/LLC/Corp/S.A/...), merge
+mentions whose keys contain one another, then match predicted to gold entities by containment. Report
+entity recall/precision and "doc exact" = every gold entity found AND nothing spurious.
+RESULTS (40 docs, identical predictions, only the scorer changed):
+  model            strict  entity-exact  recall  precision  gold ents  pred ents
+  ours H4+cand      8/40    21/40         .883    .842       3.23       3.55
+  opus-5.5         15/40    27/40         .783    .768       3.23       3.15
+  gemini-4-argon    8/40    21/40         .768    .772       3.23       3.55
+  gpt-6.1-sol       0/40    10/40         .632    .792       3.23       2.88
+  clairic           0/40     0/40         .931    .341       3.23      13.18
+Every model gains massively (Opus 15 -> 27, GPT 0 -> 10): between a quarter and a third of documents are
+penalised by annotation style rather than extraction quality. We gain 8 -> 21.
+WHAT THIS MEANS FOR THE TARGET: on the entity measure we are already at 88% recall with the best
+precision in the table, so "90%" is in reach; the residual gap to Opus (21 vs 27 doc-exact) is SET
+COMPOSITION - the documents that list 5-8 mentions or aggregate phrases - not identification. Reporting
+exact-only on parties was misleading us (and understated the model).
+RECOMMENDATION: report BOTH numbers for list<text> fields - exact (annotation-faithful, comparable to
+the current OPERATIONS rule) and entity-exact (task-faithful). Do not replace exact silently; add the
+column. This also affects other list fields whose gold is mention lists (governing_law etc.).
+
 **07:35 — CANDIDATE-CONSTRAINED DECODE FIXES HALF OF parties: 0/40 -> 6/40, and the WHOLE doc40 score
 hits a new best (.4952 exact / .6157 tokF1 / .4097 exact@all) with NO retraining.**
 Diagnosis first. The pointer is the wrong instrument for `parties`: it invents spans over 65k tokens,
