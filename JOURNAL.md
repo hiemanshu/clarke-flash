@@ -1,3 +1,25 @@
+**23:25 — PRE-REGISTRATION: M-twelve-mix, the labelled corpus on the 12-field bed.
+CUAD-12 + LEDGAR-12, 1 epoch, fresh head, 65k; evaluated on BOTH the 12-field and the 41-field docs.**
+WHY: L42 (41-field, continual from L41 at lr 1e-4) was negative but confounded - it is not a corpus
+verdict. The 12-field bed is the cheap, lower-variance bench where I-twelve (.5615) and K2 (.5729)
+already exist, so the same question costs ~7 minutes instead of ~15 and has two reference points.
+DATA: --train data/doc_train_470_twelve.jsonl data/ledgar_labelled_twelve.jsonl = 470 + 507 = 977
+records, 1 epoch = 977 steps. The labelled view carries 12 fields with EXPLICIT NULLS (the source
+records average 1.48 LEDGAR fields, so a raw join would be a 2-5 field all-present schema - the D2
+shape). Backbone runs/bb-snip-lora-mild (same as K2 and L41), fresh head (same as I-twelve/K2),
+lr 1e-4, batch 1, grad-accum 1, max-length 65536, rerank + attn pooling + agg atoms +
+slot-mask-train + slot-assign.
+EVALS (both with the K2 decode flags, eps .25, prior .75, slot mask, candidates=parties, NO ranker -
+the 12-field recipe):
+  1. data/doc_eval_40_twelve.jsonl  -> headline, compared to I-twelve (.5941/.5615) and K2
+     (.6103/.5729).
+  2. data/doc_eval_40.jsonl         -> SCHEMA-TRANSFER check only. 29 of the 41 fields were never
+     trained on, so the aggregate is expected to be low; the meaningful read is whether the 12 fields
+     it did train survive a longer schema, not the headline number.
+DECISION READ (pre-registered): M beats K2 on the 12-field eval if exact@all >= .5829 (+1.0pp);
+neutral within +-0.005; if it is below both references, the labelled corpus does not help this bed
+either and the data question moves to mixing ratio/LR rather than more labels.
+
 **23:15 — FIRST RUN ON THE LABELLED CORPUS IS NEGATIVE, AND THE CONTROL THAT WOULD EXPLAIN IT WAS
 STOPPED BY THE OWNER BEFORE ITS FIRST CHECKPOINT. NO CONCLUSION ABOUT THE CORPUS IS DRAWN.**
 L42-mix1: backbone runs/bb-snip-lora-mild, init-head runs/L41-mild-r3/checkpoint-1880, 1 epoch over
