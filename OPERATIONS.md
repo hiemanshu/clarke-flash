@@ -95,14 +95,23 @@ older diff-painted one-frame output. `WATCH_TUI=0` forces the old path.
    headline and report path to `JOURNAL.md` in the same step, so the push and the
    record cannot disagree.
 
+10. **Keep README current.** When a result changes the headline numbers, the best
+    checkpoint, a supported surface, or a stated limitation, update `README.md` in
+    the same step and commit it with the evidence. A stale README is a wrong claim,
+    not a cosmetic issue: the journal is the history, the README is what readers see.
+    If the change is mid-queue and a later run will supersede it, say so in the
+    README rather than leaving the old number up.
+
 ## Current live state (updated at each journaling step)
 
 **Last updated 2026-10-28 16:20 IST — no jobs in flight, GPU idle.**
 
-- **Best 41-field:** `runs/L41-mild-r3/checkpoint-1880` — H4 with the gentle adapter
-  (`runs/bb-snip-lora-mild`) as the backbone, decode policy baked in: exact .5139 /
-  tokF1 .6346 / contains .6997 / null_ok .9606 / 412 of 498 / exact@all .4252;
-  latency 0.29 s p50, 2.6 s p90. H4 itself was .4943 / .6184 / .6797 / .9536 / .4089.
+- **Best 41-field (doc40):** `runs/N-mix41/checkpoint-3908` — preamble-supervised
+  adapter (`runs/bb-snip-lora-v2`, 800 steps on 1,162 CUAD+LEDGAR preamble crops) +
+  head on CUAD + 507 labelled LEDGAR docs, 3,908 steps: exact .5299 / tokF1 .6418 /
+  contains .7012 / null_ok .9562 / 411 of 498 / exact@all .4373; latency 0.29/2.62 s.
+  L41 was .4252 (.5139/.6346/.6997/.9606/412). Attribution pending run P's
+  CUAD-only-head controls.
 - **Best 12-field:** `runs/K2-snip-head/checkpoint-940` on
   `runs/bb-snip-lora-mild` (gentle adapter): .6103 / .7311 / .7994 / .8824 /
   291 of 310 / .5729.
@@ -112,11 +121,13 @@ older diff-painted one-frame output. `WATCH_TUI=0` forces the old path.
   (.4252) we are 2.5 pp behind opus and 9.3 pp behind gemini. The superseded
   2026-10-26 run is in `reports/external_doc/` — its rows were distorted by 5–7
   failed calls each.
-- **Next queued:** data density (finish the LLM preamble labels / 12-field
-  hybrid corpus), candidate decode beyond `parties` (44% of gold list items are
-  never emitted), and growing the eval set. The adapter-strength sweep is done:
-  a flat plateau, no winner, K2's r=32 / lr=2e-5 / 800 stays
-  (`reports/sweep-summary.json`).
+- **Queue running:** O (2,000-step gentle adapter -> 12-field gate -> conditional
+  41-field run), then P (CUAD-only-head attribution controls at matched 3,908 steps),
+  then Q (per-field failure taxonomy on the private company eval). Each notifies.
+- **Private company eval:** 39 hand-labelled commercial contracts, 8 fields, 112
+  gold-present; eval-only, raw data and predictions gitignored, only
+  `reports/company-eval-summary.json` public. L41 .1750 vs N .2329 exact@all; parties
+  only: L41 .4915 (39/39 answered) vs N .5085 (29/39).
 - **Data threads:** `data/llm_preambles.jsonl` 271/545 complete (Kimi quota cut the
   run); `data/edgar_lm_4k.bin` 105.8M tokens built and unused;
   `data/sec_lm_65k.bin` 425M tokens blocked by the ~4k LoRA VRAM wall.

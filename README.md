@@ -79,7 +79,7 @@ the same six numbers, because any one of them alone lies:
 `"YOU ON DEMAND HOLDINGS"` vs `"YOU ON DEMAND HOLDINGS, INC."`, so it will happily
 reward a model that emits every name it finds.
 
-## Results so far (2026-10-28)
+## Results so far (2026-10-29)
 
 Primary surface: **`data/doc_eval_40.jsonl`** — 40 held-out CUAD contracts
 (`docs[470:510]`), 41-field schema, 498 gold-present fields, all text, no
@@ -90,7 +90,7 @@ windows, decoded at 65,536 tokens.
 | gemini-4-argon | **.5184** | **.5539** | **.7358** | .8926 | .9151 | 466/498 | 22.1 / 52.7 s |
 | opus-5.5 | .4502 | .4851 | .6773 | .8156 | .9002 | 462/498 | 11.9 / 22.2 s |
 | gpt-6.1-sol | .4479 | .4817 | .6360 | .8045 | .8888 | 463/498 | 9.3 / 17.2 s |
-| **clarke 2B** (gentle adapter + slot-mask + candidate parties + ranker, **baked**) | .4252 | .5139 | .6346 | .6997 | **.9606** | 412/498 | **0.29 / 2.6 s** |
+| **clarke 2B** (preamble adapter + slot-mask + candidate parties + ranker, **baked**) | .4373 | .5299 | .6418 | .7012 | **.9562** | 411/498 | **0.29 / 2.6 s** |
 | clairic | .0175 | .0176 | .4067 | **.9526** | .1699 | **496/498** | 0.83 / 2.4 s |
 
 Rows are sorted by **`exact@all` ↓** — the one column that multiplies per-answer
@@ -98,11 +98,15 @@ precision by field coverage, so it is the number to read first. Bold is the best
 value in each column (three models hold one). The 12-field table below is an
 experiment ladder in run order, not a ranking.
 
-**Backbone adaptation now pays at 41 fields too.** L41 swaps H4's frozen backbone for
-`runs/bb-snip-lora-mild` (the gentle r=32 / lr 2e-5 / 800-step adapter) and changes nothing
-else: exact .4943 → **.5139**, tokF1 .6184 → **.6346**, contains .6797 → **.6997**,
-null_ok .9536 → **.9606**, at the same 412/498 answers and the same latency. That is
-+1.6 pp `exact@all`, the first time backbone adaptation has moved the product setup.
+**Preamble supervision + the labelled LEDGAR corpus pay together.** N keeps L41's recipe
+and changes two things: the adapter trains on 24,548 snippets — 17,576 LEDGAR clause crops
+plus 1,162 preamble crops from CUAD and the 507 labelled documents, repeated 6×, so 28% of
+its diet is `parties`/`document_name`/`agreement_date`, fields it previously **never** saw as
+targets — and the head trains on CUAD plus those 507 documents at 41 fields for 3,908 steps
+instead of 1,880. exact .5139 → **.5299**, tokF1 .6346 → **.6418**, contains .6997 →
+**.7012**, null_ok .9606 → .9562, answers 412 → 411: **+1.21 pp `exact@all`**. The adapter
+and the data changed together, so this is a pipeline result; run P's CUAD-only-head controls
+are what separates them, and the README will say so until they land.
 
 **Correction to the previous table.** The earlier external rows read `.3767–.4155`
 and produced a "within 0.7 pp of the best external" claim. Those runs answered only
@@ -111,7 +115,7 @@ budget truncated the 64,883-token contract (gemini/opus mid-JSON, gpt emitted no
 text at all because reasoning consumed the whole budget). With a 12,000-token budget
 and low reasoning effort there are **zero failed calls**, the frontier rows answer
 462–466 of 498, and the honest gap was **4.1 pp behind opus and 11 pp behind gemini**,
-not 0.7 pp (with L41 it is 2.5 pp and 9.3 pp). The superseded run is kept in `reports/external_doc/`; the numbers above
+not 0.7 pp (with N it is 1.3 pp and 8.1 pp). The superseded run is kept in `reports/external_doc/`; the numbers above
 are `reports/external_doc_rerun/`.
 
 On the **28 records every run completed** (329 gold fields), which removes the
@@ -122,7 +126,7 @@ run: .5232 / .4995 / .5003 / .0162). So the coverage jump is the big effect, and
 
 **Latency** is end-to-end per document. For us: encoding plus one forward pass,
 batch 1, 65k cap, single RTX 5090, model load excluded (`clarke-eval`'s `timing`
-block, `reports/H4-finalized-timed.json`). For the externals: the same 40 documents
+block, `reports/N-mix41-finalized.json`). For the externals: the same 40 documents
 through one Cloudflare AI Gateway run, so the number includes the gateway hop,
 network, and autoregressive generation — they emit 1,359 (gpt), 2,121 (gemini) and
 1,505 (opus) output tokens per document on average, which is what the p50/p90 gap
@@ -131,12 +135,11 @@ as the metrics, in the same run (`reports/external_doc_rerun/*.timing.jsonl`).
 Latency tracks contract length: these documents run from 972 to 300,768 characters,
 hence our 0.29 s p50 against 2.6 s p90 (mean 1.0 s, 41 fields/s).
 
-Read it honestly: **the frontier is 2.5–9.3 pp ahead on `exact@all`**, and the gap is
+Read it honestly: **the frontier is 1.3–8.1 pp ahead on `exact@all`**, and the gap is
 mostly `contains`/`tokF1` (.70 vs .89–.95) — they find and quote the right clause
-more often. The externals also answer more fields than us now (462–466 vs 412), so
-the old read that we trade precision for coverage no longer holds: we keep
-`null_ok` (.954 vs .888–.915) and latency (30–75× faster) and lose on accuracy and
-coverage both. Clairic never declines (496/498 answered), which is why its
+more often. The externals also answer more fields than us (462–466 vs 411), so the old
+read that we trade precision for coverage no longer holds: we keep `null_ok`
+(.956 vs .888–.915) and latency (30–75× faster) and lose on accuracy and coverage both. Clairic never declines (496/498 answered), which is why its
 `contains` is highest and its `exact` lowest (.018).
 
 Our row's decode policy — span tie-break, per-field length prior, slot masking and
@@ -148,6 +151,17 @@ actually present in the state — is .75 (gemini), .83 (gpt), .82 (clairic), .86
 (opus): **even the best of them cannot locate a seventh of what it quotes.** A `read`
 answer from this model is grounded by construction, which is the whole argument for
 a non-generative readout.
+
+**Private commercial-contract check.** A hand-labelled set of 39 services contracts
+(from the company; eval-only and kept private — raw text and predictions never leave the
+machine, only aggregates are published) maps onto 8 of our fields with 112 gold-present
+fields. L41: exact .2063 / tokF1 .7464 / contains .8702 / answered 95 of 112. N: exact
+.3181 / tokF1 .8003 / contains .8110 / answered 82 of 112 (`exact@all` .1750 → .2329).
+The trade is localised to `parties`: N is +19.2 pp more exact per answer there but declines
+10 of 39 contracts, where L41 answers all 39. Read `contains` on this surface, not `exact` —
+the gold citation is the whole clause and we return the core phrase — and treat absent
+labels as missing, since "no" in the export means "not annotated" (`null_ok` is not
+comparable to CUAD's). Numbers: `reports/company-eval-summary.json`.
 
 **Smaller schema, sharper signal.** Restricting to the 12 most common CUAD fields
 (60.8% of gold instances) makes each field matter more per step:
