@@ -86,17 +86,39 @@ older diff-painted one-frame output. `WATCH_TUI=0` forces the old path.
 8. **Unattended operation:** prefer manifest-keyed, resumable jobs; pre-register
    decision rules in the journal BEFORE the run so no judgment is improvised
    while the owner sleeps.
+9. **Notify on completion — never leave the owner polling.** Any unattended job
+   (GPU training, multi-model API sweep, corpus build) ends with
+   `scripts/notify.sh "<title>" "<body>" <mode>`: `short` for a routine finish,
+   `full` for a result with numbers, `critical` for a failure or a decision gate.
+   Owner preference: **ntfy ping + full detail in Signal, no desktop
+   notifications**; credentials live in `~/.config/clarke/notify.env`. Add the
+   headline and report path to `JOURNAL.md` in the same step, so the push and the
+   record cannot disagree.
 
 ## Current live state (updated at each journaling step)
 
-- expReal2 (GPU, run dir runs/expReal2): train ~6,600+/7,658, verdict ~22:45.
-  Battery includes expReal2-acordbase.json (pre-train ACORD baseline .009).
-- batch3 chain (harness shell sh_16eaafa19001ZgByUtePvvStSy): waits census 19/19
-  -> mines 4 proven families into data/cache/wikiib -> assembles
-  data/mixes/wikiib_train.jsonl -> waits expReal2 DONE -> pre-registered init
-  rule (CUAD >= .097 ? expReal2 final : expSpan-5852) -> 1 epoch on the ~88k
-  record mix -> battery. Log: /tmp/opencode/batch3.log
-- census: ~10/19 shards -> reports/census/*.json; driver pid in /tmp log.
-- corpus: 19/19 sha256-verified in data/raw, 235 GB plain XML in data/raw/plain.
-- Decisions pending for the owner: LoRA (rung 4) vs more data if CUAD stalls;
-  in-prose wikitable parser (batch-4 candidate); life-date family (batch-4).
+**Last updated 2026-10-28 16:20 IST — no jobs in flight, GPU idle.**
+
+- **Best 41-field:** `runs/H4-assign/checkpoint-1880`, decode policy baked into
+  the checkpoint: exact .4943 / tokF1 .6184 / contains .6797 / null_ok .9536 /
+  412 of 498 / exact@all .4089; latency 0.29 s p50, 2.6 s p90.
+- **Best 12-field:** `runs/K2-snip-head/checkpoint-940` on
+  `runs/bb-snip-lora-mild` (gentle adapter): .6103 / .7311 / .7994 / .8824 /
+  291 of 310 / .5729.
+- **Externals (doc40, one Cloudflare run, 0 failed calls, 12k output budget, low
+  effort; `reports/external_doc_rerun/`):** gemini .5184, opus .4502, gpt .4479,
+  clairic .0175 exact@all; latency p50 22.1 / 11.9 / 9.3 / 0.83 s. Our .4089 is
+  4.1 pp behind opus and 11 pp behind gemini. The superseded 2026-10-26 run is in
+  `reports/external_doc/` — its rows were distorted by 5–7 failed calls each.
+- **Next queued:** 41-field gentle adapter — fresh head on
+  `data/doc_train_470.jsonl` at 65k with `--backbone runs/bb-snip-lora-mild`, same
+  H4 flags and 1,880 steps, then a zero-flag eval against .4943 / .4089. Then the
+  adapter strength sweep (r=16/32, lr 1e-5/2e-5, 400/800/1,200 steps).
+- **Data threads:** `data/llm_preambles.jsonl` 271/545 complete (Kimi quota cut the
+  run); `data/edgar_lm_4k.bin` 105.8M tokens built and unused;
+  `data/sec_lm_65k.bin` 425M tokens blocked by the ~4k LoRA VRAM wall.
+- **Hardware:** three GPU full-chip resets on 2026-10-27, all under 65k training;
+  none since H4. Power limit still uncapped (needs root).
+- **Spend / access:** Cloudflare AI Gateway topped up 2026-10-28. CommandCode plan
+  includes Kimi-K3, claude-sonnet-5-5, gemini-3.8-flash and the open models, but
+  **not** opus-5-5 (Provider+), gemini-4-argon (Pro+) or gpt-6.1-sol (Max+).
