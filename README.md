@@ -85,13 +85,18 @@ Primary surface: **`data/doc_eval_40.jsonl`** — 40 held-out CUAD contracts
 (`docs[470:510]`), 41-field schema, 498 gold-present fields, all text, no
 windows, decoded at 65,536 tokens.
 
-| model | exact | tokF1 | contains | null_ok | answered | exact@all |
+| model | exact@all ↓ | exact | tokF1 | contains | null_ok | answered |
 |---|---|---|---|---|---|---|
-| gemini-4-argon | **.5608** | **.7397** | **.9025** | .9335 | 369/498 | **.4155** |
-| **clarke 2B** (slot-mask + candidate parties + ranker, **baked**) | .4943 | .6184 | .6797 | **.9536** | 412/498 | .4089 |
-| gpt-6.1-sol | .5071 | .6922 | .8356 | .8835 | 399/498 | .4063 |
-| opus-5.5 | .5154 | .7008 | .8329 | .9203 | 364/498 | .3767 |
-| clairic | .0176 | .4063 | .9526 | .1699 | **496/498** | .0175 |
+| gemini-4-argon | **.4155** | **.5608** | **.7397** | **.9025** | .9335 | 369/498 |
+| **clarke 2B** (slot-mask + candidate parties + ranker, **baked**) | .4089 | .4943 | .6184 | .6797 | **.9536** | 412/498 |
+| gpt-6.1-sol | .4063 | .5071 | .6922 | .8356 | .8835 | 399/498 |
+| opus-5.5 | .3767 | .5154 | .7008 | .8329 | .9203 | 364/498 |
+| clairic | .0175 | .0176 | .4063 | .9526 | .1699 | **496/498** |
+
+Rows are sorted by **`exact@all` ↓** — the one column that multiplies per-answer
+precision by field coverage, so it is the number to read first. Bold is the best
+value in each column (four different models hold one). The 12-field table below is
+an experiment ladder in run order, not a ranking.
 
 Read it honestly: we are **within 0.7 pp of the best external `exact@all`**
 (.409 vs gemini's .416), while being **far behind on `contains`** (.68 vs .90) and
@@ -114,11 +119,11 @@ whole argument for a non-generative readout.
 **Smaller schema, sharper signal.** Restricting to the 12 most common CUAD fields
 (60.8% of gold instances) makes each field matter more per step:
 
-| model (12-field eval, 310 gold) | exact | tokF1 | contains | null_ok | answered | exact@all |
+| model (12-field eval, 310 gold) | exact@all | exact | tokF1 | contains | null_ok | answered |
 |---|---|---|---|---|---|---|
-| 41-field H4, scored on the 12 fields | .6067 | .7213 | .7940 | .8765 | 281/310 | .5499 |
-| 12-field I-twelve (frozen backbone) | .5941 | .7261 | .7941 | .8118 | 293/310 | .5615 |
-| **12-field + gentle snippet LoRA** | **.6103** | **.7311** | **.7994** | **.8824** | 291/310 | **.5729** |
+| 41-field H4, scored on the 12 fields | .5499 | .6067 | .7213 | .7940 | .8765 | 281/310 |
+| 12-field I-twelve (frozen backbone) | .5615 | .5941 | .7261 | .7941 | .8118 | 293/310 |
+| **12-field + gentle snippet LoRA** | **.5729** | **.6103** | **.7311** | **.7994** | **.8824** | 291/310 |
 
 So a smaller schema is **not** a capability win — it is a cheaper, lower-variance
 experiment loop (~12 minutes per run), which is what made the adaptation experiment
