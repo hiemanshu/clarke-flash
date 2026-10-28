@@ -198,6 +198,50 @@ def text_candidates(state: str) -> list[tuple[str, tuple[int, int]]]:
     return out
 
 
+# ---------------------------------------------------------------- party ranker features
+PARTY_FEATURES = [
+    "log_len", "log_words", "is_quoted", "has_legal_suffix", "frac_capital",
+    "all_caps", "rel_position", "log_freq", "has_digit", "has_and_or",
+    "after_paren", "before_comma", "in_preamble", "is_stopword",
+]
+_PARTY_STOPWORDS = ("agreement", "date", "section", "exhibit", "schedule", "annex",
+                    "notice", "recital", "whereas", "article", "clause")
+_LEGAL_WORDS = ("inc", "llc", "l.l.c", "ltd", "corp", "corporation", "company", "co.",
+                "s.a", "l.p", "plc", "n.v", "gmbh", "holdings", "partners", "limited")
+
+
+def party_features(state: str, text: str, start: int, end: int, freq: int) -> list[float]:
+    """Hand features for "is this name candidate one of the contracting parties?".
+
+    Deliberately model-free so the ranker trains in seconds and runs without a forward
+    pass; the pointer's own score is blended in at decode time instead.
+    """
+    import math
+
+    words = text.split()
+    letters = [c for c in text if c.isalpha()]
+    caps = sum(1 for c in letters if c.isupper())
+    prev = state[max(0, start - 1):start]
+    nxt = state[end:end + 1]
+    low = text.lower()
+    return [
+        math.log1p(len(text)),
+        math.log1p(len(words)),
+        1.0 if prev in "\"\u201c\u201d'" else 0.0,
+        1.0 if any(w in low for w in _LEGAL_WORDS) else 0.0,
+        (caps / len(letters)) if letters else 0.0,
+        1.0 if letters and caps == len(letters) else 0.0,
+        start / max(len(state), 1),
+        math.log1p(freq),
+        1.0 if any(c.isdigit() for c in text) else 0.0,
+        1.0 if (" and " in low or " or " in low) else 0.0,
+        1.0 if prev == "(" else 0.0,
+        1.0 if nxt == "," else 0.0,
+        1.0 if start < 0.10 * len(state) else 0.0,
+        1.0 if any(w in low for w in _PARTY_STOPWORDS) else 0.0,
+    ]
+
+
 class Pool:
     """Candidate atoms for one record: (value, char_span) per extracted form.
 

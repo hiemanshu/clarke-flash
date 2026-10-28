@@ -46,7 +46,9 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              length_prior_alpha: float = 0.0,
              pool_decode: bool = False, pool_starts: int = 4,
              candidate_decode: bool = False, candidate_region: float = 1.0,
-             candidate_fields: set[str] | None = None) -> dict[str, Any]:
+             candidate_fields: set[str] | None = None, candidate_extra: int = 0,
+             candidate_ranker: dict | None = None,
+             ranker_alpha: float = 0.0) -> dict[str, Any]:
     stats: dict[tuple[str, str], dict[str, float]] = {}
 
     def stat(dom: str, kind: str) -> dict[str, float]:
@@ -83,7 +85,10 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                                    pool_starts=pool_starts,
                                    candidate_decode=candidate_decode,
                                    candidate_region=candidate_region,
-                                   candidate_fields=candidate_fields)
+                                   candidate_fields=candidate_fields,
+                                   candidate_extra=candidate_extra,
+                                   candidate_ranker=candidate_ranker,
+                                   ranker_alpha=ranker_alpha)
         torch.cuda.empty_cache()  # varying-length long docs + per-field NxN pointer
         # matrices fragment the allocator fast; releasing per batch costs ~nothing
         # next to a 19GB model and prevents the 30GB OOM seen at 02:46
@@ -325,6 +330,14 @@ def main(argv: list[str] | None = None) -> None:
                         help="list<text> fields: restrict spans to name-like candidates (quoted "
                              "terms, capitalised runs, by-and-between operands) and rank them; "
                              "measured ceiling 191/192 CUAD party items, 39/40 documents")
+    parser.add_argument("--candidate-extra", dest="candidate_extra", type=int, default=0,
+                        help="extra candidates to emit per document (0 = as many as the "
+                             "present head asks for)")
+    parser.add_argument("--ranker-alpha", dest="ranker_alpha", type=float, default=0.0,
+                        help="strength of the baked party ranker when no config is present")
+    parser.add_argument("--no-decode-config", dest="decode_config", action="store_false",
+                        help="ignore decode_config.json inside the checkpoint (reproduce raw "
+                             "defaults instead of the finalized decode settings)")
     parser.add_argument("--candidate-fields", dest="candidate_fields", default="parties",
                         help="comma-separated fields that may use candidate-constrained decode "
                              "(default parties; clause fields must not)")
@@ -376,6 +389,26 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--field-groups", dest="field_groups", type=int, default=0,
                         help="serving-strategy diagnostic: evaluate in passes of N schema fields")
     args = parser.parse_args(argv)
+    _head_dir = Path(args.head)
+
+    # BAKED DECODE CONFIG: a finalized checkpoint carries the decode settings that produced
+    # its reported numbers, so sharing the directory shares the behaviour. Explicit CLI flags
+    # still win (we only fill values the user left at their parser default).
+    baked: dict = {}
+    cfg_path = _head_dir / "decode_config.json"
+    if getattr(args, "decode_config", True) and cfg_path.exists():
+        baked = json.loads(cfg_path.read_text())
+        for key, value in baked.items():
+            if key in ("span_priors", "candidate_ranker", "version", "candidate_fields"):
+                continue
+            if hasattr(args, key) and getattr(args, key) == parser.get_default(key):
+                setattr(args, key, value)
+        if "candidate_fields" in baked:
+            args.candidate_fields = ",".join(baked["candidate_fields"])
+        print(f"[eval] decode_config.json applied: eps={args.span_tiebreak_eps} "
+              f"null={args.null_threshold} slot={args.slot_threshold} "
+              f"prior_a={args.span_prior_alpha} candidates={args.candidate_fields} "
+              f"ranker_a={getattr(args, 'ranker_alpha', 0)}", flush=True)
 
     span_caps = None
     if args.span_caps:
@@ -383,21 +416,29 @@ def main(argv: list[str] | None = None) -> None:
         span_caps = {name: int(row[args.span_cap_key]) for name, row in table.items()
                      if isinstance(row, dict) and args.span_cap_key in row}
         print(f"[eval] per-field span caps ({args.span_cap_key}) for "
-              f"{len(span_caps)} fields: {sorted(span_caps.items(), key=lambda kv: kv[1])[:6]} ...",
-              flush=True)
+              f"{len(span_caps)} fields", flush=True)
 
     length_priors = None
-    if args.span_priors and args.span_prior_alpha > 0:
-        table = json.loads(Path(args.span_priors).read_text())
-        length_priors = {}
-        for name, row in table.items():
-            counts = torch.tensor([float(c) + 1.0 for c in row["hist"]])
-            length_priors[name] = counts / counts.sum()
-        print(f"[eval] length priors for {len(length_priors)} fields, alpha="
-              f"{args.span_prior_alpha}", flush=True)
+    if args.span_prior_alpha > 0:
+        if args.span_priors:
+            table = json.loads(Path(args.span_priors).read_text())
+            length_priors = {}
+            for name, row in table.items():
+                counts = torch.tensor([float(c) + 1.0 for c in row["hist"]])
+                length_priors[name] = counts / counts.sum()
+            print(f"[eval] length priors for {len(length_priors)} fields, alpha="
+                  f"{args.span_prior_alpha}", flush=True)
+        elif baked.get("span_priors"):
+            length_priors = {}
+            for name, counts in baked["span_priors"].items():
+                t = torch.tensor([float(c) + 1.0 for c in counts])
+                length_priors[name] = t / t.sum()
+            print(f"[eval] embedded length priors for {len(length_priors)} fields", flush=True)
+
+    ranker = baked.get("candidate_ranker") or None
+    ranker_alpha = float(getattr(args, "ranker_alpha", 0.0)) if ranker else 0.0
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    _head_dir = Path(args.head)
     _cfg = {}
     try:
         _cfg = json.loads((_head_dir / "extraction_head_config.json").read_text())
@@ -446,6 +487,9 @@ def main(argv: list[str] | None = None) -> None:
                            candidate_region=args.candidate_region,
                            candidate_fields={f.strip() for f in args.candidate_fields.split(",")
                                              if f.strip()},
+                           candidate_extra=getattr(args, "candidate_extra", 0),
+                           candidate_ranker=ranker,
+                           ranker_alpha=ranker_alpha,
                            agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "metrics": summary["overall"], "by_domain": summary["by_domain"]}

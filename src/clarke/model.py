@@ -72,7 +72,9 @@ class ClarkeModel(torch.nn.Module):
                candidate_decode: bool = False,
                candidate_region: float = 1.0,
                candidate_fields: set[str] | None = None,
-               candidate_extra: int = 0) -> list[dict[str, Any]]:
+               candidate_extra: int = 0,
+               candidate_ranker: dict | None = None,
+               ranker_alpha: float = 1.0) -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -101,7 +103,9 @@ class ClarkeModel(torch.nn.Module):
                                             candidate_decode=candidate_decode,
                                             candidate_region=candidate_region,
                                             candidate_fields=candidate_fields,
-                                            candidate_extra=candidate_extra)
+                                            candidate_extra=candidate_extra,
+                                            candidate_ranker=candidate_ranker,
+                                            ranker_alpha=ranker_alpha)
                 for encoded, field_logits in zip(record.fields, record_logits)
             })
         return out
@@ -126,7 +130,9 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                   candidate_decode: bool = False,
                   candidate_region: float = 1.0,
                   candidate_fields: set[str] | None = None,
-                  candidate_extra: int = 0) -> dict[str, Any]:
+                  candidate_extra: int = 0,
+                  candidate_ranker: dict | None = None,
+                  ranker_alpha: float = 1.0) -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
     # Per-field extent cap: score(i,j)=p_start*p_end has no term for how long this
@@ -185,6 +191,22 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                         sp = torch.softmax(logits.start.float() * pointer_temp, dim=-1)
                         ep = torch.softmax(logits.end.float() * pointer_temp, dim=-1)
                         scores = (sp[:, st] * ep[:, en]).max(dim=0).values
+                        if candidate_ranker:
+                            # text-feature ranker (trained on CUAD train) re-weights the
+                            # pointer's ranking; alpha controls how hard it acts
+                            from .candidates import party_features
+                            w = torch.tensor(candidate_ranker["weights"])
+                            mu = torch.tensor(candidate_ranker["mean"])
+                            sd = torch.tensor(candidate_ranker["std"])
+                            bias = float(candidate_ranker["bias"])
+                            frows = []
+                            for t_c, (cs, ce) in zip(texts, spans_c):
+                                frows.append(party_features(record.state, t_c, cs, ce,
+                                                            record.state.lower().count(t_c.lower())))
+                            ft = torch.tensor(frows)
+                            z = ((ft - mu) / sd) @ w + bias
+                            rank_p = torch.sigmoid(z).to(scores.device)
+                            scores = scores * rank_p.clamp_min(1e-6) ** ranker_alpha
                         want = max(1, int((present >= slot_threshold).sum()) + candidate_extra)
                         order = torch.argsort(scores, descending=True).tolist()
                         taken: set[str] = set()

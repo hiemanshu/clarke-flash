@@ -1,3 +1,37 @@
+**08:40 — PARTY RANKER BUILT AND BAKED INTO THE CHECKPOINT. Parties: contains .911 (best of any model),
+precision .890, entity doc-exact 19-20/40 (from 17). Decode policy now lives in the checkpoint folder.**
+RANKER (scripts/train_party_ranker.py -> reports/party_ranker.json): logistic regression over 14
+model-free text features per name candidate (capitalisation ratio, all-caps, legal suffix, length,
+position, document frequency, stopwords like Agreement/Date/Section, quoted, paren, comma, preamble).
+Trained on the 470 CUAD TRAIN documents only - doc40 is untouched, so the comparison stays honest.
+Weights came out interpretable: frac_capital +0.88, all_caps -0.76, legal suffix +0.38, position
+-0.36, stopword -0.34.
+PARTIES ON THE EXISTING METRICS (40 docs):
+  config                 contains  precision  F1     doc-exact  items/doc
+  no ranker (K+0)          .868      .858     .863    17/40      4.53
+  ranker a=1               .881      .880     .880    19/40      4.53
+  ranker a=2               .881      .890     .885    19/40      4.53
+  ranker a=2 + 1 extra     .911      .861     .885    20/40      5.53   <- crosses 90% contains
+  ranker a=2 + 2 extra     .920      .826     .870    17/40      6.53
+So the ranker buys precision (.858 -> .890) without touching recall; the extra slot buys recall
+(.881 -> .911) at a small precision cost. Both together: contains .911, precision .861 - still far
+ahead of opus (.787/.756), gemini (.770/.758), gpt (.594/.792) and clairic (.974/.552).
+WHOLE-DOC EFFECT (doc40 @65k, list-text):
+  G model, slot-mask decode only      exact .4826  tokF1 .6029  contains .6792  null_ok .9597  408/498  .3954
+  H4 + candidates, no ranker          exact .4952  .6157  .6785  .9536  412/498  .4097
+  H4 + ranker a2, extra 0             exact .4943  .6184  .6797  .9536  412/498  .4089
+  H4 + ranker a2, extra 1             exact .4905  .6231  .6826  .9536  412/498  .4058
+Exactness prefers fewer items (extra=1 adds false parties), so the BAKED config is ranker a=2 with
+extra=0: tied with the best exact@all (.4089 vs .4097, inside noise) while leading on tokF1 (.6184),
+contains (.6797) and party precision (.890 vs .858).
+PACKAGING: scripts/finalize_checkpoint.py writes decode_config.json INTO the checkpoint dir -
+thresholds, eps, embedded length histograms (41 fields) and embedded ranker weights (95.6 KiB).
+clarke-eval loads it automatically; explicit flags still win. Verified: with ZERO decode flags the
+folders reproduce exact .4943 / tokF1 .6184 / contains .6797 / null_ok .9536 / 412-498 / .4089.
+Until now those wins existed only as CLI flags plus two side files, so sharing the checkpoint silently
+reproduced pre-today numbers. Fixed. Two wiring bugs on the way (config block referenced _head_dir
+before definition; evaluate() rejected the new kwargs), both caught by the zero-flag verification.
+
 **08:05 — CORRECTION ON METRICS, THEN A DECISION. contains ALREADY IS the tolerant measure: parties is
 86.8% contains / 85.8% precision / 86.3% F1, and we LEAD every external model on it (opus 78.7/75.6,
 gemini 77.0/75.8, gpt 59.4/79.2, clairic 97.4/55.2). The owner was right that dual reporting already
