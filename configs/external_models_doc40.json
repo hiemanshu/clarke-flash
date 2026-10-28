@@ -1,0 +1,36 @@
+{
+  "_note": "The four rows of the doc40 results table in README.md, and nothing else. configs/external_models.json is the broader harness roster (7 models); this file is the published comparison set, so a table re-run cannot silently pick up an extra model. Params and the 12000 output budget are documented in external_models.json's _note: reasoning cannot be disabled through this gateway, and 4000 truncates the 64,883-token document for all three chat models while 16000 is rejected with HTTP 500.",
+  "models": [
+    {
+      "label": "clairic",
+      "kind": "clairic",
+      "model": "@cf/cloudflare/clairic"
+    },
+    {
+      "label": "gpt-6.1-sol",
+      "kind": "chat",
+      "model": "openai/gpt-6.1-sol",
+      "params": {
+        "reasoning_effort": "low"
+      }
+    },
+    {
+      "label": "gemini-4-argon",
+      "kind": "chat",
+      "model": "google/gemini-4-argon",
+      "params": {
+        "reasoning_effort": "low"
+      }
+    },
+    {
+      "label": "opus-5.5",
+      "kind": "chat",
+      "model": "anthropic/claude-opus-5.5",
+      "params": {
+        "output_config": {
+          "effort": "low"
+        }
+      }
+    }
+  ]
+}

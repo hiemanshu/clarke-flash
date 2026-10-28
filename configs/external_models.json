@@ -1,5 +1,5 @@
 {
-  "_note": "Models the external baseline calls, all routed through Cloudflare AI Gateway. 'kind': 'clairic' = native state+fields schema (non-chat); 'chat' = OpenAI-compatible messages. Clairic is the only non-chat model here.",
+  "_note": "Models the external baseline calls, all routed through Cloudflare AI Gateway. 'kind': 'clairic' = native state+fields schema (non-chat); 'chat' = OpenAI-compatible messages. Clairic is the only non-chat model here. 'params' is merged into the request body verbatim. Reasoning cannot be disabled through this gateway: gpt-6.1-sol rejects 'none' and 'minimal' as unsupported values (accepts 'low'), claude-opus-5.5 takes the Anthropic effort knob instead: output_config.effort='low', gemini-4-argon accepts 'minimal' but it does not change its output size. Max output tokens must be run at 12000: at 4000 the 64,883-token CUAD document makes gpt emit nothing (reasoning consumed the budget), and truncates gemini/opus mid-JSON; 16000 is rejected with HTTP 500.",
   "models": [
     {
       "label": "clairic",
@@ -9,17 +9,28 @@
     {
       "label": "gpt-6.1-sol",
       "kind": "chat",
-      "model": "openai/gpt-6.1-sol"
+      "model": "openai/gpt-6.1-sol",
+      "params": {
+        "reasoning_effort": "low"
+      }
     },
     {
       "label": "gemini-4-argon",
       "kind": "chat",
-      "model": "google/gemini-4-argon"
+      "model": "google/gemini-4-argon",
+      "params": {
+        "reasoning_effort": "low"
+      }
     },
     {
       "label": "opus-5.5",
       "kind": "chat",
-      "model": "anthropic/claude-opus-5.5"
+      "model": "anthropic/claude-opus-5.5",
+      "params": {
+        "output_config": {
+          "effort": "low"
+        }
+      }
     },
     {
       "label": "qwen3.8-max",

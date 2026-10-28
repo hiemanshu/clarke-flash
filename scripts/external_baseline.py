@@ -54,6 +54,7 @@ import json
 import os
 import random
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import urllib.error
@@ -275,8 +276,10 @@ def call_cc(record, fields, model, api="chat", sleep_s=0.0, max_tokens=4000,
     latency = time.perf_counter() - t0
     if sleep_s:
         time.sleep(sleep_s)
-    meta = {"latency_s": latency, **_usage(resp), "endpoint": api}
-    return extract_json_block(_response_text(resp)), meta
+    raw = _response_text(resp)
+    meta = {"latency_s": latency, **_usage(resp), "endpoint": api,
+            "raw_len": len(raw), "raw_tail": raw[-160:]}
+    return extract_json_block(raw), meta
 
 
 def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None, timeout=600):
@@ -339,11 +342,14 @@ def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None, ti
     time.sleep(sleep_s)
     if use_stream:
         _t0 = time.perf_counter()
-        text = _post_stream_text(url, _cf_headers(), body, timeout=int(timeout))
-        return extract_json_block(text), {"latency_s": time.perf_counter() - _t0,
-                                         "endpoint": "chat-stream"}
-    meta = {"latency_s": latency, "endpoint": "chat", **_usage(resp)}
-    return extract_json_block(_response_text(resp)), meta
+        raw = _post_stream_text(url, _cf_headers(), body, timeout=int(timeout))
+        return (extract_json_block(raw),
+                {"latency_s": time.perf_counter() - _t0, "endpoint": "chat-stream",
+                 "raw_len": len(raw), "raw_tail": raw[-160:]})
+    raw = _response_text(resp)
+    meta = {"latency_s": latency, "endpoint": "chat", **_usage(resp),
+            "raw_len": len(raw), "raw_tail": raw[-160:]}
+    return extract_json_block(raw), meta
 
 
 def call_cf_clairic(record, fields, model, sleep_s, timeout=600):
@@ -478,20 +484,66 @@ def run_model(spec, records, args):
     preds = [{} for _ in records]
     metas: list[dict | None] = [None for _ in records]
     ok = [False for _ in records]
+
+    # RESUME: a sweep that stalls or is killed used to lose every completed call, so a
+    # retry paid for the same records again. Successful records are now written to disk
+    # as they land and skipped on the next run; failed ones are retried.
+    out = Path(args.out_dir) / f"{spec.get('label') or spec['model'].replace('/', '-').replace('@', '')}.json"
+    preds_path, timing_path = out.with_suffix(".preds.jsonl"), out.with_suffix(".timing.jsonl")
+    done_pred: dict[str, dict] = {}
+    done_meta: dict[str, dict] = {}
+    if not args.no_resume and preds_path.exists():
+        for line in preds_path.read_text().splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("ok"):
+                done_pred[row["id"]] = row.get("pred") or {}
+        if timing_path.exists():
+            for line in timing_path.read_text().splitlines():
+                if line.strip():
+                    row = json.loads(line)
+                    if row.get("ok"):
+                        done_meta[row["id"]] = row
+    pending: list[int] = []
+    for i, rec in enumerate(records):
+        rid = rec.get("id")
+        if rid in done_pred:
+            preds[i] = done_pred[rid]
+            ok[i] = True
+            metas[i] = {k: v for k, v in done_meta.get(rid, {}).items()
+                        if k not in ("id", "ok")} or None
+        else:
+            pending.append(i)
+    if len(pending) < len(records):
+        print(f"[{tag}] resume: {len(records) - len(pending)}/{len(records)} already on disk, "
+              f"{len(pending)} to fetch", flush=True)
+
     failed, done = 0, 0
-    with ThreadPoolExecutor(max_workers=max(1, args.concurrency)) as pool:
-        futures = [pool.submit(work, i, r) for i, r in enumerate(records)]
+    lock = threading.Lock()
+    preds_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(preds_path, "a") as pf, open(timing_path, "a") as tf, \
+            ThreadPoolExecutor(max_workers=max(1, args.concurrency)) as pool:
+        futures = [pool.submit(work, i, records[i]) for i in pending]
         for fut in as_completed(futures):
             idx, pred, meta, err = fut.result()
             preds[idx] = pred if isinstance(pred, dict) else {}
             metas[idx] = meta
             ok[idx] = not err
+            row = {"id": records[idx].get("id"), "pred": preds[idx], "ok": ok[idx]}
+            trow = {"id": records[idx].get("id"), "ok": ok[idx]}
+            trow.update(meta or {})
+            with lock:
+                pf.write(json.dumps(row) + "\n")
+                tf.write(json.dumps(trow) + "\n")
+                pf.flush()
+                tf.flush()
             if err:
                 failed += 1
                 print(f"[{tag}] [{idx}] failed: {err}", file=sys.stderr, flush=True)
             done += 1
             if done % 10 == 0:
-                print(f"[{tag}] {done}/{len(records)}", flush=True)
+                print(f"[{tag}] {done}/{len(pending)}", flush=True)
     report = score(records, preds, label, args.data)
     report["max_context_tokens"] = args.max_context_tokens
     report["truncated_records"] = args.truncated
@@ -499,14 +551,14 @@ def run_model(spec, records, args):
     report["transport"] = transport
     report["timing"] = timing_summary(metas, ok)
     body = json.dumps(report, indent=2)
-    out = Path(args.out_dir) / f"{spec.get('label') or spec['model'].replace('/', '-').replace('@', '')}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(body)
     print(f"[{tag}] done {json.dumps(report['metrics'])}", flush=True)
-    with open(out.with_suffix(".preds.jsonl"), "w") as f:
+    # rewrite (not append) so resumed + fresh rows collapse to exactly one per record
+    with open(preds_path, "w") as f:
         for rec, pred, good in zip(records, preds, ok):
             f.write(json.dumps({"id": rec.get("id"), "pred": pred, "ok": good}) + "\n")
-    with open(out.with_suffix(".timing.jsonl"), "w") as f:
+    with open(timing_path, "w") as f:
         for rec, meta, good in zip(records, metas, ok):
             row = {"id": rec.get("id"), "ok": good}
             row.update(meta or {})
@@ -600,6 +652,8 @@ def main(argv=None):
                     help="completion budget per record (chat models); 41 typed fields of spans "
                          "need room, and adversarial models burn tokens on reasoning")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--no-resume", dest="no_resume", action="store_true",
+                    help="ignore existing <label>.preds.jsonl and refetch every record")
     ap.add_argument("--rescore-dir", default=None,
                     help="recompute reports from saved <label>.preds.jsonl (no API calls)")
     args = ap.parse_args(argv)
