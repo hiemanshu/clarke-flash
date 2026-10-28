@@ -227,6 +227,7 @@ scripts/
   clean_edgar_corpus.py   EDGAR -> one clean text column (1.07M docs, 19GB)
   build_ledgar_spans.py   LEDGAR provisions -> verbatim spans in SEC contracts
   build_sec_corpus.py     packed 65k-token LM corpus
+  lm_adapt.py             unsupervised LoRA adaptation on packed token blocks (merge)
   external_baseline.py    Clairic + chat models through one gateway, same metrics
   train_party_ranker.py   the 14-feature name ranker
   finalize_checkpoint.py  bake decode policy into a checkpoint (shareable folder)
