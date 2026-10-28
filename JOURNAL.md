@@ -1,8 +1,11 @@
 **17:41 — FIFTH GPU FULL-CHIP RESET, ON A FRESH RUN 15 MINUTES AFTER A COLD BOOT. STOPPING 65k RETRIES
 UNTIL THE OWNER CHOOSES; PUSH SENT (critical).**
+**(ANNOTATED 17:58 by the session that instrumented this crash. Original text left intact and nothing
+deleted; three statements are corrected below, marked [CORRECTED], and the measurement that resolves
+candidate 1 is appended at the end.)**
 L41-mild-r2 was launched from scratch (owner: "restart the training no checkpoints") at 17:34 after the
 power cycle, same command and data as L41, new run dir. It died at 17:39:26 at step ~685/1880, ~5 min in,
-2.1-4.1 rec/s, 5.7 GB, 82 C. Same signature: CUDA_ERROR_LAUNCH_FAILED in the head forward, NVRM
+2.1-4.1 rec/s, 5.7 GB, 82 C [CORRECTED - unsourced, see below]. Same signature: CUDA_ERROR_LAUNCH_FAILED in the head forward, NVRM
 _issueRpcAndWait rpcSendMessage 0x0000000f, then the card left the bus. Checkpoints 250 and 500 survived.
 THE PATTERN IS NOW 5/5 UNDER 65k TRAINING, NONE ELSEWHERE:
   10-27 17:20 H1  step 780   5 min   late in a heavy day
@@ -16,15 +19,46 @@ load" nor "hot machine" explains it, and a cold boot no longer buys a run. The d
 here - L41-r2 loss@500 was 1.88, better than H4's 3.44.
 NO CODE CHANGE IS IMPLICATED: L41-r2 differs from the successful H4 only in the backbone path
 (runs/bb-snip-lora-mild), and the adapter itself was trained on 4k snippets, where the GPU was stable.
-Candidates in cost order (none free):
+Candidates in cost order (none free) [CORRECTED - two of them are free]:
   1. POWER LIMIT 450 W (root) then retry 65k - untested, cheapest hardware theory, transient spikes
-     above the 575 W cap are the textbook cause of this exact error.
+     above the 575 W cap are the textbook cause of this exact error. [CORRECTED - the card never
+     sustained 575 W: measured peak 581 W (transient overshoot), ~500-540 W typical, and 531 W at the
+     instant of death. A cap clips an average the card was not pulling, and the +12V rail measured flat
+     through the failure, so this is no longer the cheapest theory - it is unjustified until a fast
+     probe shows the transients this claim assumes.]
   2. 8,192-token control run of the same recipe - much lower power and different attention kernels; if
      it survives, 65k is the trigger and the deliverable has to move to a lower-context regime or wait.
   3. another long cooldown + 65k (this worked once, not twice).
   4. RMA if 1+2 fail.
 DECISION: do not relaunch 65k unchanged. It has failed five times in a row; repeating it is a hardware
 stress test, not an experiment. Awaiting the owner's pick.
+CORRECTIONS AND THE MEASUREMENT THAT RESOLVES CANDIDATE 1 (added 17:58):
+- **"82 C" is unsourced.** Nothing records GPU temperature in runs/L41-mild-r2/train.jsonl - the row
+  schema is step/epoch/lr/total/bs/accum/gpu_gb/recs_per_s/null/present/span/loss. The 1 Hz telemetry
+  measured **39 C at start, rising to 86 C**, and from 17:35:18 onward it sat at **85-86 C repeatedly**
+  (six-plus samples at or above 85 C in the last four minutes) - so 85-86 C was the steady state under
+  load, not a spike, and the final sample was 85 C. This is not cosmetic: 82 C reads comfortable, 85-86 C
+  sustained is at the throttle edge. It does not prove thermal causation, but it removes "wasn't hot".
+- **"none free" is wrong.** `nvidia-smi -pm 1` (persistence) costs nothing, and the measurement below
+  costs nothing.
+- **The rail, measured for the first time on this crash** (logs/telemetry.csv, 1 Hz):
+      17:39:24  11.968 V  58.00 A  728 W   GPU 524 W  79 C  2790 MHz  P1  gen4
+      17:39:25  11.968 V  63.25 A  812 W   GPU 531 W  85 C  2790 MHz  P1  gen4   <- dies
+      17:39:26  12.000 V   6.75 A  124 W   gone
+  Run-wide spread **11.937-12.000 V (63 mV)**, PSU peak **812 W of 1200 W (68%)**, **568 mV above the
+  11.4 V ATX floor** at the instant of death, and the rail *rose* to 12.000 V as the load vanished. So
+  PSU capacity and sustained regulation are out by measurement, not argument. What remains UNMEASURED
+  is microsecond transients: 1 Hz cannot see them, which is precisely why candidate 1 has to wait for a
+  faster probe instead of being guessed at. Clocks held 2790 MHz through the final sample, so this is
+  not a slow throttle convergence either.
+- **The owner's direction is therefore a sixth 65k run WITH instrumentation, not a blind retry.**
+  scripts/watch_training.sh now streams one long-lived `nvidia-smi --loop-ms=20` into
+  logs/gpu-fast.csv: `power.draw.instant` plus `clocks_event_reasons.hw_power_brake_slowdown` - the
+  card's own power-brake assertion, documented as "external power brake assertion is triggered (e.g.
+  by the system power supply)". At 50 Hz the run either shows 700-900 W spikes and a brake assertion
+  (power confirmed, cap justified) or it shows a flat ~580 W plateau (power excluded, skip the cap and
+  keep the throughput). Same run cost, 5-15 minutes. The DECISION above still stands in substance:
+  no *uninstrumented* 65k retry.
 
 **17:40 — FIFTH XID 79, NOW AT PCIe GEN4 ON THE NEW BIOS: THE +12V RAIL DID NOT MOVE AT THE MOMENT
 OF DEATH, SO THE PSU IS OUT BY MEASUREMENT. Gen4 DID NOT FIX IT — DIED AT STEP ~680, EARLIER THAN
@@ -48,7 +82,8 @@ THE MEASUREMENT (real rows from logs/telemetry.csv, 1 Hz):
 17:39:26  12.000 V   6.75 A  124 W   gone
 ```
 RUN-WIDE: rail **11.937-12.000 V (63 mV spread)**, PSU peak **812 W of 1200 W (68%)**, GPU peak
-581 W (cap 575 W, transient overshoot), clocks 2775-2925 MHz under load, core temp 77-85 C.
+581 W (cap 575 W, transient overshoot), clocks 2775-2925 MHz under load, core temp 39 C at start rising
+to 86 C and sustained 85-86 C over the last four minutes.
 CONCLUSIONS, each with the evidence that forces it:
 1. **PSU capacity / transient delivery: OUT.** 812 W of 1200 W with the rail 568 mV above the 11.4 V
    ATX floor at the instant of death, and it *rose* to 12.000 V as the load vanished - the supply was
