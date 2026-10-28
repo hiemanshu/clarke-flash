@@ -99,26 +99,30 @@ older diff-painted one-frame output. `WATCH_TUI=0` forces the old path.
 
 **Last updated 2026-10-28 16:20 IST — no jobs in flight, GPU idle.**
 
-- **Best 41-field:** `runs/H4-assign/checkpoint-1880`, decode policy baked into
-  the checkpoint: exact .4943 / tokF1 .6184 / contains .6797 / null_ok .9536 /
-  412 of 498 / exact@all .4089; latency 0.29 s p50, 2.6 s p90.
+- **Best 41-field:** `runs/L41-mild-r3/checkpoint-1880` — H4 with the gentle adapter
+  (`runs/bb-snip-lora-mild`) as the backbone, decode policy baked in: exact .5139 /
+  tokF1 .6346 / contains .6997 / null_ok .9606 / 412 of 498 / exact@all .4252;
+  latency 0.29 s p50, 2.6 s p90. H4 itself was .4943 / .6184 / .6797 / .9536 / .4089.
 - **Best 12-field:** `runs/K2-snip-head/checkpoint-940` on
   `runs/bb-snip-lora-mild` (gentle adapter): .6103 / .7311 / .7994 / .8824 /
   291 of 310 / .5729.
 - **Externals (doc40, one Cloudflare run, 0 failed calls, 12k output budget, low
   effort; `reports/external_doc_rerun/`):** gemini .5184, opus .4502, gpt .4479,
-  clairic .0175 exact@all; latency p50 22.1 / 11.9 / 9.3 / 0.83 s. Our .4089 is
-  4.1 pp behind opus and 11 pp behind gemini. The superseded 2026-10-26 run is in
-  `reports/external_doc/` — its rows were distorted by 5–7 failed calls each.
-- **Next queued:** 41-field gentle adapter — fresh head on
-  `data/doc_train_470.jsonl` at 65k with `--backbone runs/bb-snip-lora-mild`, same
-  H4 flags and 1,880 steps, then a zero-flag eval against .4943 / .4089. Then the
-  adapter strength sweep (r=16/32, lr 1e-5/2e-5, 400/800/1,200 steps).
+  clairic .0175 exact@all; latency p50 22.1 / 11.9 / 9.3 / 0.83 s. With L41
+  (.4252) we are 2.5 pp behind opus and 9.3 pp behind gemini. The superseded
+  2026-10-26 run is in `reports/external_doc/` — its rows were distorted by 5–7
+  failed calls each.
+- **Next queued:** the adapter-strength sweep (step 2 of the 2026-10-28
+  pre-registration) on the 12-field bed against K2 (.5729): arms r=16/64,
+  lr=1e-5/4e-5, steps=400/1,200, filtered by head-loss@500; only a winner
+  >= 1.0 pp over K2 is applied to the 41-field setup.
 - **Data threads:** `data/llm_preambles.jsonl` 271/545 complete (Kimi quota cut the
   run); `data/edgar_lm_4k.bin` 105.8M tokens built and unused;
   `data/sec_lm_65k.bin` 425M tokens blocked by the ~4k LoRA VRAM wall.
-- **Hardware:** three GPU full-chip resets on 2026-10-27, all under 65k training;
-  none since H4. Power limit still uncapped (needs root).
+- **Hardware:** five GPU full-chip resets, all under 65k training (three on
+  2026-10-27, two on 2026-10-28). With **persistence mode enabled** (owner,
+  2026-10-28) L41 completed 1,880 steps with no fault — one run, not yet proof.
+  Power limit still uncapped.
 - **Spend / access:** Cloudflare AI Gateway topped up 2026-10-28. CommandCode plan
   includes Kimi-K3, claude-sonnet-5-5, gemini-3.8-flash and the open models, but
   **not** opus-5-5 (Provider+), gemini-4-argon (Pro+) or gpt-6.1-sol (Max+).

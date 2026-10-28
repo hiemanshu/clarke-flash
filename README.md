@@ -90,7 +90,7 @@ windows, decoded at 65,536 tokens.
 | gemini-4-argon | **.5184** | **.5539** | **.7358** | .8926 | .9151 | 466/498 | 22.1 / 52.7 s |
 | opus-5.5 | .4502 | .4851 | .6773 | .8156 | .9002 | 462/498 | 11.9 / 22.2 s |
 | gpt-6.1-sol | .4479 | .4817 | .6360 | .8045 | .8888 | 463/498 | 9.3 / 17.2 s |
-| **clarke 2B** (slot-mask + candidate parties + ranker, **baked**) | .4089 | .4943 | .6184 | .6797 | **.9536** | 412/498 | **0.29 / 2.6 s** |
+| **clarke 2B** (gentle adapter + slot-mask + candidate parties + ranker, **baked**) | .4252 | .5139 | .6346 | .6997 | **.9606** | 412/498 | **0.29 / 2.6 s** |
 | clairic | .0175 | .0176 | .4067 | **.9526** | .1699 | **496/498** | 0.83 / 2.4 s |
 
 Rows are sorted by **`exact@all` ↓** — the one column that multiplies per-answer
@@ -98,14 +98,20 @@ precision by field coverage, so it is the number to read first. Bold is the best
 value in each column (three models hold one). The 12-field table below is an
 experiment ladder in run order, not a ranking.
 
+**Backbone adaptation now pays at 41 fields too.** L41 swaps H4's frozen backbone for
+`runs/bb-snip-lora-mild` (the gentle r=32 / lr 2e-5 / 800-step adapter) and changes nothing
+else: exact .4943 → **.5139**, tokF1 .6184 → **.6346**, contains .6797 → **.6997**,
+null_ok .9536 → **.9606**, at the same 412/498 answers and the same latency. That is
++1.6 pp `exact@all`, the first time backbone adaptation has moved the product setup.
+
 **Correction to the previous table.** The earlier external rows read `.3767–.4155`
 and produced a "within 0.7 pp of the best external" claim. Those runs answered only
 364–399 of 498 fields because 5–7 calls per model failed — the 4,000-token output
 budget truncated the 64,883-token contract (gemini/opus mid-JSON, gpt emitted no
 text at all because reasoning consumed the whole budget). With a 12,000-token budget
 and low reasoning effort there are **zero failed calls**, the frontier rows answer
-462–466 of 498, and the honest gap is **4.1 pp behind opus and 11 pp behind gemini**,
-not 0.7 pp. The superseded run is kept in `reports/external_doc/`; the numbers above
+462–466 of 498, and the honest gap was **4.1 pp behind opus and 11 pp behind gemini**,
+not 0.7 pp (with L41 it is 2.5 pp and 9.3 pp). The superseded run is kept in `reports/external_doc/`; the numbers above
 are `reports/external_doc_rerun/`.
 
 On the **28 records every run completed** (329 gold fields), which removes the
@@ -125,8 +131,8 @@ as the metrics, in the same run (`reports/external_doc_rerun/*.timing.jsonl`).
 Latency tracks contract length: these documents run from 972 to 300,768 characters,
 hence our 0.29 s p50 against 2.6 s p90 (mean 1.0 s, 41 fields/s).
 
-Read it honestly: **the frontier is 4–11 pp ahead on `exact@all`**, and the gap is
-mostly `contains`/`tokF1` (.68 vs .89–.95) — they find and quote the right clause
+Read it honestly: **the frontier is 2.5–9.3 pp ahead on `exact@all`**, and the gap is
+mostly `contains`/`tokF1` (.70 vs .89–.95) — they find and quote the right clause
 more often. The externals also answer more fields than us now (462–466 vs 412), so
 the old read that we trade precision for coverage no longer holds: we keep
 `null_ok` (.954 vs .888–.915) and latency (30–75× faster) and lose on accuracy and
@@ -341,8 +347,8 @@ uv run python scripts/finalize_checkpoint.py --head runs/H4-assign/checkpoint-18
 
 ### Where the loss actually is
 
-We are **4–11 pp behind the frontier on `exact@all`** (.409 vs .448 opus / .518 gemini)
-and well behind on `contains` (.68 vs .82–.89). It is not tokenization: **94.4% of the
+We are **2.5–9.3 pp behind the frontier on `exact@all`** (.425 vs .450 opus / .518 gemini)
+and behind on `contains` (.70 vs .82–.89). It is not tokenization: **94.4% of the
 1,022 gold spans in doc40 are expressible with Qwen's vocabulary** (94.1% with a
 contract-trained BPE — 5.6% start or end mid-token and are unreachable with *any* BPE),
 and our per-answer `exact` (~.49) is about 52% of that ceiling. What remains is mostly

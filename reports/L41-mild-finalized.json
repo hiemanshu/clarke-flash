@@ -1,0 +1,53 @@
+{
+  "checkpoint": "runs/L41-mild-r3/checkpoint-1880",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 412,
+      "null_n": 1142,
+      "exact": 0.5139,
+      "located": 0.5139,
+      "null_correct": 0.9606,
+      "tok_f1": 0.6346,
+      "contains": 0.6997,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0609
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 412,
+        "null_n": 1142,
+        "exact": 0.5139,
+        "located": 0.5139,
+        "null_correct": 0.9606,
+        "tok_f1": 0.6346,
+        "contains": 0.6997,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0609
+      }
+    }
+  },
+  "timing": {
+    "per_document_s": {
+      "n": 40,
+      "mean": 0.996,
+      "p50": 0.288,
+      "p90": 2.619,
+      "p99": 8.817,
+      "min": 0.064,
+      "max": 11.217
+    },
+    "encode_s": 0.621,
+    "infer_s": 39.21,
+    "total_s": 39.831,
+    "records_per_s": 1.004,
+    "fields_per_s": 41.2,
+    "batched": false,
+    "batch_size_max": 1
+  }
+}

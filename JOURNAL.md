@@ -1,3 +1,28 @@
+**18:30 — L41: THE GENTLE ADAPTER TRANSFERS TO 41 FIELDS. BEST RESULT ON EVERY METRIC:
+exact@all .4089 -> .4252 (+1.6pp), exact .4943 -> .5139, tokF1 .6184 -> .6346,
+contains .6797 -> .6997, null_ok .9536 -> .9606, same 412/498 answers, same latency.**
+RUN: runs/L41-mild-r3/checkpoint-1880, 1,880 steps at 65k, ~13 min, 2.0-4.1 rec/s, 5.7 GB.
+Exactly one variable vs H4: --backbone Qwen/Qwen3.5-2B -> runs/bb-snip-lora-mild (the r=32, lr=2e-5,
+800-step adapter on 4k LEDGAR snippets). Decode finalized identically (eps .25, prior .75, slot mask,
+candidates parties, ranker alpha 2.0, extra 0) and evaluated with ZERO flags, so the decode policy is in
+the checkpoint folder (runs/L41-mild-r3/checkpoint-1880/decode_config.json, 95.6 KiB).
+  model                exact@all  exact   tokF1   contains null_ok answered  p50/p90
+  H4 (frozen)           .4089    .4943   .6184    .6797   .9536  412/498  0.29/2.62s
+  L41 (gentle adapter)  .4252    .5139   .6346    .6997   .9606  412/498  0.29/2.62s
+PRE-REGISTERED RULE MET: adopt required exact@all >= .4189 (+1.0pp) OR exact >= .5043 with null_ok
+within .01. Both hold, and the gain is uniform (no metric regressed, answers unchanged), so this is not
+a coverage/abstention trade - the adapter makes the same number of answers better. The drift gate was
+satisfied before launch: head loss@500 = 1.88 vs H4's 3.44 and K2's 2.91.
+EXTERNAL CONTEXT: with L41 we are 2.5 pp behind opus (.4502) and 9.3 pp behind gemini (.5184) on
+exact@all, still 4th of 5, while keeping null_ok .9606 (best in table) and 0.29 s p50 (30-75x faster).
+HARDWARE NOTE: this is the run after the fifth full-chip reset. The owner enabled persistence mode
+(nvidia-smi -pm 1) and the run completed 1,880 steps with no NVRM event; persistence mode is the only
+environmental change, but that is one run - do not call the reset problem solved on it. Logs now live
+in ./logs/ (gitignored) because /tmp was wiped by the reboots.
+NEXT: step 2 of the pre-registration - adapter strength sweep on the 12-field bed against K2 (.5729):
+r=16/64, lr=1e-5/4e-5, steps=400/1,200, filtered by head-loss@500; only a winner >= 1.0pp over K2 is
+applied to this 41-field setup.
+
 **17:41 — FIFTH GPU FULL-CHIP RESET, ON A FRESH RUN 15 MINUTES AFTER A COLD BOOT. STOPPING 65k RETRIES
 UNTIL THE OWNER CHOOSES; PUSH SENT (critical).**
 **(ANNOTATED 17:58 by the session that instrumented this crash. Original text left intact and nothing
