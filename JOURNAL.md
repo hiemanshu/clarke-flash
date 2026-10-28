@@ -1,3 +1,25 @@
+**00:05 — PRE-REGISTRATION: RUN N (adapter with preamble supervision + 41-field CUAD&LEDGAR head).**
+WHY: the adapter has never been supervised on parties/document_name/agreement_date (0 of 17,576
+snippets carry them), and the head has never trained on the 507 labelled LEDGAR docs. Run N adds
+both, on top of the winning L41 recipe.
+PIPELINE:
+  1. LoRA r=32, alpha=32, lr 2e-5, 800 steps, max-length 4096 on data/snippets_4k_with_preamble.jsonl
+     (24,548 records, 28% preamble) from Qwen/Qwen3.5-2B -> runs/N-snip-lora-v2 -> merge to
+     runs/bb-snip-lora-v2.
+  2. Fresh head on data/doc_train_470.jsonl + data/ledgar_labelled_cuad.jsonl (977 docs), 4 epochs =
+     3,908 steps at 65k, lr 1e-4, rerank + attn + agg atoms + slot-mask-train + slot-assign ->
+     runs/N-mix41.
+  3. Finalize decode (eps .25, prior .75, candidates parties, ranker alpha 2.0), zero-flag eval on
+     data/doc_eval_40.jsonl.
+READ (pre-registered, vs L41 exact@all .4252 / exact .5139 / contains .6997 / null_ok .9606 / 412):
+  ADOPT if exact@all >= .4352 (+1.0pp) with null_ok not worse by more than .01
+  NEUTRAL if |delta exact@all| < .005
+  REJECT if exact@all < .4202 (-0.5pp)
+  PARTIES is the field this is supposed to move (it is 8% of all fields and still the weakest), so the
+  eval is followed by a per-field diagnostic if the aggregate moves at all.
+CAVEAT (held): this changes the backbone AND the head data against L41, so a win is a pipeline win.
+Attribution would need a third run: new backbone + CUAD-only head at the same 3,908 steps.
+
 **23:55 — PREAMBLE SNIPPET SET BUILT FOR BOTH CORPORA: 1,162 unique 4k windows (CUAD + LEDGAR),
 12-field schema, every span re-verified. Combined adapter set is 24,548 records at 28% preamble.**
 WHY: measured the existing 17,576 snippets (all LEDGAR clause crops, no CUAD at all): the only
