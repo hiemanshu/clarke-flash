@@ -1,3 +1,20 @@
+**22:55 — MERGE DEFERRED UNTIL THE LABELLING RUN STOPS, AND THE CORPUS IS SELECTED, NOT PATCHED:
+only records whose label row has ALL THREE fields AND whose source record has at least one
+LEDGAR-derived field enter the training corpus.**
+Owner's rule, and it is the right one: partial label rows are not worth null-padding, because a
+record with 1 of 3 preamble fields plus one LEDGAR clause is a 2-present-field schema - the D2
+shape we already know teaches wrong schema-length behaviour. Waiting also means the eligible set is
+computed once, from a finished file, instead of being re-derived as rows arrive.
+CONSEQUENCE: the 5,511 records with no preamble marker in the first 12k chars (29% of the corpus)
+can never satisfy the rule and are excluded; records where K3 returned only 1-2 of the 3 are
+excluded too. Expected yield is therefore bounded by (records with a marker) x (K3 all-three rate),
+which the current run is measuring: 186 K3 successes so far, 150 with all three, 0 errors.
+WHEN IT STOPS: join data/llm_preambles.jsonl into data/ledgar_split_cuad.jsonl on id, keep the
+intersection, expand to the full schema with EXPLICIT NULLS (the records carry 1.39 fields on
+average, so a raw join would be a 1-4 field all-present schema), and write the 41-field corpus plus
+a 12-field view. Then the OPERATIONS rule-7 leak audit against the frozen eval surfaces before any
+mix touches training. Still no mining: the other 38 fields stay absent (null) in this corpus.
+
 **20:20 — HARD SLICE: K3 vs K3.1 PRO ON 10 RECORDS WITH 4-30 PARTIES. Parties and dates
 byte-identical 10/10 (including a 30-party and a 12-party contract); document_name 8/10
 case-sensitive but 10/10 case-insensitive, because the two "mismatches" are title-case variants
