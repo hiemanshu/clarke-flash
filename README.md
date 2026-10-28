@@ -87,21 +87,25 @@ windows, decoded at 65,536 tokens.
 
 | model | exact | tokF1 | contains | null_ok | answered | exact@all |
 |---|---|---|---|---|---|---|
-| **clarke 2B** (H4 + candidate parties, **baked**) | .4905 | .6231 | .6826 | **.9536** | 412/498 | .4058 |
-| clarke 2B (H4 + candidate parties, ranker α=2 +1) | **.4952** | .6157 | .6785 | .9536 | 412/498 | **.4097** |
-| gemini-4-argon | .5608 | .7397 | **.9025** | .9335 | 369/498 | .4156 |
+| gemini-4-argon | **.5608** | **.7397** | **.9025** | .9335 | 369/498 | **.4155** |
+| **clarke 2B** (slot-mask + candidate parties + ranker, **baked**) | .4943 | .6184 | .6797 | **.9536** | 412/498 | .4089 |
 | gpt-6.1-sol | .5071 | .6922 | .8356 | .8835 | 399/498 | .4063 |
-| opus-5.5 | .5154 | .7008 | .8329 | .9203 | 364/498 | .3768 |
+| opus-5.5 | .5154 | .7008 | .8329 | .9203 | 364/498 | .3767 |
 | clairic | .0176 | .4063 | .9526 | .1699 | **496/498** | .0175 |
 
-Read it honestly: we are **at frontier `exact@all`** (.41 vs .40–.42) while being
-**far behind on `contains`** (.68 vs .90) and `tokF1`. The frontier models find the
-right clause more often and quote it more cleanly; we decline fewer wrong answers
-(`null_ok` .954) and pay for it in coverage. Clairic never declines, which is why
-its `contains` is highest and its `exact` is lowest.
+Read it honestly: we are **within 0.7 pp of the best external `exact@all`**
+(.409 vs gemini's .416), while being **far behind on `contains`** (.68 vs .90) and
+`tokF1` (.62 vs .74). The frontier models find and quote the right clause more
+often; we compensate by answering more fields (412/498 vs gemini's 369) while
+refusing fewer wrong ones — `null_ok` .954 is the best in the table. Clairic never
+declines (496/498 answered), which is why its `contains` is highest and its `exact`
+lowest (.018).
 
-External numbers come from `scripts/external_baseline.py` through one gateway, on
-the same 40 documents (`reports/external_doc/`). Their `grounded_rate` — how often
+Our row's decode policy — span tie-break, per-field length prior, slot masking and
+the candidate/ranker path for `parties` — is written into the checkpoint as
+`decode_config.json`, so `clarke-eval --head <dir>` reproduces these numbers with no
+flags. External numbers come from `scripts/external_baseline.py` through one gateway,
+on the same 40 documents (`reports/external_doc/`). Their `grounded_rate` — how often
 the quoted text is actually present in the state — is .79 (gemini), .82 (gpt),
 .82 (clairic), .86 (opus): **even the best of them cannot locate a fifth of what it
 quotes.** A `read` answer from this model is grounded by construction, which is the
@@ -112,11 +116,20 @@ whole argument for a non-generative readout.
 
 | model (12-field eval, 310 gold) | exact | tokF1 | contains | null_ok | answered | exact@all |
 |---|---|---|---|---|---|---|
-| 41-field H4, scored on the 12 fields | **.6067** | .7213 | .7940 | **.8765** | 281/310 | .5499 |
-| 12-field I-twelve | .5941 | .7261 | .7941 | .8118 | 293/310 | **.5615** |
+| 41-field H4, scored on the 12 fields | .6067 | .7213 | .7940 | .8765 | 281/310 | .5499 |
+| 12-field I-twelve (frozen backbone) | .5941 | .7261 | .7941 | .8118 | 293/310 | .5615 |
+| **12-field + gentle snippet LoRA** | **.6103** | **.7311** | **.7994** | **.8824** | 291/310 | **.5729** |
 
 So a smaller schema is **not** a capability win — it is a cheaper, lower-variance
-experiment loop. That matters, because each 12-field run is ~12 minutes.
+experiment loop (~12 minutes per run), which is what made the adaptation experiment
+affordable.
+
+**Backbone adaptation works, but only when it is gentle.** LoRA on 4 k LEDGAR
+snippets, adapter merged, then a fresh head trained on full 65 k documents:
+`r=32, lr 2e-5, 800 steps` improves every metric (row above), while the same
+mechanism at `r=64, lr 2e-4, 2,000 steps` collapses to `exact .080` / `null_ok 0.00`
+because the adapter rewrites the features. Head-training loss at step 500 is a cheap
+early warning: 3.44 (original backbone), 9.01 (harsh adapter), 2.91 (gentle).
 
 **`parties` — the one field that moved furthest** (same 40 documents):
 
