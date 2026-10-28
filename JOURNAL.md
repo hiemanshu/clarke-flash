@@ -1,3 +1,29 @@
+**20:05 — K3 (CommandCode) vs K3.1 Pro (the stored labels) ON 10 RECORDS: BYTE-IDENTICAL.
+document_name, agreement_date and parties match on raw value AND span for 10/10; party sets
+exact 10/10; mean 15.1 s/call. K3 is a safe substitute at this sample.**
+SETUP: gold = the first 10 complete rows of data/llm_preambles.jsonl, which were produced by
+opencode-go/kimi-k3.1-pro with prompt v3. K3 was run through the same labeler path
+(--backend opencode --model commandcode/moonshotai/Kimi-K3 --prompt v3 --chars 12000), so the prompt,
+grounding rule and canonical-name convention are identical; only the model version and provider differ.
+RESULT (scripts/compare_labels.py, preds /tmp/opencode/pilot10_cc_k3.jsonl):
+  name exact 10/10, date exact 10/10, parties P/R/F1 1.00, party set exact 10/10,
+  parties per doc 2.3 vs 2.3, 0 errors, 15.1 s/call.
+  Raw-string and span equality are also 10/10 for all three fields, so the normalisation is not
+  hiding a formatting difference.
+PRO RE-RUN IS BLOCKED, AND THAT DOES NOT BLOCK THE COMPARISON: opencode-go still reports "Go usage
+limit exceeded" and the OpenRouter key in .env returns HTTP 402 "this account never purchased
+credits" (the top-up must be on a different account/org, or the key predates it). The stored gold
+labels ARE k3.1-pro output, so K3-vs-gold is the version comparison; what we cannot test is
+Pro-vs-Pro transport reproducibility.
+CAVEATS: n=10, all from one shard (ledgar-train-00000-of-00304) and all "easy" early records; both
+runs go through the opencode CLI agent, so this is model-version + provider, not harness shape. Before
+scaling to thousands, spot-check a harder slice (later shards, longer states, multi-entity parties).
+ADDED: scripts/compare_labels.py (gold-vs-pred field comparison with normalised party sets and a
+@detail mode) and an OpenRouter backend in scripts/llm_label_preambles.py with per-backend pricing
+(input+output) so --max-cost is a real spend guard. Both committed.
+NEXT: if the harder slice holds up, finish the remaining preamble labels with K3 on CommandCode; the
+OpenRouter route becomes usable once the 402 is resolved.
+
 **19:45 — ADAPTER-STRENGTH SWEEP DONE: A FLAT PLATEAU, NO WINNER. K2'S r=32 / lr=2e-5 / 800 STAYS
 AND NOTHING FROM THE SWEEP IS APPLIED TO THE 41-FIELD SETUP.**
 Seven arms, 12-field bed, each = adapter on data/snippets_4k.jsonl -> merge -> fresh head at 65k
