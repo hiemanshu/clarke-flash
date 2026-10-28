@@ -187,10 +187,11 @@ class Trainer:
         torch.save({"optimizer": self.optimizer.state_dict(), "step": self.step,
                     "args": vars(self.args)}, directory / "train_state.pt")
         keep = sorted(self.run_dir.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
+        import shutil
         for stale in keep[:-3]:
-            for part in stale.iterdir():
-                part.unlink()
-            stale.rmdir()
+            # LoRA checkpoints hold a lora/ DIRECTORY, so unlink() on every entry raises
+            # IsADirectoryError and kills the run at its 4th checkpoint (seen 2026-10-28).
+            shutil.rmtree(stale, ignore_errors=True)
         return directory
 
     def _load_checkpoint(self, directory: Path) -> None:
@@ -335,7 +336,7 @@ class Trainer:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Train the clarke extraction head")
-    parser.add_argument("--backbone", default="Qwen/Qwen3.5-9B",
+    parser.add_argument("--backbone", default="Qwen/Qwen3.5-2B",
                         help="backbone repo or local dir; Cloudflare/clef-flash is a transfer-init option")
     parser.add_argument("--train", nargs="+", required=True, help="training JSONL paths")
     parser.add_argument("--val", default=None, help="validation JSONL path")
