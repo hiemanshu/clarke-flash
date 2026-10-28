@@ -7,6 +7,7 @@
 #   ./scripts/watch_training.sh --full     # + all runs, reports, eval log tails
 #   LOGDIR=.. CLEAR_EVERY=30 ROWS=40 COLS=100  # env overrides (ROWS/COLS when not a tty)
 #   TELEMETRY=0 TELEMETRY_FILE=.. TELEMETRY_MAX_BYTES=.. TELEMETRY_KEEP=..  # see below
+#   FAST=0 FAST_MS=20 FAST_FILE=.. FAST_MAX_BYTES=.. FAST_KEEP=..         # 50 Hz GPU probe
 #
 # Every invocation also appends one CSV row per second to logs/telemetry.csv
 # (gitignored, self-rotating). That sampler is deliberately independent of the
@@ -48,6 +49,23 @@ TELEMETRY_INTERVAL="${TELEMETRY_INTERVAL:-$INTERVAL}"
 TELEMETRY_MAX_BYTES="${TELEMETRY_MAX_BYTES:-10485760}"   # 10 MiB
 TELEMETRY_KEEP="${TELEMETRY_KEEP:-4}"                     # 4 rotated copies
 TELEMETRY_PID=""
+
+# ---- 50 Hz GPU probe ------------------------------------------------------
+# The 1 Hz file cannot see the thing we actually suspect: a 5090 spikes to ~900 W
+# for <1 ms, and `power.draw` is an average. This second logger streams ONE
+# long-lived `nvidia-smi --loop-ms` (not 50 processes/s) into its own file, with
+# `power.draw.instant` and every clocks_event_reasons bit -- including
+# hw_power_brake_slowdown, which is the card itself saying its power input is the
+# problem. Separate file so the 1 Hz PSU schema stays clean; join on epoch_ms.
+FAST="${FAST:-1}"
+FAST_FILE="${FAST_FILE:-$ROOT/logs/gpu-fast.csv}"
+FAST_MS="${FAST_MS:-20}"                                  # 20 ms = 50 Hz
+FAST_MAX_BYTES="${FAST_MAX_BYTES:-16777216}"              # 16 MiB (~4h at 50 Hz)
+FAST_KEEP="${FAST_KEEP:-3}"                               # 3 rotated copies
+FAST_PID=""
+FAST_FIELDS='pstate,power.draw.instant,power.draw,clocks.current.graphics,clocks.current.memory,temperature.gpu,utilization.gpu,clocks_event_reasons.active,clocks_event_reasons.hw_power_brake_slowdown,clocks_event_reasons.hw_slowdown,clocks_event_reasons.hw_thermal_slowdown,clocks_event_reasons.sw_power_cap,pcie.link.gen.current'
+FAST_HEADER='epoch_ms,pstate,power_instant_w,power_avg_w,clk_gr_mhz,clk_mem_mhz,temp_c,util_pct,event_reasons_active,hw_power_brake,hw_slowdown,hw_thermal_slowdown,sw_power_cap,pcie_gen'
+FAST_NCOMMAS=12                                           # 13 fields -> 12 commas
 : "${ROWS:=24}"; : "${COLS:=80}"
 K=$'\033[K'
 CLEAR_EVERY=${CLEAR_EVERY:-30}
@@ -183,6 +201,18 @@ sc1() { [[ -z "${1:-}" ]] && return 0; awk -v v="$1" 'BEGIN{printf "%.1f", v/100
 
 TELEMETRY_HEADER='ts,epoch,psu_vin_v,psu_12v_v,psu_12v_a,psu_total_w,psu_12v_w,psu_vrm_c,psu_case_c,psu_fan_rpm,gpu_ok,pstate,gpu_power_w,gpu_temp_c,gpu_util_pct,gpu_mem_used_mib,gpu_clk_gr_mhz,gpu_clk_mem_mhz,pcie_gen_cur,run,step'
 
+# shift .N down and the live file to .1 when it exceeds max; 1 = rotated
+rotate_file() {
+  local file="$1" max="$2" keep="$3" sz i
+  sz=$(stat -c %s "$file" 2>/dev/null || printf 0)
+  (( sz >= max )) || return 1
+  for (( i = keep - 1; i >= 1; i-- )); do
+    [[ -f "$file.$i" ]] && mv -f "$file.$i" "$file.$((i+1))" 2>/dev/null
+  done
+  mv -f "$file" "$file.1" 2>/dev/null
+  return 0
+}
+
 # one CSV row; never blocks on a dead GPU and never buffers a partial line
 telemetry_row() {
   local ts now psu vin v12 a12 pw pwt vrm cse fan
@@ -233,7 +263,7 @@ telemetry_row() {
 }
 
 telemetry_logger() {
-  local main_pid="$1" file dir sz i
+  local main_pid="$1" file dir
   file="$TELEMETRY_FILE"; dir=$(dirname "$file")
   mkdir -p "$dir" 2>/dev/null || return 0
   command -v flock >/dev/null 2>&1 && { exec 9>"$dir/.$(basename "$file").lock" && flock -n 9 || return 0; }
@@ -241,14 +271,8 @@ telemetry_logger() {
   while :; do
     kill -0 "$main_pid" 2>/dev/null || break        # parent gone (SIGKILL included)
     [[ -s "$file" ]] || printf '%s\n' "$TELEMETRY_HEADER" >> "$file"
-    sz=$(stat -c %s "$file" 2>/dev/null || printf 0)
-    if (( sz >= TELEMETRY_MAX_BYTES )); then
-      for (( i = TELEMETRY_KEEP - 1; i >= 1; i-- )); do
-        [[ -f "$file.$i" ]] && mv -f "$file.$i" "$file.$((i+1))" 2>/dev/null
-      done
-      mv -f "$file" "$file.1" 2>/dev/null
-      printf '%s\n' "$TELEMETRY_HEADER" >> "$file"
-    fi
+    rotate_file "$file" "$TELEMETRY_MAX_BYTES" "$TELEMETRY_KEEP" \
+      && printf '%s\n' "$TELEMETRY_HEADER" >> "$file"
     telemetry_row >> "$file" 2>/dev/null
     sleep "$TELEMETRY_INTERVAL"
   done
@@ -264,6 +288,49 @@ stop_telemetry() {
   kill "$TELEMETRY_PID" 2>/dev/null
   wait "$TELEMETRY_PID" 2>/dev/null
   TELEMETRY_PID=""
+}
+
+# stream ONE long-lived nvidia-smi at $FAST_MS into FAST_FILE. One process, not
+# 50/s: a per-sample nvidia-smi would cost more CPU than the training step.
+fast_probe() {
+  local main_pid="$1" file dir line t stripped n=0 buf=""
+  file="$FAST_FILE"; dir=$(dirname "$file")
+  mkdir -p "$dir" 2>/dev/null || return 0
+  command -v flock >/dev/null 2>&1 && { exec 8>"$dir/.$(basename "$file").lock" && flock -n 8 || return 0; }
+  nvidia-smi --help 2>/dev/null | grep -q -- '--loop-ms' || return 0   # unsupported: stay off
+  command -v stdbuf >/dev/null 2>&1 && buf="stdbuf -oL"                # line-buffer, or the
+  trap 'exit 0' TERM INT                                              # last samples are lost
+  [[ -s "$file" ]] || printf '%s\n' "$FAST_HEADER" >> "$file"
+  while kill -0 "$main_pid" 2>/dev/null; do
+    # stdbuf matters: block-buffered stdout would swallow the final rows (the ones
+    # that matter) when the card vanishes mid-stream.
+    $buf nvidia-smi --query-gpu="$FAST_FIELDS" --format=csv,noheader,nounits \
+          --loop-ms="$FAST_MS" 2>/dev/null | while IFS= read -r line; do
+      stripped=${line//,/}
+      (( ${#line} - ${#stripped} == FAST_NCOMMAS )) || continue   # drop error text
+      if [[ -n "${EPOCHREALTIME:-}" ]]; then t="${EPOCHREALTIME//[.,]/}"; t=${t:0:13}
+      else t=$(date +%s%3N); fi                                  # bash<5 fallback
+      printf '%s,%s\n' "$t" "$line" >> "$file"
+      n=$(( n + 1 ))
+      if (( n % 20 == 0 )); then             # ~0.4s at 50 Hz: caps overshoot at ~20 rows
+        rotate_file "$file" "$FAST_MAX_BYTES" "$FAST_KEEP" \
+          && printf '%s\n' "$FAST_HEADER" >> "$file"
+      fi
+    done
+    sleep 1     # nvidia-smi exited (card lost) - retry; resumes when it is back
+  done
+}
+
+start_probe() {
+  (( FAST )) || return 0
+  ( fast_probe $$ ) &
+  FAST_PID=$!
+}
+stop_probe() {
+  [[ -n "$FAST_PID" ]] || return 0
+  kill "$FAST_PID" 2>/dev/null
+  wait "$FAST_PID" 2>/dev/null
+  FAST_PID=""
 }
 
 # ---- frame buffers ------------------------------------------------------
@@ -441,7 +508,7 @@ draw() {
 assemble() { printf '%s\n' "${OUT[@]}" "${BOT[@]}"; }
 
 if (( TTY && ! STATUS )); then printf '\033[?1049h'; fi
-cleanup() { stop_telemetry; printf '\033[?25h\033[?1049l'; exit 0; }
+cleanup() { stop_telemetry; stop_probe; printf '\033[?25h\033[?1049l'; exit 0; }
 trap cleanup INT TERM
 
 if (( STATUS )); then draw; assemble; exit 0; fi
@@ -451,6 +518,7 @@ if (( STATUS )); then draw; assemble; exit 0; fi
 # Telemetry starts first and is independent of which dashboard runs -- note this no
 # longer `exec`s, so the logger keeps a parent to die with and can be reaped on exit.
 start_telemetry
+start_probe
 if (( TTY )) && [[ "${WATCH_TUI:-1}" != "0" ]]; then
   printf '\033[?25l'
   python3 "$ROOT/scripts/watch_tui.py" "$INTERVAL"
