@@ -36,5 +36,25 @@
     }
   },
   "note": "Only aggregate numbers are public. Source documents and per-record predictions stay under data/ and reports/company-eval/ (both gitignored).",
-  "read": "N beats L41 on exact@all (+5.8pp) and exact (+11.2pp) with better null discipline, but answers 13 fewer gold fields (82 vs 95), so contains falls. On this surface recall/coverage is the binding constraint for both models, not clause finding: contains is .81-.87 while answered/gold is 73-85%."
+  "read": "N beats L41 on exact@all (+5.8pp) and exact (+11.2pp) with better null discipline, but answers 13 fewer gold fields (82 vs 95), so contains falls. On this surface recall/coverage is the binding constraint for both models, not clause finding: contains is .81-.87 while answered/gold is 73-85%.",
+  "parties_only": {
+    "note": "one field per contract, all 39 gold-present, so null_ok is undefined here",
+    "clarke-L41": {
+      "exact": 0.4915,
+      "tok_f1": 0.8803,
+      "contains": 0.9017,
+      "answered": 39,
+      "gold": 39,
+      "exact_at_all": 0.4915
+    },
+    "clarke-N": {
+      "exact": 0.6839,
+      "tok_f1": 0.7529,
+      "contains": 0.7816,
+      "answered": 29,
+      "gold": 39,
+      "exact_at_all": 0.5085
+    },
+    "read": "N is +19.2pp more exact per answer but declines 10/39 contracts; L41 answers all 39 and finds more items (contains .90 vs .78). The overall 13-answer gap on the company set is this field."
+  }
 }

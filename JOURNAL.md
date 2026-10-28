@@ -1,3 +1,17 @@
+**00:35 — PARTIES-ONLY ON THE PRIVATE COMPANY SET: N IS +19.2pp MORE EXACT PER ANSWER BUT DECLINES 10 OF
+39 CONTRACTS. The overall 13-answer gap on this surface is this one field.**
+  model  exact   tokF1   contains answered  exact@all
+  L41    .4915   .8803    .9017    39/39    .4915
+  N      .6839   .7529    .7816    29/39    .5085
+So N's improvement on the company set came from being conservative on parties, not from better clause
+finding. When N commits it gets the 2-3 entity set exactly right 68% of the time versus 49% for L41; when
+it declines, the whole list is lost, which is why contains/tokF1 fall even though exact@all rises 1.7pp.
+NEXT (cheap, decode-only, no training): sweep a PER-FIELD null threshold for parties on this set. If the
+10 declines are ok_rejected (span right, p_null > 0.5) rather than wrong_rejected, a parties-specific gate
+of ~0.3 should recover most of the coverage while keeping N's tighter crops. Run Q's taxonomy answers
+which case it is before the sweep; do not tune the gate blind.
+Also worth noting: all 39 contracts have parties present, so null_ok is undefined on this subset.
+
 **00:25 — PRE-REGISTRATION: RUN Q, PER-FIELD FAILURE TAXONOMY ON THE PRIVATE COMPANY SET.**
 WHY: N beats L41 on both surfaces but answers 13 fewer gold fields on the company set (82 vs 95), so
 the open question is WHERE recall is lost. The aggregate cannot say.
