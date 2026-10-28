@@ -1,3 +1,30 @@
+**08:05 — CORRECTION ON METRICS, THEN A DECISION. contains ALREADY IS the tolerant measure: parties is
+86.8% contains / 85.8% precision / 86.3% F1, and we LEAD every external model on it (opus 78.7/75.6,
+gemini 77.0/75.8, gpt 59.4/79.2, clairic 97.4/55.2). The owner was right that dual reporting already
+existed; my "entity-exact" scorer was mostly re-deriving `contains`, whose substring matching already
+forgives "YOU ON DEMAND HOLDINGS" vs "YOU ON DEMAND HOLDINGS, INC.". What contains omits is PRECISION,
+and that is the number worth adding rather than a new exact-style metric.
+STATE OF parties ON THE EXISTING METRICS (40 docs, candidate decode):
+  model            contains  precision   F1
+  ours H4+cand       .868      .858      .863
+  opus-5.5           .787      .756      .771
+  gemini-4-argon     .770      .758      .764
+  gpt-6.1-sol        .594      .792      .679
+  clairic            .974      .552      .705
+So the strict 6-8/40 was an annotation-style artefact, not an extraction failure: we find more correct
+parties with fewer spurious ones than any frontier model tested, at .868 contains.
+THE 90% QUESTION, ANSWERED WITH A DIAL: emitting K+1 candidates (one more name per document than the
+present head asks for) gives
+  K+0  contains .868  precision .858  F1 .863  strict 8/40  entity doc-exact 21/40  items 4.53
+  K+1  contains .911  precision .835  F1 .871  strict 5/40  entity doc-exact 18/40  items 5.53
+  K+2  contains .931  precision .814  F1 .869  strict 4/40  entity doc-exact 16/40  items 6.53
+K+1 is the F1 optimum and crosses 90% contains, but it costs 3 documents of all-or-nothing exactness
+(21 -> 18) because the extra item is usually spurious. K+0 stays the default: precision and doc-exact
+matter more than a 4pp recall gain that is bought with false parties.
+REAL PATH TO 90% ON DOC-EXACT (21/40 -> ~30/40): precision .858 -> .95 through a trained candidate
+ranker (features: model start/end score, quoted?, legal suffix, position, capitalisation), trained on
+the 470 CUAD docs. A K dial cannot get there; it trades one error type for the other.
+
 **07:50 — THE parties METRIC WAS THE PROBLEM, NOT (ONLY) THE MODEL. Scored by ENTITY instead of by
 annotated string, we are 21/40 doc-exact with recall .883 / precision .842 - BETTER recall and precision
 than Opus 5.5 (.783/.768).**

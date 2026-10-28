@@ -71,7 +71,8 @@ class ClarkeModel(torch.nn.Module):
                dedupe_mode: str = "overlap",
                candidate_decode: bool = False,
                candidate_region: float = 1.0,
-               candidate_fields: set[str] | None = None) -> list[dict[str, Any]]:
+               candidate_fields: set[str] | None = None,
+               candidate_extra: int = 0) -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -99,7 +100,8 @@ class ClarkeModel(torch.nn.Module):
                                             pool_starts=pool_starts,
                                             candidate_decode=candidate_decode,
                                             candidate_region=candidate_region,
-                                            candidate_fields=candidate_fields)
+                                            candidate_fields=candidate_fields,
+                                            candidate_extra=candidate_extra)
                 for encoded, field_logits in zip(record.fields, record_logits)
             })
         return out
@@ -123,7 +125,8 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                   pool_starts: int = 4,
                   candidate_decode: bool = False,
                   candidate_region: float = 1.0,
-                  candidate_fields: set[str] | None = None) -> dict[str, Any]:
+                  candidate_fields: set[str] | None = None,
+                  candidate_extra: int = 0) -> dict[str, Any]:
     p_null = torch.sigmoid(logits.null.float())
     answer: dict[str, Any] = {"type": spec.type}
     # Per-field extent cap: score(i,j)=p_start*p_end has no term for how long this
@@ -182,7 +185,7 @@ def decode_answer(spec: FieldSpec, record: EncodedRecord, logits: FieldLogits,
                         sp = torch.softmax(logits.start.float() * pointer_temp, dim=-1)
                         ep = torch.softmax(logits.end.float() * pointer_temp, dim=-1)
                         scores = (sp[:, st] * ep[:, en]).max(dim=0).values
-                        want = max(1, int((present >= slot_threshold).sum()))
+                        want = max(1, int((present >= slot_threshold).sum()) + candidate_extra)
                         order = torch.argsort(scores, descending=True).tolist()
                         taken: set[str] = set()
                         for idx_c in order:
