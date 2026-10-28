@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/bb-lfm230/checkpoint-8384",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 277,
+      "null_n": 1142,
+      "exact": 0.3448,
+      "located": 0.3448,
+      "null_correct": 0.9448,
+      "tok_f1": 0.4732,
+      "contains": 0.576,
+      "mean_confidence": 0.0,
+      "brier_null": 0.1318
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 277,
+        "null_n": 1142,
+        "exact": 0.3448,
+        "located": 0.3448,
+        "null_correct": 0.9448,
+        "tok_f1": 0.4732,
+        "contains": 0.576,
+        "mean_confidence": 0.0,
+        "brier_null": 0.1318
+      }
+    }
+  }
+}

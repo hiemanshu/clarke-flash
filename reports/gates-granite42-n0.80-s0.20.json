@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/bb-granite42/checkpoint-8380",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 346,
+      "null_n": 1142,
+      "exact": 0.4333,
+      "located": 0.4333,
+      "null_correct": 0.944,
+      "tok_f1": 0.559,
+      "contains": 0.6636,
+      "mean_confidence": 0.0,
+      "brier_null": 0.1153
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 346,
+        "null_n": 1142,
+        "exact": 0.4333,
+        "located": 0.4333,
+        "null_correct": 0.944,
+        "tok_f1": 0.559,
+        "contains": 0.6636,
+        "mean_confidence": 0.0,
+        "brier_null": 0.1153
+      }
+    }
+  }
+}

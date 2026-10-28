@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/D2-ledgar/checkpoint-11000",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 228,
+      "null_n": 1142,
+      "exact": 0.3921,
+      "located": 0.3921,
+      "null_correct": 0.9711,
+      "tok_f1": 0.5313,
+      "contains": 0.6481,
+      "mean_confidence": 0.0,
+      "brier_null": 0.1384
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 228,
+        "null_n": 1142,
+        "exact": 0.3921,
+        "located": 0.3921,
+        "null_correct": 0.9711,
+        "tok_f1": 0.5313,
+        "contains": 0.6481,
+        "mean_confidence": 0.0,
+        "brier_null": 0.1384
+      }
+    }
+  }
+}

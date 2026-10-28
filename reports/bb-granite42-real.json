@@ -1,0 +1,49 @@
+{
+  "checkpoint": "runs/bb-granite42/checkpoint-8380",
+  "data": "data/real_eval.jsonl",
+  "records": 168,
+  "metrics": {
+    "list-text": {
+      "n": 6088,
+      "answered": 336,
+      "null_n": 5495,
+      "exact": 0.4087,
+      "located": 0.4087,
+      "null_correct": 0.9891,
+      "tok_f1": 0.5337,
+      "contains": 0.6746,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0411
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 6068,
+        "answered": 316,
+        "null_n": 5495,
+        "exact": 0.4301,
+        "located": 0.4301,
+        "null_correct": 0.9891,
+        "tok_f1": 0.5569,
+        "contains": 0.6907,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0412
+      }
+    },
+    "keyphrase": {
+      "list-text": {
+        "n": 20,
+        "answered": 20,
+        "null_n": 0,
+        "exact": 0.0708,
+        "located": 0.0708,
+        "null_correct": 0.0,
+        "tok_f1": 0.1661,
+        "contains": 0.4192,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/bb-hymt2/checkpoint-8384",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 366,
+      "null_n": 1142,
+      "exact": 0.3152,
+      "located": 0.3152,
+      "null_correct": 0.7636,
+      "tok_f1": 0.4899,
+      "contains": 0.5615,
+      "mean_confidence": 0.0,
+      "brier_null": 0.136
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 366,
+        "null_n": 1142,
+        "exact": 0.3152,
+        "located": 0.3152,
+        "null_correct": 0.7636,
+        "tok_f1": 0.4899,
+        "contains": 0.5615,
+        "mean_confidence": 0.0,
+        "brier_null": 0.136
+      }
+    }
+  }
+}

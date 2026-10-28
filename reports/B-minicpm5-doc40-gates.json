@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/B-minicpm5/checkpoint-1880",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 409,
+      "null_n": 1142,
+      "exact": 0.4287,
+      "located": 0.4287,
+      "null_correct": 0.9413,
+      "tok_f1": 0.5722,
+      "contains": 0.6769,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0668
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 409,
+        "null_n": 1142,
+        "exact": 0.4287,
+        "located": 0.4287,
+        "null_correct": 0.9413,
+        "tok_f1": 0.5722,
+        "contains": 0.6769,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0668
+      }
+    }
+  }
+}

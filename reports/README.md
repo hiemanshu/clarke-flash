@@ -1,7 +1,7 @@
 # reports/ — how to read this directory
 
-**Status: tracked in git** (owner decision 2026-10-26, after briefly being ignored). At ~2.7 MB
-for 169 files the cost is trivial, and it makes every journaled number traceable to the exact
+**Status: tracked in git** (owner decision 2026-10-26, after briefly being ignored). At ~4.9 MB
+for 399 files the cost is trivial, and it makes every journaled number traceable to the exact
 report that produced it — including the raw per-record predictions, which are what the failure
 taxonomy and threshold sweeps were computed from.
 

@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/A-4b/checkpoint-1880",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 436,
+      "null_n": 1142,
+      "exact": 0.4459,
+      "located": 0.4459,
+      "null_correct": 0.9387,
+      "tok_f1": 0.5844,
+      "contains": 0.6749,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0552
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 436,
+        "null_n": 1142,
+        "exact": 0.4459,
+        "located": 0.4459,
+        "null_correct": 0.9387,
+        "tok_f1": 0.5844,
+        "contains": 0.6749,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0552
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/A2-qwen2b-brier/checkpoint-1880",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 458,
+      "null_n": 1142,
+      "exact": 0.4104,
+      "located": 0.4104,
+      "null_correct": 0.8634,
+      "tok_f1": 0.6268,
+      "contains": 0.7274,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0647
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 458,
+        "null_n": 1142,
+        "exact": 0.4104,
+        "located": 0.4104,
+        "null_correct": 0.8634,
+        "tok_f1": 0.6268,
+        "contains": 0.7274,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0647
+      }
+    }
+  }
+}

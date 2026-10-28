@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/C-fieldbal/checkpoint-1880",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 412,
+      "null_n": 1142,
+      "exact": 0.4311,
+      "located": 0.4311,
+      "null_correct": 0.9562,
+      "tok_f1": 0.5558,
+      "contains": 0.6662,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0637
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 412,
+        "null_n": 1142,
+        "exact": 0.4311,
+        "located": 0.4311,
+        "null_correct": 0.9562,
+        "tok_f1": 0.5558,
+        "contains": 0.6662,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0637
+      }
+    }
+  }
+}

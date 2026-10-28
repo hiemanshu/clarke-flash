@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/bb-ministral/checkpoint-8380",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 447,
+      "null_n": 1142,
+      "exact": 0.3585,
+      "located": 0.3585,
+      "null_correct": 0.7426,
+      "tok_f1": 0.48,
+      "contains": 0.5396,
+      "mean_confidence": 0.0,
+      "brier_null": 0.1038
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 447,
+        "null_n": 1142,
+        "exact": 0.3585,
+        "located": 0.3585,
+        "null_correct": 0.7426,
+        "tok_f1": 0.48,
+        "contains": 0.5396,
+        "mean_confidence": 0.0,
+        "brier_null": 0.1038
+      }
+    }
+  }
+}

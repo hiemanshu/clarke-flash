@@ -1,0 +1,49 @@
+{
+  "checkpoint": "runs/A-ministral/checkpoint-1880",
+  "data": "data/real_eval.jsonl",
+  "records": 168,
+  "metrics": {
+    "list-text": {
+      "n": 6088,
+      "answered": 405,
+      "null_n": 5495,
+      "exact": 0.4292,
+      "located": 0.4292,
+      "null_correct": 0.8923,
+      "tok_f1": 0.5612,
+      "contains": 0.6665,
+      "mean_confidence": 0.0,
+      "brier_null": 0.1073
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 6068,
+        "answered": 405,
+        "null_n": 5495,
+        "exact": 0.4292,
+        "located": 0.4292,
+        "null_correct": 0.8923,
+        "tok_f1": 0.5612,
+        "contains": 0.6665,
+        "mean_confidence": 0.0,
+        "brier_null": 0.1073
+      }
+    },
+    "keyphrase": {
+      "list-text": {
+        "n": 20,
+        "answered": 0,
+        "null_n": 0,
+        "exact": 0.0,
+        "located": null,
+        "null_correct": 0.0,
+        "tok_f1": 0.0,
+        "contains": 0.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.1295
+      }
+    }
+  }
+}

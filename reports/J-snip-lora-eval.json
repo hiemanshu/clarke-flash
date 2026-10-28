@@ -1,0 +1,35 @@
+{
+  "checkpoint": "runs/J-snip-lora/checkpoint-2000",
+  "data": "data/doc_eval_40_twelve.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 480,
+      "answered": 0,
+      "null_n": 170,
+      "exact": 0.0,
+      "located": null,
+      "null_correct": 1.0,
+      "tok_f1": 0.0,
+      "contains": 0.0,
+      "mean_confidence": 0.0,
+      "brier_null": 0.5366
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 480,
+        "answered": 0,
+        "null_n": 170,
+        "exact": 0.0,
+        "located": null,
+        "null_correct": 1.0,
+        "tok_f1": 0.0,
+        "contains": 0.0,
+        "mean_confidence": 0.0,
+        "brier_null": 0.5366
+      }
+    }
+  }
+}

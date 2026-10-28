@@ -1,0 +1,49 @@
+{
+  "checkpoint": "runs/bb-gemma_e2b/checkpoint-8380",
+  "data": "data/real_eval.jsonl",
+  "records": 168,
+  "metrics": {
+    "list-text": {
+      "n": 6088,
+      "answered": 313,
+      "null_n": 5495,
+      "exact": 0.3129,
+      "located": 0.3129,
+      "null_correct": 0.9862,
+      "tok_f1": 0.4638,
+      "contains": 0.5933,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0464
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 6068,
+        "answered": 293,
+        "null_n": 5495,
+        "exact": 0.3301,
+        "located": 0.3301,
+        "null_correct": 0.9862,
+        "tok_f1": 0.4827,
+        "contains": 0.5968,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0466
+      }
+    },
+    "keyphrase": {
+      "list-text": {
+        "n": 20,
+        "answered": 20,
+        "null_n": 0,
+        "exact": 0.0617,
+        "located": 0.0617,
+        "null_correct": 0.0,
+        "tok_f1": 0.1868,
+        "contains": 0.5417,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0
+      }
+    }
+  }
+}
