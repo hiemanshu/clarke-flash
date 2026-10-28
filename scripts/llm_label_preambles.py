@@ -340,6 +340,10 @@ def main(argv: list[str] | None = None) -> None:
                     help="USD per 1M input tokens; default comes from PRICING[backend]")
     ap.add_argument("--output-cost-per-mtok", type=float, default=None,
                     help="USD per 1M output tokens; default comes from PRICING[backend]")
+    ap.add_argument("--stop-after-errors", type=int, default=5,
+                    help="abort after N consecutive failed calls (a plan block returns the "
+                         "same error for every record; without this the run writes thousands "
+                         "of error rows before anyone notices)")
     ap.add_argument("--assumed-output-tokens", type=int, default=300,
                     help="output tokens per record for the estimate (JSON + optional reasoning)")
     ap.add_argument("--max-cost", type=float, default=25.0)
@@ -401,17 +405,30 @@ def main(argv: list[str] | None = None) -> None:
                 return one_openrouter(j, args.model, args.chars, args.fallback_model)
             return one(j, args.model, args.chars)
         futures = {pool.submit(call, j): j["id"] for j in jobs}
+        consec = 0
+        stopped = False
         for i, fut in enumerate(as_completed(futures), 1):
             r = fut.result()
             fh.write(json.dumps(r) + "\n"); fh.flush()
             if "error" in r:
                 err += 1
+                consec += 1
+                if consec >= args.stop_after_errors:
+                    blocked = any(m in str(r["error"]).lower() for m in LIMIT_MARKERS)
+                    print(f"STOP: {consec} consecutive errors "
+                          f"({'quota/limit' if blocked else 'unknown'}); last: {r['error']}",
+                          flush=True)
+                    stopped = True
+                    break
             else:
                 ok += 1
+                consec = 0
             if i % 25 == 0:
                 rate = i / max(time.time() - started, 1e-9)
                 print(f"  {i}/{len(jobs)}  ok {ok} err {err}  {rate:.2f} rec/s", flush=True)
-    print(f"done: {ok} ok, {err} errors -> {args.out}")
+        if stopped:
+            pool.shutdown(wait=False, cancel_futures=True)
+    print(f"{'stopped' if err and stopped else 'done'}: {ok} ok, {err} errors -> {args.out}")
 
 
 if __name__ == "__main__":
