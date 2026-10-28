@@ -260,7 +260,14 @@ def _run_opencode(model: str, prompt: str) -> tuple[str, str]:
     except Exception as exc:                                   # noqa: BLE001
         return "", f"{type(exc).__name__}: {exc}"[:200]
     if proc.returncode != 0:
-        return "", f"exit {proc.returncode}: {proc.stderr[:200]}"
+        # The CLI prints quota/plan errors on STDOUT ("You've reached your 5-hour
+        # usage limit...") and leaves stderr empty, so keeping only stderr made a
+        # block look like an unknown failure. Keep the tail of both streams.
+        tail = " | ".join(x.strip() for x in (proc.stdout or "").strip().splitlines()[-3:]
+                          if x.strip())
+        stderr = (proc.stderr or "").strip()
+        detail = " | ".join(x for x in (tail, stderr) if x)[:220]
+        return "", f"exit {proc.returncode}: {detail}"
     chunks = []
     for line in proc.stdout.splitlines():
         line = line.strip()
@@ -274,7 +281,12 @@ def _run_opencode(model: str, prompt: str) -> tuple[str, str]:
             chunks.append((ev.get("part") or {}).get("text") or "")
         elif ev.get("type") == "error":
             return "", str(ev)[:200]
-    return "".join(chunks), ""
+    text = "".join(chunks)
+    if not text.strip():
+        # rc=0 with no text would otherwise be stored as a successful label with
+        # zero fields; treat it as a failure so it is retried.
+        return "", "empty response: no text events"
+    return text, ""
 
 
 def one_opencode(job: dict, model: str, chars: int, fallback: str = "") -> dict:
