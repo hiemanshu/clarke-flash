@@ -1,3 +1,24 @@
+**23:55 — PRE-REGISTRATION: RUN O (adapter length at gentle LR) AND ITS CONDITIONAL 41-FIELD FOLLOW-UP.**
+WHY: every good result rests on an 800-step adapter. The only points beyond that are 1,200 at
+r32/lr2e-5 (flat, .5675 vs .5670 control) and 2,000/3,000 at r64/lr2e-4 (destroyed, .0801/.0000).
+**2,000 steps at lr 2e-5 has never been trained.** Run N gives the preamble fields ~224 updates at
+800 steps, which may be too few; this run tests whether a longer *gentle* adapter is safe and whether
+it moves the preamble fields.
+O-1 (12-field bed, cheap): LoRA r=32, lr 2e-5, **2,000 steps**, max-length 4096, on
+data/snippets_4k_with_preamble.jsonl -> merge runs/bb-snip-lora-v2-2000 -> fresh 12-field head on
+data/doc_train_470_twelve.jsonl, 2 epochs = 940 steps -> eval with K2's flags.
+  SAFE   = exact@all >= .5620 (within 0.5pp of the .5670 control) AND null_ok >= .80
+  BETTER = exact@all >= .5829 (+1.0pp over K2's .5729)
+  DRIFT  = exact@all < .5620 or null_ok < .80  -> stop, notify, do not spend the 41-field run
+  drift check: head loss@500 vs K2's 3.28 (sweep control 2.06; a value >= 6.0 means the adapter moved
+  the features, the harsh-LoRA signature).
+O-2 (only if SAFE or BETTER): 41-field head on runs/bb-snip-lora-v2-2000,
+  --train data/doc_train_470.jsonl data/ledgar_labelled_cuad.jsonl, 4 epochs = 3,908 steps, 65k,
+  finalize + zero-flag eval on doc40. Read vs L41 (.4252/.5139/.6346/.6997/.9606/412):
+  ADOPT >= .4352, NEUTRAL within .005, REJECT < .4202.
+CAVEAT carried: O-2 changes adapter length + backbone diet + head data vs L41, so it is a pipeline
+test, not an attribution. Attribution still needs a CUAD-only-head control at matched steps.
+
 **00:05 — PRE-REGISTRATION: RUN N (adapter with preamble supervision + 41-field CUAD&LEDGAR head).**
 WHY: the adapter has never been supervised on parties/document_name/agreement_date (0 of 17,576
 snippets carry them), and the head has never trained on the 507 labelled LEDGAR docs. Run N adds
