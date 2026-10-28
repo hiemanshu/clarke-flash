@@ -201,19 +201,36 @@ def _json_of(text: str) -> dict:
 
 
 def ground(text: str, quote: str) -> tuple[int, int] | None:
-    """Locate a verbatim quote, tolerating whitespace differences. None if absent."""
+    """Locate a verbatim quote, tolerating whitespace differences. None if absent.
+
+    The flat view KEEPS one space per whitespace run, so its indices and the
+    original-index map are the same length. The previous version built the map
+    from non-space characters only while searching a space-containing string, so
+    every offset after the first space was shifted (measured: 0/2228 spans
+    correct, all 2228 fixed by this mapping).
+    """
     if not quote:
         return None
     q = " ".join(str(quote).split())
-    flat = re.sub(r"\s+", " ", text)
-    # build a map from flat index -> original index
-    idx = [i for i, ch in enumerate(text) if not ch.isspace()]
-    pos = flat.find(q)
+    flat: list[str] = []
+    idx: list[int] = []
+    i = 0
+    while i < len(text):
+        if text[i].isspace():
+            j = i
+            while j < len(text) and text[j].isspace():
+                j += 1
+            flat.append(" ")
+            idx.append(i)
+            i = j
+        else:
+            flat.append(text[i])
+            idx.append(i)
+            i += 1
+    pos = "".join(flat).find(q)
     if pos < 0:
         return None
     end = pos + len(q)
-    if end - 1 >= len(idx):
-        return None
     return idx[pos], idx[end - 1] + 1
 
 

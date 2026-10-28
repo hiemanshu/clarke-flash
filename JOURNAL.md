@@ -1,3 +1,36 @@
+**23:30 — GROUNDING BUG FOUND AND REPAIRED; FIRST LABELLED CORPUS BUILT (507 docs, 4.35 present
+fields each, 0 leaks, 1 doc too long). Every span in the 523 existing label rows was WRONG.**
+THE BUG (scripts/llm_label_preambles.py ground()): it searched a whitespace-collapsed string but
+mapped flat indices through an index list built from NON-space characters only. Every offset after
+the first space was therefore shifted. Measured on the existing labels: **0 of 2,228 values verified
+against their stored span**, and all 2,228 verify with the corrected index map. The VALUES were
+always right - only the offsets were wrong - so this was repairable offline, no re-labelling and no
+API calls: scripts/reground_labels.py re-locates each value in its source state (523 rows changed,
+2,228 values verified, 0 unlocatable, 0 dropped) -> data/llm_preambles_regrounded.jsonl.
+Note the earlier K3-vs-Pro "spans identical 10/10" comparison still holds as an agreement statement,
+but both sides' spans were shifted the same way, so it could not have caught this.
+CORPUS (scripts/build_ledgar_labelled.py, data/ledgar_labelled_cuad.jsonl + _twelve.jsonl):
+  selection  parties + document_name required, agreement_date optional (null when absent)
+  523 qualified label rows -> 507 documents kept
+  dropped    15 without both required fields, 0 bad spans, 1 over the encoder budget
+             (66,847 state tokens + 2.4k schema > 65,536 - the truncation caveat, not a guess)
+  schema     full 41 fields with explicit nulls, verified identical to data/doc_train_470.jsonl
+  present    4.35 fields/record: 3:54 4:273 5:142 6:26 7:12  -> 10.6% present
+  fields     document_name 507, parties 507, agreement_date 438; governing_law 434,
+             anti_assignment 196, insurance 36, termination_for_convenience 31,
+             warranty_duration 24, cap_on_liability 12, effective_date 8,
+             non_disparagement 6, change_of_control 5
+  leak audit 0 matches vs doc_eval_40, doc_eval_40_twelve, real_eval, val3, typed_test
+CAVEATS CARRIED FORWARD FROM THE JOURNAL/OPERATIONS (read before training, not after):
+  - D2 taught "short schema => answer everything" at 71% present; full-schema nulls are mandatory and
+    present rate must stay near the eval's ~30% or below, not near 100%.
+  - spans past the 65k cut become FALSE NULLS silently (the 240k-char builder already windows; this
+    corpus adds an explicit token check because a raw char cap is not a token guarantee).
+  - user._frozen eval surfaces (typed_test 400-1612, real_eval, doc_eval_40, val3) were not trained on.
+  - never report exact alone; exact@all + answered/gold + null_ok always.
+NEXT: a smoke run (40 steps) then a 1-epoch (507-step) test initialised from L41
+(runs/L41-mild-r3/checkpoint-1880), evaluated on doc40 with the full metric set.
+
 **23:05 — SELECTION RULE CORRECTED: parties + document_name are REQUIRED, agreement_date MAY BE NULL.
 This supersedes the "all three fields" condition in the 22:55 entry.**
 WHY: agreement_date is frequently absent from the 12k-char preamble even in contracts that clearly
