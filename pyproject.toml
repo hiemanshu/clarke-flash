@@ -5,7 +5,7 @@ requires = ["hatchling"]
 [project]
 name = "clarke-flash"
 version = "0.1.0"
-description = "System One extraction model post-trained from Qwen3.5-9B: typed extract/compute/estimate/forecast in one parallel pass"
+description = "System One extraction model on a frozen Qwen3.5-2B backbone: typed extract/compute/estimate/forecast in one parallel pass"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
