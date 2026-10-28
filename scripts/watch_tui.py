@@ -26,7 +26,10 @@ from collections import deque
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LOGDIR = Path(os.environ.get("LOGDIR", "/tmp/opencode"))
+# The drivers now write into the repo's logs/; /tmp/opencode is the old location. Search
+# all of them, so the LOG panel follows the logs rather than tailing a dead directory.
+LOG_DIRS = ([Path(os.environ["LOGDIR"])] if os.environ.get("LOGDIR")
+            else [ROOT / "logs", Path("/tmp/opencode")])
 HIST = 60
 PSU_MAX = float(os.environ.get("PSU_MAX", 1200))   # rated watts, for the load gauge
 SPARK = "▁▂▃▄▅▆▇█"
@@ -651,8 +654,8 @@ class Dash:
         # ── log tail ─────────────────────────────────────────────────────
         log_h = h - y - 1
         if log_h >= 4:
-            logs = sorted(glob.glob(str(LOGDIR / "*.log")), key=os.path.getmtime,
-                          reverse=True)[:8]
+            logs = sorted((str(p) for d in LOG_DIRS if d.is_dir() for p in d.glob("*.log")),
+                          key=os.path.getmtime, reverse=True)[:8]
             path = Path(logs[self.log_idx % len(logs)]) if logs else Path("-")
             title = f"LOG {path.name}"
             if len(logs) > 1:

@@ -37,8 +37,23 @@ for a in "$@"; do
   esac
 done
 
-LOGDIR="${LOGDIR:-/tmp/opencode}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# The trainer drivers now write into the repo's logs/ (logs/L41r3.log,
+# logs/sweep-k2-control.log, ...); /tmp/opencode was the old location. Default to the
+# new one and search both, so the dashboard follows the logs instead of silently
+# tailing a directory nobody writes to any more.
+LOGDIR="${LOGDIR:-$ROOT/logs}"
+log_files() {
+  local d f
+  local dirs=("$LOGDIR")
+  [[ "$LOGDIR" == /tmp/opencode ]] || dirs+=(/tmp/opencode)
+  for d in "${dirs[@]}"; do
+    [[ -d "$d" ]] || continue
+    for f in "$d"/*.log; do
+      [[ -e "$f" ]] && printf '%s\t%s\n' "$(stat -c %Y "$f" 2>/dev/null || printf 0)" "$f"
+    done
+  done | sort -rn | cut -f2-
+}
 
 # ---- telemetry ------------------------------------------------------------
 # Rotation is self-managed (no root, no cron): $TELEMETRY_KEEP rotated copies of
@@ -494,11 +509,10 @@ draw() {
     emit "    ${B}all runs${R}${K}"
     while IFS= read -r l; do emit "${D}  ${l}${R}${K}"; done < <(all_runs)
     for f in "$ROOT"/reports/*.json; do [[ -e "$f" ]] && emit "  report: ${f##*/}${K}"; done
-    for f in "$LOGDIR"/eval-*.log; do
-      [[ -e "$f" ]] || continue
+    while IFS= read -r f; do
       emit "  ${D}${f##*/}:${R}${K}"
       while IFS= read -r l; do emit "    ${l:0:110}${K}"; done < <(tail -3 "$f" | tr -d '\r')
-    done
+    done < <(log_files)
     SINK=OUT
   fi
 
