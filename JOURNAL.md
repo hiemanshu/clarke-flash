@@ -1,3 +1,31 @@
+**17:41 — FIFTH GPU FULL-CHIP RESET, ON A FRESH RUN 15 MINUTES AFTER A COLD BOOT. STOPPING 65k RETRIES
+UNTIL THE OWNER CHOOSES; PUSH SENT (critical).**
+L41-mild-r2 was launched from scratch (owner: "restart the training no checkpoints") at 17:34 after the
+power cycle, same command and data as L41, new run dir. It died at 17:39:26 at step ~685/1880, ~5 min in,
+2.1-4.1 rec/s, 5.7 GB, 82 C. Same signature: CUDA_ERROR_LAUNCH_FAILED in the head forward, NVRM
+_issueRpcAndWait rpcSendMessage 0x0000000f, then the card left the bus. Checkpoints 250 and 500 survived.
+THE PATTERN IS NOW 5/5 UNDER 65k TRAINING, NONE ELSEWHERE:
+  10-27 17:20 H1  step 780   5 min   late in a heavy day
+  10-27 17:59 H2  step 1660  15 min  after a power cycle
+  10-27 18:47 H3  step 1580  12 min  panel on (display hypothesis falsified)
+  10-28 16:30 L41 step ~790  5 min   9h42m uptime, GPU idle most of the day
+  10-28 17:39 L41-r2 step ~685 5 min 15 min after a cold boot, GPU 38 C at start
+WHAT SURVIVED: a 10-minute full-power matmul stress (84 C / 535 W / 117k matmuls); H4 completed all
+1,880 steps once, on 10-28 07:06, after the machine had been off for 12 hours. So neither "GPU under
+load" nor "hot machine" explains it, and a cold boot no longer buys a run. The drift gate is irrelevant
+here - L41-r2 loss@500 was 1.88, better than H4's 3.44.
+NO CODE CHANGE IS IMPLICATED: L41-r2 differs from the successful H4 only in the backbone path
+(runs/bb-snip-lora-mild), and the adapter itself was trained on 4k snippets, where the GPU was stable.
+Candidates in cost order (none free):
+  1. POWER LIMIT 450 W (root) then retry 65k - untested, cheapest hardware theory, transient spikes
+     above the 575 W cap are the textbook cause of this exact error.
+  2. 8,192-token control run of the same recipe - much lower power and different attention kernels; if
+     it survives, 65k is the trigger and the deliverable has to move to a lower-context regime or wait.
+  3. another long cooldown + 65k (this worked once, not twice).
+  4. RMA if 1+2 fail.
+DECISION: do not relaunch 65k unchanged. It has failed five times in a row; repeating it is a hardware
+stress test, not an experiment. Awaiting the owner's pick.
+
 **17:40 — FIFTH XID 79, NOW AT PCIe GEN4 ON THE NEW BIOS: THE +12V RAIL DID NOT MOVE AT THE MOMENT
 OF DEATH, SO THE PSU IS OUT BY MEASUREMENT. Gen4 DID NOT FIX IT — DIED AT STEP ~680, EARLIER THAN
 THE 780/790 BEFORE. First Xid 79 in this project with rails recorded; the instrument earned its keep
