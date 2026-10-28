@@ -1,3 +1,23 @@
+**00:10 — PRE-REGISTRATION: RUN P, THE ATTRIBUTION CONTROLS FOR N AND O.**
+WHY: N and O-2 each change the adapter diet/length AND the head data versus L41, so neither can say
+which change did the work. P repeats each pipeline's **backbone** with a **CUAD-only head at matched
+steps** (3,908): if the control matches or beats the pipeline, the extra training/CUAD exposure did
+it and the LEDGAR head data added nothing; if the pipeline beats its control, the head data helped;
+if both beat L41, the adapter helped.
+CONTROLS (each only if its pipeline produced a 41-field report and was not a clear reject,
+exact@all >= .4202):
+  P-N: backbone runs/bb-snip-lora-v2 (800-step preamble adapter), CUAD-only head
+       (--train data/doc_train_470.jsonl --epochs 9 --max-steps 3908), 65k, same flags,
+       finalize + zero-flag doc40 eval -> reports/P-control-N.json
+  P-O: backbone runs/bb-snip-lora-v2-2000 (2,000-step adapter), same head recipe
+       -> reports/P-control-O.json
+HONEST FRAMING: matched STEPS, not matched composition - the control sees CUAD ~8.3 passes where the
+pipeline saw CUAD 4 + LEDGAR 4. That is deliberate: it answers "does the LEDGAR data beat spending the
+same compute on CUAD", which is the practical question, not "is one LEDGAR pass equivalent to one CUAD
+pass". Both numbers plus L41 go in the final table; no verdict without all three.
+NOTIFY: one `full` push with the 2x3 table (pipeline / control / L41), or a `full` push saying the
+controls were skipped and why.
+
 **23:55 — PRE-REGISTRATION: RUN O (adapter length at gentle LR) AND ITS CONDITIONAL 41-FIELD FOLLOW-UP.**
 WHY: every good result rests on an 800-step adapter. The only points beyond that are 1,200 at
 r32/lr2e-5 (flat, .5675 vs .5670 control) and 2,000/3,000 at r64/lr2e-4 (destroyed, .0801/.0000).
