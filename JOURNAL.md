@@ -1,3 +1,61 @@
+**17:40 — FIFTH XID 79, NOW AT PCIe GEN4 ON THE NEW BIOS: THE +12V RAIL DID NOT MOVE AT THE MOMENT
+OF DEATH, SO THE PSU IS OUT BY MEASUREMENT. Gen4 DID NOT FIX IT — DIED AT STEP ~680, EARLIER THAN
+THE 780/790 BEFORE. First Xid 79 in this project with rails recorded; the instrument earned its keep
+on its first outing.**
+WHAT CHANGED SINCE THE FOURTH CRASH (owner, ~17:00): BIOS **2.A30 (DMI date 01/06/2025) -> 2.AC4
+(09/02/2026)** and the PEG slot forced to **Gen4** (was Gen5). Verified after the fact rather than
+assumed: `pcie.link.gen.max = 4` and `gen.current = 4` under load, width 16, no lanes lost. Two
+variables changed at once (flagged at the time): a clean run could not have attributed between them.
+It did not run clean, so the ambiguity collapses in the only direction that matters - neither helped.
+WHAT HAPPENED: **L41-mild-r2** (fresh run: same recipe as L41, backbone runs/bb-snip-lora-mild, 65k,
+1880 steps) launched 17:34, died **17:39:25 at step ~680/1880**, five minutes in. Identical signature
+to the previous four: Xid 79 -> Xid 79 -> **Xid 154 (recovery action 0x2 = OS Reboot)**, ZERO
+`_kgspIsHeartbeatTimedOut` lines, ZERO AER/pcieport errors. Card still enumerated (`01:00.0 GB202 [10de:2b85]`,
+still bound to nvidia) while nvidia-smi says "No devices were found" -> needs an AC power-off, not a
+restart. Checkpoints 250/500 survive; resume is `--resume runs/L41-mild-r2/checkpoint-500`.
+THE MEASUREMENT (real rows from logs/telemetry.csv, 1 Hz):
+```
+17:39:24  11.968 V  58.00 A  728 W   GPU 524 W  79 C  2790 MHz  P1  gen4
+17:39:25  11.968 V  63.25 A  812 W   GPU 531 W  85 C  2790 MHz  P1  gen4   <- dies
+17:39:26  12.000 V   6.75 A  124 W   gone
+```
+RUN-WIDE: rail **11.937-12.000 V (63 mV spread)**, PSU peak **812 W of 1200 W (68%)**, GPU peak
+581 W (cap 575 W, transient overshoot), clocks 2775-2925 MHz under load, core temp 77-85 C.
+CONCLUSIONS, each with the evidence that forces it:
+1. **PSU capacity / transient delivery: OUT.** 812 W of 1200 W with the rail 568 mV above the 11.4 V
+   ATX floor at the instant of death, and it *rose* to 12.000 V as the load vanished - the supply was
+   never the constraint. The failure mode never matched OCP either: an OCP trip latches the PSU and
+   takes the whole machine down, while here Linux stays up with one device missing. This is now
+   settled by measurement, not argument.
+2. **PCIe Gen4 + BIOS 2.AC4: DID NOT FIX IT.** It died *earlier* (680 vs 780/790), not later. Link
+   signal integrity is now the weakest survivor of the original list - not fully exonerated (it never
+   is without a Gen3 run), but it bought nothing.
+3. **No thermal-throttle ramp.** Clocks held 2790 MHz through the final second, so this is not a slow
+   throttle convergence. But 85 C at death was the run's maximum, and the card's real hotspots
+   (GDDR7 junction, VRM, PCIe controller) have no sensor we can read - thermal is downgraded, not dead.
+4. **NVIDIA bug 6426268 / GSP firmware: OUT.** That path always logs `_kgspIsHeartbeatTimedOut` first.
+   Zero such lines in any of the five boots. The earlier suspicion that this was the known Blackwell
+   bug was wrong and should not be resurrected without a heartbeat line to show.
+WHAT IS LEFT, cost order:
+- **Power cap 450 W** (`sudo nvidia-smi -pl 450`) - STILL the untested cheapest knob, because it needs
+  root and has never been applied. It directly cuts VRM/thermal stress at identical code. Pre-register:
+  survives an hour at 450 W and dies at 575 W => the card's own power delivery, and that is RMA-grade
+  evidence. Dies at 450 W too => RMA regardless.
+- **RMA.**
+- Not worth more time: driver version (615.78.08 installed 10-12, 15 days before the first fault),
+  kernel 7.3.0-5 (10-25), and the training code (G ran 1,880 clean steps in the same boot as faults 1-3).
+INSTRUMENT (commit 2942bd2): watch_training.sh appends PSU+GPU one row per second to logs/telemetry.csv
+(self-rotating, ~50 MiB ceiling); watch_tui.py shows the psu row in the NETWORK panel. It **survived
+this death** - rows continue past 17:39:26 with the PSU columns intact and the GPU columns empty - which
+was the entire design goal, since nvidia-smi dies with the card and every other instrument goes dark.
+BUG THE FAILURE FOUND: `gpu_ok` was set from *non-empty* nvidia-smi output, but a lost card makes
+nvidia-smi exit 6 **and print "No devices were found" on stdout**, so post-death rows carried
+gpu_ok=1 with the error words split into the pstate/temp columns. Fixed to key off the exit code and
+tested against the actually-dead card (gpu_ok=0, GPU fields empty, PSU intact). Rows after 17:39:26 in
+this CSV are known-bogus in the GPU columns ONLY; the PSU columns are good.
+STILL OUTSTANDING: `pcie_aspm` policy is `[default]` (ASPM enabled) - one more untried knob. The BIOS
+flash reset CMOS, so **EXPO/memory profile and fan curves need re-checking** before the next run.
+
 **16:32 — FOURTH GPU FULL-CHIP RESET. L41 DIED AT STEP ~790/1880, FIVE MINUTES IN, WITH NO CODE
 CHANGE BEYOND THE BACKBONE. Owner notified (critical: ntfy + Signal). Checkpoints 250/500/750 survive.**
 WHAT HAPPENED: L41-mild started 16:26, loss@500 = 2.32 (below H4's 3.44, so the gentle adapter was
