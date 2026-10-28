@@ -1,0 +1,31 @@
+{
+  "model": "cf-gpt-6.1-sol",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 28,
+  "metrics": {
+    "list-text": {
+      "n": 1148,
+      "exact": 0.5361,
+      "tok_f1": 0.6931,
+      "contains": 0.8522,
+      "answered": 307,
+      "null_correct": 0.8706,
+      "grounded_rate": 0.7818
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1148,
+        "exact": 0.5361,
+        "tok_f1": 0.6931,
+        "contains": 0.8522,
+        "answered": 307,
+        "null_correct": 0.8706,
+        "grounded_rate": 0.7818
+      }
+    }
+  },
+  "gold_fields": 329,
+  "success_rule": "non-empty prediction (no ok flag)"
+}

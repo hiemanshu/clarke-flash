@@ -1,0 +1,40 @@
+{
+  "model": "gemini-4-argon",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 28,
+  "metrics": {
+    "list-text": {
+      "n": 1148,
+      "exact": 0.5759,
+      "tok_f1": 0.7631,
+      "contains": 0.9109,
+      "answered": 305,
+      "null_correct": 0.9255,
+      "grounded_rate": 0.7311
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1148,
+        "exact": 0.5759,
+        "tok_f1": 0.7631,
+        "contains": 0.9109,
+        "answered": 305,
+        "null_correct": 0.9255,
+        "grounded_rate": 0.7311
+      }
+    }
+  },
+  "gold_fields": 329,
+  "success_rule": "ok flag",
+  "timing": {
+    "n": 28,
+    "latency_s": {
+      "p50": 18.644,
+      "p90": 48.071,
+      "mean": 26.308
+    },
+    "output_tokens_mean": 1902.0
+  }
+}

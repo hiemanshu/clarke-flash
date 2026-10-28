@@ -1,0 +1,53 @@
+{
+  "model": "external:default:google/gemini-4-argon",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "exact": 0.5539,
+      "tok_f1": 0.7358,
+      "contains": 0.8926,
+      "answered": 466,
+      "null_correct": 0.9151,
+      "grounded_rate": 0.7489
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "exact": 0.5539,
+        "tok_f1": 0.7358,
+        "contains": 0.8926,
+        "answered": 466,
+        "null_correct": 0.9151,
+        "grounded_rate": 0.7489
+      }
+    }
+  },
+  "max_context_tokens": 65536,
+  "truncated_records": 0,
+  "failed_calls": 0,
+  "transport": "cloudflare",
+  "timing": {
+    "n": 40,
+    "latency_s": {
+      "p50": 22.068,
+      "p90": 52.684,
+      "mean": 29.073,
+      "min": 9.295,
+      "max": 118.505,
+      "total": 1162.9
+    },
+    "output_tokens": {
+      "mean": 2120.7,
+      "total": 84829
+    },
+    "input_tokens": {
+      "mean": 12914.7,
+      "total": 516588
+    },
+    "output_tokens_per_s": 72.9
+  }
+}

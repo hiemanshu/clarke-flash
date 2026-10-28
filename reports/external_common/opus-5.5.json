@@ -1,0 +1,40 @@
+{
+  "model": "opus-5.5",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 28,
+  "metrics": {
+    "list-text": {
+      "n": 1148,
+      "exact": 0.5072,
+      "tok_f1": 0.688,
+      "contains": 0.8372,
+      "answered": 302,
+      "null_correct": 0.9096,
+      "grounded_rate": 0.8344
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1148,
+        "exact": 0.5072,
+        "tok_f1": 0.688,
+        "contains": 0.8372,
+        "answered": 302,
+        "null_correct": 0.9096,
+        "grounded_rate": 0.8344
+      }
+    }
+  },
+  "gold_fields": 329,
+  "success_rule": "ok flag",
+  "timing": {
+    "n": 28,
+    "latency_s": {
+      "p50": 10.788,
+      "p90": 19.185,
+      "mean": 11.893
+    },
+    "output_tokens_mean": 1426.6
+  }
+}

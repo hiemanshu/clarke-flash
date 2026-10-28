@@ -1,0 +1,53 @@
+{
+  "model": "external:default:openai/gpt-6.1-sol",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "exact": 0.4817,
+      "tok_f1": 0.636,
+      "contains": 0.8045,
+      "answered": 463,
+      "null_correct": 0.8888,
+      "grounded_rate": 0.8272
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "exact": 0.4817,
+        "tok_f1": 0.636,
+        "contains": 0.8045,
+        "answered": 463,
+        "null_correct": 0.8888,
+        "grounded_rate": 0.8272
+      }
+    }
+  },
+  "max_context_tokens": 65536,
+  "truncated_records": 0,
+  "failed_calls": 0,
+  "transport": "cloudflare",
+  "timing": {
+    "n": 40,
+    "latency_s": {
+      "p50": 9.345,
+      "p90": 17.215,
+      "mean": 10.781,
+      "min": 4.046,
+      "max": 24.665,
+      "total": 431.2
+    },
+    "output_tokens": {
+      "mean": 1358.6,
+      "total": 54343
+    },
+    "input_tokens": {
+      "mean": 12608.5,
+      "total": 504341
+    },
+    "output_tokens_per_s": 126.0
+  }
+}

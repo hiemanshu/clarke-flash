@@ -1,0 +1,53 @@
+{
+  "model": "external:default:anthropic/claude-opus-5.5",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "exact": 0.4851,
+      "tok_f1": 0.6773,
+      "contains": 0.8156,
+      "answered": 462,
+      "null_correct": 0.9002,
+      "grounded_rate": 0.8615
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "exact": 0.4851,
+        "tok_f1": 0.6773,
+        "contains": 0.8156,
+        "answered": 462,
+        "null_correct": 0.9002,
+        "grounded_rate": 0.8615
+      }
+    }
+  },
+  "max_context_tokens": 65536,
+  "truncated_records": 0,
+  "failed_calls": 0,
+  "transport": "cloudflare",
+  "timing": {
+    "n": 40,
+    "latency_s": {
+      "p50": 11.929,
+      "p90": 22.217,
+      "mean": 12.561,
+      "min": 5.372,
+      "max": 24.961,
+      "total": 502.4
+    },
+    "output_tokens": {
+      "mean": 1504.8,
+      "total": 60190
+    },
+    "input_tokens": {
+      "mean": 20205.5,
+      "total": 808219
+    },
+    "output_tokens_per_s": 119.8
+  }
+}

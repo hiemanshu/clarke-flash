@@ -87,42 +87,61 @@ windows, decoded at 65,536 tokens.
 
 | model | exact@all ↓ | exact | tokF1 | contains | null_ok | answered | latency p50/p90 |
 |---|---|---|---|---|---|---|---|
-| gemini-4-argon | **.4155** | **.5608** | **.7397** | **.9025** | .9335 | 369/498 | — |
+| gemini-4-argon | **.5184** | **.5539** | **.7358** | .8926 | .9151 | 466/498 | 22.1 / 52.7 s |
+| opus-5.5 | .4502 | .4851 | .6773 | .8156 | .9002 | 462/498 | 11.9 / 22.2 s |
+| gpt-6.1-sol | .4479 | .4817 | .6360 | .8045 | .8888 | 463/498 | 9.3 / 17.2 s |
 | **clarke 2B** (slot-mask + candidate parties + ranker, **baked**) | .4089 | .4943 | .6184 | .6797 | **.9536** | 412/498 | **0.29 / 2.6 s** |
-| gpt-6.1-sol | .4063 | .5071 | .6922 | .8356 | .8835 | 399/498 | — |
-| opus-5.5 | .3767 | .5154 | .7008 | .8329 | .9203 | 364/498 | — |
-| clairic | .0175 | .0176 | .4063 | .9526 | .1699 | **496/498** | — |
+| clairic | .0175 | .0176 | .4067 | **.9526** | .1699 | **496/498** | 0.83 / 2.4 s |
 
 Rows are sorted by **`exact@all` ↓** — the one column that multiplies per-answer
 precision by field coverage, so it is the number to read first. Bold is the best
-value in each column (four different models hold one). The 12-field table below is
-an experiment ladder in run order, not a ranking.
+value in each column (three models hold one). The 12-field table below is an
+experiment ladder in run order, not a ranking.
 
-**Latency** is end-to-end per document — encoding plus one forward pass, batch 1,
-65k cap, on the single RTX 5090, with model load excluded — measured by
-`clarke-eval`'s `timing` block (`reports/H4-finalized-timed.json`). It tracks
-contract length: these 40 documents range from 972 to 300,768 characters, hence
-0.29 s at p50 against 2.6 s at p90 (mean 1.0 s, 41 fields/s). External latencies
-were **not** measured in this run, so they are shown as `—`; all external numbers,
-latency included, will be remeasured when the eval set is updated.
+**Correction to the previous table.** The earlier external rows read `.3767–.4155`
+and produced a "within 0.7 pp of the best external" claim. Those runs answered only
+364–399 of 498 fields because 5–7 calls per model failed — the 4,000-token output
+budget truncated the 64,883-token contract (gemini/opus mid-JSON, gpt emitted no
+text at all because reasoning consumed the whole budget). With a 12,000-token budget
+and low reasoning effort there are **zero failed calls**, the frontier rows answer
+462–466 of 498, and the honest gap is **4.1 pp behind opus and 11 pp behind gemini**,
+not 0.7 pp. The superseded run is kept in `reports/external_doc/`; the numbers above
+are `reports/external_doc_rerun/`.
 
-Read it honestly: we are **within 0.7 pp of the best external `exact@all`**
-(.409 vs gemini's .416), while being **far behind on `contains`** (.68 vs .90) and
-`tokF1` (.62 vs .74). The frontier models find and quote the right clause more
-often; we compensate by answering more fields (412/498 vs gemini's 369) while
-refusing fewer wrong ones — `null_ok` .954 is the best in the table. Clairic never
-declines (496/498 answered), which is why its `contains` is highest and its `exact`
-lowest (.018).
+On the **28 records every run completed** (329 gold fields), which removes the
+coverage difference: gemini .5339, opus .4656, gpt .4622, clairic .0162 (published
+run: .5232 / .4995 / .5003 / .0162). So the coverage jump is the big effect, and
+`effort=low` costs gpt and opus ~3–4 pp of per-answer precision on identical records
+— accepted here because latency is part of the comparison.
+
+**Latency** is end-to-end per document. For us: encoding plus one forward pass,
+batch 1, 65k cap, single RTX 5090, model load excluded (`clarke-eval`'s `timing`
+block, `reports/H4-finalized-timed.json`). For the externals: the same 40 documents
+through one Cloudflare AI Gateway run, so the number includes the gateway hop,
+network, and autoregressive generation — they emit 1,359 (gpt), 2,121 (gemini) and
+1,505 (opus) output tokens per document on average, which is what the p50/p90 gap
+over our single forward pass measures. All four are measured on the same documents
+as the metrics, in the same run (`reports/external_doc_rerun/*.timing.jsonl`).
+Latency tracks contract length: these documents run from 972 to 300,768 characters,
+hence our 0.29 s p50 against 2.6 s p90 (mean 1.0 s, 41 fields/s).
+
+Read it honestly: **the frontier is 4–11 pp ahead on `exact@all`**, and the gap is
+mostly `contains`/`tokF1` (.68 vs .89–.95) — they find and quote the right clause
+more often. The externals also answer more fields than us now (462–466 vs 412), so
+the old read that we trade precision for coverage no longer holds: we keep
+`null_ok` (.954 vs .888–.915) and latency (30–75× faster) and lose on accuracy and
+coverage both. Clairic never declines (496/498 answered), which is why its
+`contains` is highest and its `exact` lowest (.018).
 
 Our row's decode policy — span tie-break, per-field length prior, slot masking and
 the candidate/ranker path for `parties` — is written into the checkpoint as
 `decode_config.json`, so `clarke-eval --head <dir>` reproduces these numbers with no
 flags. External numbers come from `scripts/external_baseline.py` through one gateway,
-on the same 40 documents (`reports/external_doc/`). Their `grounded_rate` — how often
-the quoted text is actually present in the state — is .79 (gemini), .82 (gpt),
-.82 (clairic), .86 (opus): **even the best of them cannot locate a fifth of what it
-quotes.** A `read` answer from this model is grounded by construction, which is the
-whole argument for a non-generative readout.
+on the same 40 documents. Their `grounded_rate` — how often the quoted text is
+actually present in the state — is .75 (gemini), .83 (gpt), .82 (clairic), .86
+(opus): **even the best of them cannot locate a seventh of what it quotes.** A `read`
+answer from this model is grounded by construction, which is the whole argument for
+a non-generative readout.
 
 **Smaller schema, sharper signal.** Restricting to the 12 most common CUAD fields
 (60.8% of gold instances) makes each field matter more per step:
@@ -322,11 +341,12 @@ uv run python scripts/finalize_checkpoint.py --head runs/H4-assign/checkpoint-18
 
 ### Where the loss actually is
 
-We sit at the frontier on `exact@all` (.41 vs .40–.42) and well behind on `contains`
-(.68 vs .90). It is not tokenization: **94.4% of the 1,022 gold spans in doc40 are
-expressible with Qwen's vocabulary** (94.1% with a contract-trained BPE — 5.6% start or
-end mid-token and are unreachable with *any* BPE), and our per-answer `exact` (~.45) is
-about 48% of that ceiling. What remains is mostly **one** failure, measured three ways:
+We are **4–11 pp behind the frontier on `exact@all`** (.409 vs .448 opus / .518 gemini)
+and well behind on `contains` (.68 vs .82–.89). It is not tokenization: **94.4% of the
+1,022 gold spans in doc40 are expressible with Qwen's vocabulary** (94.1% with a
+contract-trained BPE — 5.6% start or end mid-token and are unreachable with *any* BPE),
+and our per-answer `exact` (~.49) is about 52% of that ceiling. What remains is mostly
+**one** failure, measured three ways:
 
 1. **Under-emission, and it is universal — not a `parties` quirk.** Every `list<text>`
    field emits **1.03 items where gold has 1.84: 44% of gold items are never produced.**

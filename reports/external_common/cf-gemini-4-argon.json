@@ -1,0 +1,31 @@
+{
+  "model": "cf-gemini-4-argon",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 28,
+  "metrics": {
+    "list-text": {
+      "n": 1148,
+      "exact": 0.5625,
+      "tok_f1": 0.7461,
+      "contains": 0.9048,
+      "answered": 306,
+      "null_correct": 0.9255,
+      "grounded_rate": 0.7614
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1148,
+        "exact": 0.5625,
+        "tok_f1": 0.7461,
+        "contains": 0.9048,
+        "answered": 306,
+        "null_correct": 0.9255,
+        "grounded_rate": 0.7614
+      }
+    }
+  },
+  "gold_fields": 329,
+  "success_rule": "non-empty prediction (no ok flag)"
+}

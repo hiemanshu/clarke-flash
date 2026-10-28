@@ -1,0 +1,40 @@
+{
+  "model": "gpt-6.1-sol",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 28,
+  "metrics": {
+    "list-text": {
+      "n": 1148,
+      "exact": 0.5019,
+      "tok_f1": 0.65,
+      "contains": 0.822,
+      "answered": 303,
+      "null_correct": 0.8999,
+      "grounded_rate": 0.802
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1148,
+        "exact": 0.5019,
+        "tok_f1": 0.65,
+        "contains": 0.822,
+        "answered": 303,
+        "null_correct": 0.8999,
+        "grounded_rate": 0.802
+      }
+    }
+  },
+  "gold_fields": 329,
+  "success_rule": "ok flag",
+  "timing": {
+    "n": 28,
+    "latency_s": {
+      "p50": 8.613,
+      "p90": 17.032,
+      "mean": 10.348
+    },
+    "output_tokens_mean": 1279.6
+  }
+}

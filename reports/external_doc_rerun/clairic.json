@@ -1,0 +1,47 @@
+{
+  "model": "external:default:@cf/cloudflare/clairic",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "exact": 0.0176,
+      "tok_f1": 0.4067,
+      "contains": 0.9526,
+      "answered": 496,
+      "null_correct": 0.1699,
+      "grounded_rate": 0.8206
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "exact": 0.0176,
+        "tok_f1": 0.4067,
+        "contains": 0.9526,
+        "answered": 496,
+        "null_correct": 0.1699,
+        "grounded_rate": 0.8206
+      }
+    }
+  },
+  "max_context_tokens": 65536,
+  "truncated_records": 0,
+  "failed_calls": 0,
+  "transport": "cloudflare",
+  "timing": {
+    "n": 40,
+    "latency_s": {
+      "p50": 0.831,
+      "p90": 2.358,
+      "mean": 1.21,
+      "min": 0.452,
+      "max": 5.587,
+      "total": 48.4
+    },
+    "output_tokens": null,
+    "input_tokens": null,
+    "output_tokens_per_s": null
+  }
+}

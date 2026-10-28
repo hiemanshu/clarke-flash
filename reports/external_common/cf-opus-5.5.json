@@ -1,0 +1,31 @@
+{
+  "model": "cf-opus-5.5",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 28,
+  "metrics": {
+    "list-text": {
+      "n": 1148,
+      "exact": 0.5515,
+      "tok_f1": 0.7318,
+      "contains": 0.856,
+      "answered": 298,
+      "null_correct": 0.9072,
+      "grounded_rate": 0.8289
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1148,
+        "exact": 0.5515,
+        "tok_f1": 0.7318,
+        "contains": 0.856,
+        "answered": 298,
+        "null_correct": 0.9072,
+        "grounded_rate": 0.8289
+      }
+    }
+  },
+  "gold_fields": 329,
+  "success_rule": "non-empty prediction (no ok flag)"
+}

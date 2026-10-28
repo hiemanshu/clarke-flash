@@ -1,3 +1,41 @@
+**16:12 — EXTERNALS REMEASURED WITH FULL COVERAGE AND LATENCY. THE "WITHIN 0.7 pp" CLAIM WAS AN
+ARTIFACT OF THEIR FAILED CALLS: WITH COMPLETE COVERAGE WE ARE 4.1 pp BEHIND OPUS AND 11 pp BEHIND
+GEMINI. All four rows now carry latency; gpt/opus run at effort=low by owner choice.**
+WHY: the table had no cost column and the gateway had $0.02. Owner topped it up and chose one
+transport for all four rows, with low effort kept because latency is part of the comparison.
+CONFIG (configs/external_models_doc40.json): output budget 12,000 (4,000 truncates the 64,883-token
+contract - gemini/opus cut mid-JSON, gpt emitted NOTHING because reasoning consumed the budget; 16,000
+is rejected by the provider with HTTP 500). Reasoning cannot be switched off through this gateway:
+gpt takes reasoning_effort=low (none/minimal are rejected), gemini accepts reasoning_effort low/minimal
+but it changes nothing, opus takes the Anthropic knob output_config.effort=low (thinking.enabled and
+budget_tokens are rejected; only thinking.type=adaptive is accepted). Sweep: 40 docs x 4 models, serial,
+sleep 0, retries 4, 0 failed calls.
+RESULTS (doc40, 41 fields, 498 gold-present; reports/external_doc_rerun/):
+  model          exact@all  exact   tokF1   contains null_ok answered  grounded p50/p90
+  gemini-4-argon  .5184    .5539   .7358    .8926   .9151  466/498   .749   22.1/52.7s
+  opus-5.5        .4502    .4851   .6773    .8156   .9002  462/498   .862   11.9/22.2s
+  gpt-6.1-sol     .4479    .4817   .6360    .8045   .8888  463/498   .827    9.3/17.2s
+  clarke 2B       .4089    .4943   .6184    .6797   .9536  412/498   by-construction 0.29/2.6s
+  clairic         .0175    .0176   .4067    .9526   .1699  496/498   .821    0.83/2.4s
+CORRECTION: the superseded 2026-10-26 rows (.3767-.4155 exact@all, 364-399 answered) were handicapped
+by 5-7 failed calls per model. They are not the frontier's real position, and the "within 0.7 pp" read
+was wrong. The old reports stay in reports/external_doc/ as history.
+COMMON-RECORD CHECK (28 records every run completed, 329 gold fields; reports/external_common/):
+  gemini .5232 -> .5339 (+1.1pp, its knob is a no-op)   opus .4995 -> .4656 (-3.4pp)
+  gpt    .5003 -> .4622 (-3.8pp)                        clairic .0162 -> .0162 (identical)
+So the coverage jump is the headline effect, and effort=low costs gpt/opus ~3-4pp of per-answer
+precision on identical records - accepted, latency is the trade. Gemini's grounded_rate also fell
+.82 -> .749: more answers on the huge contracts means more long quotes that are not verbatim.
+PROCESS FAILURE WORTH FIXING: the harness had no idempotency. Gemini stalled twice (12:11, 12:33) on
+record 0 and each kill lost every completed call, because preds were only written after all 40
+records. Fixed: each record is appended+flushed as it lands, a re-run skips successful ids and retries
+failed ones, and the final files are rewritten to exactly one row per record (--no-resume forces a
+full sweep). Verified end-to-end: a second identical run reports "0 to fetch", 3.1 s wall, no API
+call. I also self-killed a shell with `pkill -f 'label opus-5.5'` (the command line matched itself) -
+the exact trap OPERATIONS.md warns about; use explicit PIDs.
+NEXT: README table now uses this run. Remaining honesty item: doc40 is 40 documents of one genre;
+the eval set should grow before any of these per-field deltas are treated as settled.
+
 **10:52 — COMMANDCODE TRANSPORT BUILT AND PROVEN; ALL THREE PUBLISHED EXTERNALS ARE BEHIND A HIGHER
 TIER. DECISION: TOP UP THE CLOUDFLARE GATEWAY AND RE-MEASURE ALL FOUR ON ONE TRANSPORT.**
 WHY: the results table is gaining a latency column, and the published external rows came through
