@@ -1,3 +1,24 @@
+**08:20 — EDGAR CLEANED ONCE (1.068M docs, 19GB, 5.4% dupes, 5.5 min) AND THE 12-FIELD SCHEMA IS
+NEUTRAL, NOT BETTER.**
+CLEANUP (scripts/clean_edgar_corpus.py -> data/edgar_clean/): 304 shards in 5.5 min with 10 workers at
+0.91 shard/s. Kept 1,068,049 docs (dropped 73,583 under 2k chars or under 90% printable), 37GB -> 19GB.
+Columns: id, cik, filing_date, doc_type, file_name, text, chars, printable_ratio, has_contract_marker,
+hash. Dedupe pass: 1,010,560 unique, 57,489 duplicates (5.4%) -> dups.json. The raw corpus is untouched.
+Every future builder (LEDGAR spans, LM corpus, field miner) reads this directly instead of re-running
+the HTML clean().
+12-FIELD SCHEMA BASELINE (I-twelve: top-12 CUAD fields, CUAD only, 4 epochs, 1,880 steps, 65k, 12 min).
+Scored on the SAME 12-field eval set (data/doc_eval_40_twelve.jsonl), so the comparison is honest:
+  41-field H4, restricted eval   exact .6067  tokF1 .7213  contains .7940  null_ok .8765  281/310  .5499
+  12-field I-twelve              exact .5941  .7261  .7941  .8118  293/310  .5615
+So the specialist is NOT better at these fields: -1.3pp exact, +0.5pp tokF1, +0.2pp contains, and more
+answers (293 vs 281). exact@all +1.2pp is inside noise. The earlier apparent jump (.4943 -> .5615) came
+from the EASIER EVAL SET (12 fields = 310 gold instances vs 41 fields = 498), not from the model.
+CONCLUSION SO FAR: schema reduction alone buys nothing except a fast, clean test bed (12 min for a full
+4-epoch run, sharper per-field signal) - which is still useful for the next variable. What has NOT been
+tested in this configuration: external supervision at 12 fields, and LoRA.
+NEXT: add LEDGAR/EDGAR records to the 12-field schema (full 12-field schema with explicit nulls, the
+D2 lesson) and re-run; then LoRA on whichever data config wins.
+
 **08:55 — UNDER-EMISSION IS UNIVERSAL, NOT A parties QUIRK. Every list<text> field emits 1.03 items
 where gold has 1.84: 44% of gold items are never produced.**
 Measured from the per-field diagnostic (gold-present fields, doc40):
