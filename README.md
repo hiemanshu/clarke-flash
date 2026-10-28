@@ -85,18 +85,26 @@ Primary surface: **`data/doc_eval_40.jsonl`** — 40 held-out CUAD contracts
 (`docs[470:510]`), 41-field schema, 498 gold-present fields, all text, no
 windows, decoded at 65,536 tokens.
 
-| model | exact@all ↓ | exact | tokF1 | contains | null_ok | answered |
-|---|---|---|---|---|---|---|
-| gemini-4-argon | **.4155** | **.5608** | **.7397** | **.9025** | .9335 | 369/498 |
-| **clarke 2B** (slot-mask + candidate parties + ranker, **baked**) | .4089 | .4943 | .6184 | .6797 | **.9536** | 412/498 |
-| gpt-6.1-sol | .4063 | .5071 | .6922 | .8356 | .8835 | 399/498 |
-| opus-5.5 | .3767 | .5154 | .7008 | .8329 | .9203 | 364/498 |
-| clairic | .0175 | .0176 | .4063 | .9526 | .1699 | **496/498** |
+| model | exact@all ↓ | exact | tokF1 | contains | null_ok | answered | latency p50/p90 |
+|---|---|---|---|---|---|---|---|
+| gemini-4-argon | **.4155** | **.5608** | **.7397** | **.9025** | .9335 | 369/498 | — |
+| **clarke 2B** (slot-mask + candidate parties + ranker, **baked**) | .4089 | .4943 | .6184 | .6797 | **.9536** | 412/498 | **0.29 / 2.6 s** |
+| gpt-6.1-sol | .4063 | .5071 | .6922 | .8356 | .8835 | 399/498 | — |
+| opus-5.5 | .3767 | .5154 | .7008 | .8329 | .9203 | 364/498 | — |
+| clairic | .0175 | .0176 | .4063 | .9526 | .1699 | **496/498** | — |
 
 Rows are sorted by **`exact@all` ↓** — the one column that multiplies per-answer
 precision by field coverage, so it is the number to read first. Bold is the best
 value in each column (four different models hold one). The 12-field table below is
 an experiment ladder in run order, not a ranking.
+
+**Latency** is end-to-end per document — encoding plus one forward pass, batch 1,
+65k cap, on the single RTX 5090, with model load excluded — measured by
+`clarke-eval`'s `timing` block (`reports/H4-finalized-timed.json`). It tracks
+contract length: these 40 documents range from 972 to 300,768 characters, hence
+0.29 s at p50 against 2.6 s at p90 (mean 1.0 s, 41 fields/s). External latencies
+were **not** measured in this run, so they are shown as `—`; all external numbers,
+latency included, will be remeasured when the eval set is updated.
 
 Read it honestly: we are **within 0.7 pp of the best external `exact@all`**
 (.409 vs gemini's .416), while being **far behind on `contains`** (.68 vs .90) and

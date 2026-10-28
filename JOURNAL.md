@@ -1,3 +1,30 @@
+**10:37 — LATENCY IS MEASURED AND IN THE TABLE. clarke 2B: 0.29 s p50 / 2.6 s p90 per document,
+end-to-end at 65k on the single 5090 (mean 1.0 s, 41 fields/s). External latency is blank, not zero.**
+WHY: the results table compared quality only, and no report anywhere in reports/ had ever recorded
+wall time, so our own cost was not recoverable from history. The ask was "time to answer in that".
+WHAT CHANGED: src/clarke/eval.py now times each encode_record plus each model.answer() call and emits a
+`timing` block (p50/p90/p99/mean/min/max, encode_s, infer_s, records/s, fields/s). Model and backbone
+loading are OUTSIDE the timed region. At batch_size=1 each call is one document; at batch>1 the call's
+seconds are split evenly across its documents and `batched: true` is set, because batching changes
+per-document cost and one shared number would be misleading.
+RESULT (runs/H4-assign/checkpoint-1880, data/doc_eval_40.jsonl, batch 1, max-length 65536, ZERO decode
+flags so the baked policy applies; reports/H4-finalized-timed.json):
+  metrics  exact .4943  tokF1 .6184  contains .6797  null_ok .9536  412/498  exact@all .4089
+  timing   p50 0.289 s  p90 2.610 s  p99 8.778 s  mean 0.995 s  min 0.064 s  max 11.109 s
+           encode 0.627 s total, infer 39.159 s total, 1.005 rec/s, 41.2 fields/s
+The metrics reproduce the README row EXACTLY, which is the check that the timer is inert. The spread is
+document length, not noise: the 40 contracts range 972 to 300,768 characters (median 29,683), so p50 is
+a ~30k-char contract and the 11 s max is the 300k outlier truncated at 65k tokens.
+WHY THE EXTERNAL COLUMN IS BLANK AND MUST STAY BLANK FOR NOW: reports/external_doc/*.json carry no
+timing (keys are model/data/records/metrics/by_domain/max_context_tokens/truncated_records/failed_calls),
+and scripts/external_baseline.py only uses time.sleep(sleep_s) for rate limiting - a re-run would
+measure our sleep, the Cloudflare gateway hop and queueing, not the model. Generative latency also
+includes emitting up to 2,000 JSON tokens per document, so it is a different quantity from one frozen
+forward pass. Owner decision: remeasure all external numbers (latency included) when the eval set is
+updated, rather than bolt a non-comparable number onto the current table. The README footnote says so.
+REPORT: reports/H4-finalized-timed.json (reports/H4-finalized.json is left untouched as the original
+evidence for the same metrics).
+
 **09:56 — BACKBONE ADAPTATION FINALLY HELPS, BUT ONLY IF IT IS GENTLE. K2 (r=32, lr 2e-5, 800 steps on
 4k LEDGAR snippets) BEATS THE BASELINE ON EVERY METRIC AND IS THE BEST 12-FIELD RESULT.**
 Setup: LoRA trains on data/snippets_4k.jsonl (17,576 cropped windows around LEDGAR-matched spans, full
