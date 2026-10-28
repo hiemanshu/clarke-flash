@@ -1,0 +1,26 @@
+{
+  "_note": "Same three chat models as configs/external_models.json's chat entries, but called directly on CommandCode's provider API instead of through Cloudflare AI Gateway. 'api' selects the wire format: 'messages' = Anthropic shape (premium/Claude models are served only there), 'chat' = OpenAI chat completions. The provider's own /provider/v1/models list reports supported_endpoints per model, so check it before adding one here. Labels match the Cloudflare roster on purpose, so the two transports can be compared row-for-row and rescored on their common successful records.",
+  "models": [
+    {
+      "label": "opus-5.5",
+      "kind": "chat",
+      "transport": "commandcode",
+      "api": "messages",
+      "model": "claude-opus-5-5"
+    },
+    {
+      "label": "gemini-4-argon",
+      "kind": "chat",
+      "transport": "commandcode",
+      "api": "chat",
+      "model": "google/gemini-4-argon"
+    },
+    {
+      "label": "gpt-6.1-sol",
+      "kind": "chat",
+      "transport": "commandcode",
+      "api": "chat",
+      "model": "gpt-6.1-sol"
+    }
+  ]
+}

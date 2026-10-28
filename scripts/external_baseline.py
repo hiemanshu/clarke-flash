@@ -1,4 +1,19 @@
-"""External baselines on our eval files, ALL routed through Cloudflare AI Gateway.
+"""External baselines on our eval files, routed through Cloudflare AI Gateway OR
+CommandCode's provider API.
+
+Cloudflare transport (default):
+  chat models (OpenAI / Anthropic / Google / Workers AI chat):
+      POST https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions
+  Clairic (non-chat, native schema):
+      POST https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/@cf/cloudflare/clairic
+
+CommandCode transport (spec "transport": "commandcode"):
+      POST {base}/chat/completions   OpenAI wire format  (spec "api": "chat")
+      POST {base}/messages           Anthropic wire format (spec "api": "messages")
+  base defaults to https://api.commandcode.ai/provider/v1 and is overridable with
+  COMMANDCODE_BASE_URL; auth is Authorization: Bearer $COMMANDCODE_API_KEY.
+  Per docs, premium models (Claude) are served only on /messages; the models list
+  (/provider/v1/models) reports supported_endpoints per model.
 
 Transport (single REST surface, per Cloudflare docs):
   chat models (OpenAI / Anthropic / Google / Workers AI chat):
@@ -22,6 +37,8 @@ Env (all optional except the first two):
   CLOUDFLARE_API_TOKEN       required (auth for the REST endpoints)
   CLOUDFLARE_GATEWAY         gateway id (default: "default")
   CF_AIG_TOKEN               only if the gateway itself enforces auth (cf-aig-authorization)
+  COMMANDCODE_API_KEY        required for transport=commandcode
+  COMMANDCODE_BASE_URL       default https://api.commandcode.ai/provider/v1
   OPENAI_API_KEY / ANTHROPIC_API_KEY / ...  only if NOT using stored BYOK keys
 
 Usage:
@@ -192,6 +209,76 @@ def _post_stream_text(url: str, headers: dict, body: dict, timeout: int = 300) -
     return "".join(out)
 
 
+def _pct(values: list[float], q: float) -> float | None:
+    """Linear-interpolated percentile; None on empty input."""
+    if not values:
+        return None
+    s = sorted(values)
+    if len(s) == 1:
+        return s[0]
+    pos = (len(s) - 1) * q
+    lo = int(pos)
+    hi = min(lo + 1, len(s) - 1)
+    return s[lo] + (s[hi] - s[lo]) * (pos - lo)
+
+
+def _cc_base() -> str:
+    return os.environ.get("COMMANDCODE_BASE_URL",
+                          "https://api.commandcode.ai/provider/v1").rstrip("/")
+
+
+def _cc_headers() -> dict:
+    key = os.environ.get("COMMANDCODE_API_KEY")
+    if not key:
+        raise SystemExit("set COMMANDCODE_API_KEY for transport=commandcode")
+    return {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+            "Accept": "application/json", "User-Agent": "opencode/2.1.4"}
+
+
+def _usage(resp: dict) -> dict:
+    u = resp.get("usage") or {}
+    return {"input_tokens": u.get("prompt_tokens", u.get("input_tokens")),
+            "output_tokens": u.get("completion_tokens", u.get("output_tokens"))}
+
+
+def call_cc(record, fields, model, api="chat", sleep_s=0.0, max_tokens=4000,
+            timeout=600):
+    """One CommandCode provider call. Returns (answers, meta).
+
+    meta carries latency_s measured around the HTTP request only - the rate-limit
+    sleep happens after the clock stops, so latency is not our own pacing.
+    """
+    base = _cc_base()
+    if api == "messages":
+        url = f"{base}/messages"
+        body = {"model": model, "max_tokens": max_tokens,
+                "system": json_instruction(fields),
+                "messages": [{"role": "user", "content": "STATE:\n" + record["state"]}]}
+    else:
+        url = f"{base}/chat/completions"
+        body = {"model": model,
+                "messages": [{"role": "system", "content": json_instruction(fields)},
+                             {"role": "user", "content": "STATE:\n" + record["state"]}],
+                "max_tokens": max_tokens}
+
+    t0 = time.perf_counter()
+    try:
+        resp = _post_json(url, _cc_headers(), body, timeout=int(timeout))
+    except RuntimeError as e:
+        # OpenAI's newer models reject max_tokens; retry once with the other key.
+        if "max_tokens" in str(e) and api != "messages":
+            body.pop("max_tokens", None)
+            body["max_completion_tokens"] = max_tokens
+            resp = _post_json(url, _cc_headers(), body, timeout=int(timeout))
+        else:
+            raise
+    latency = time.perf_counter() - t0
+    if sleep_s:
+        time.sleep(sleep_s)
+    meta = {"latency_s": latency, **_usage(resp), "endpoint": api}
+    return extract_json_block(_response_text(resp)), meta
+
+
 def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None, timeout=600):
     acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID") or sys.exit("set CLOUDFLARE_ACCOUNT_ID")
     url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions"
@@ -348,14 +435,21 @@ def score(records, preds, label, data):
 # ---------------------------------------------------------------- main
 
 def run_model(spec, records, args):
-    label = f"external:{args.gateway}:{spec['model']}"
+    transport = spec.get("transport", "cloudflare")
+    gateway = "commandcode" if transport == "commandcode" else args.gateway
+    label = f"external:{gateway}:{spec['model']}"
+
     def one(rec, fields):
         if spec.get("kind", "chat") == "clairic":
             return call_cf_clairic(rec, fields, spec["model"], args.sleep,
-                                   timeout=args.timeout)
+                                   timeout=args.timeout), None
+        if transport == "commandcode":
+            return call_cc(rec, fields, spec["model"], api=spec.get("api", "chat"),
+                           sleep_s=args.sleep, max_tokens=args.max_output_tokens,
+                           timeout=args.timeout)
         return call_cf_chat(rec, fields, spec["model"], args.sleep,
                             max_tokens=args.max_output_tokens, extra=spec.get("params"),
-                            timeout=args.timeout)
+                            timeout=args.timeout), None
     tag = spec.get("label") or spec["model"]
     print(f"[{tag}] start {label} ({spec.get('kind','chat')}) on {len(records)} records "
           f"(concurrency {args.concurrency})", flush=True)
@@ -364,20 +458,25 @@ def run_model(spec, records, args):
         fields = fields_for_record(rec)
         for attempt in range(args.retries + 1):
             try:
-                return idx, one(rec, fields), None
+                answers, meta = one(rec, fields)
+                return idx, answers, meta, None
             except (RuntimeError, urllib.error.URLError, TimeoutError, KeyError) as e:
                 if attempt == args.retries:
-                    return idx, {}, str(e)
+                    return idx, {}, None, str(e)
                 # jittered backoff: parallel workers must not retry in lockstep
                 time.sleep(1.5 * (attempt + 1) + random.random())
 
     preds = [{} for _ in records]
+    metas: list[dict | None] = [None for _ in records]
+    ok = [False for _ in records]
     failed, done = 0, 0
     with ThreadPoolExecutor(max_workers=max(1, args.concurrency)) as pool:
         futures = [pool.submit(work, i, r) for i, r in enumerate(records)]
         for fut in as_completed(futures):
-            idx, pred, err = fut.result()
+            idx, pred, meta, err = fut.result()
             preds[idx] = pred if isinstance(pred, dict) else {}
+            metas[idx] = meta
+            ok[idx] = not err
             if err:
                 failed += 1
                 print(f"[{tag}] [{idx}] failed: {err}", file=sys.stderr, flush=True)
@@ -388,16 +487,48 @@ def run_model(spec, records, args):
     report["max_context_tokens"] = args.max_context_tokens
     report["truncated_records"] = args.truncated
     report["failed_calls"] = failed
+    report["transport"] = transport
+    report["timing"] = timing_summary(metas, ok)
     body = json.dumps(report, indent=2)
     out = Path(args.out_dir) / f"{spec.get('label') or spec['model'].replace('/', '-').replace('@', '')}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(body)
     print(f"[{tag}] done {json.dumps(report['metrics'])}", flush=True)
     with open(out.with_suffix(".preds.jsonl"), "w") as f:
-        for rec, pred in zip(records, preds):
-            f.write(json.dumps({"id": rec.get("id"), "pred": pred}) + "\n")
+        for rec, pred, good in zip(records, preds, ok):
+            f.write(json.dumps({"id": rec.get("id"), "pred": pred, "ok": good}) + "\n")
+    with open(out.with_suffix(".timing.jsonl"), "w") as f:
+        for rec, meta, good in zip(records, metas, ok):
+            row = {"id": rec.get("id"), "ok": good}
+            row.update(meta or {})
+            f.write(json.dumps(row) + "\n")
     print(f"[{tag}] -> {out}", flush=True)
     return report
+
+
+def timing_summary(metas: list[dict | None], ok: list[bool]) -> dict | None:
+    """Latency + token accounting for the calls that actually succeeded."""
+    rows = [m for m, good in zip(metas, ok) if good and m and m.get("latency_s")]
+    if not rows:
+        return None
+    lat = [float(m["latency_s"]) for m in rows]
+    out_tok = [m.get("output_tokens") for m in rows if m.get("output_tokens")]
+    in_tok = [m.get("input_tokens") for m in rows if m.get("input_tokens")]
+    total = sum(lat)
+    return {
+        "n": len(rows),
+        "latency_s": {"p50": round(_pct(lat, 0.50) or 0.0, 3),
+                      "p90": round(_pct(lat, 0.90) or 0.0, 3),
+                      "mean": round(total / len(lat), 3),
+                      "min": round(min(lat), 3), "max": round(max(lat), 3),
+                      "total": round(total, 1)},
+        "output_tokens": ({"mean": round(sum(out_tok) / len(out_tok), 1),
+                           "total": sum(out_tok)} if out_tok else None),
+        "input_tokens": ({"mean": round(sum(in_tok) / len(in_tok), 1),
+                          "total": sum(in_tok)} if in_tok else None),
+        "output_tokens_per_s": (round(sum(out_tok) / total, 1)
+                                if out_tok and total > 0.05 else None),
+    }
 
 
 def rescore_dir(args) -> int:
@@ -436,7 +567,7 @@ def rescore_dir(args) -> int:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--models-file", default=None,
-                    help="JSON list of {label, kind: chat|clairic, model}")
+                    help="JSON list of {label, kind: chat|clairic, model, transport, api}")
     ap.add_argument("--model", default=None)
     ap.add_argument("--kind", default="chat", choices=["chat", "clairic"])
     ap.add_argument("--label", default=None)
