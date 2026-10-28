@@ -202,12 +202,20 @@ telemetry_row() {
   fi
   # nvidia-smi HANGS once the card is lost, and a hung sampler would stop
   # recording at exactly the moment the evidence exists. Hence the timeout.
-  smi=$(timeout 3 nvidia-smi \
+  # rc, not non-empty output: with the card gone nvidia-smi exits 6 *and* writes
+  # "No devices were found" to stdout, so a non-empty string is not proof of a
+  # live GPU -- and feeding that text into `read` silently became gpu_ok=1 with
+  # the error words in the pstate/temp columns (caught live on 2026-10-28 17:39).
+  local raw rc
+  raw=$(timeout 3 nvidia-smi \
         --query-gpu=pstate,power.draw,temperature.gpu,utilization.gpu,memory.used,clocks.current.graphics,clocks.current.memory,pcie.link.gen.current \
-        --format=csv,noheader,nounits 2>/dev/null | head -1)
-  if [[ -n "$smi" ]]; then
+        --format=csv,noheader,nounits 2>/dev/null); rc=$?
+  if (( rc == 0 )) && [[ -n "$raw" ]]; then
     ok=1
-    IFS=', ' read -r pst gpw gtm gut gmem gcg gcm ggen <<< "$smi"
+    smi=${raw%%$'\n'*}
+    IFS=',' read -r pst gpw gtm gut gmem gcg gcm ggen <<< "$smi"
+    pst=${pst// /}; gpw=${gpw// /}; gtm=${gtm// /}; gut=${gut// /}
+    gmem=${gmem// /}; gcg=${gcg// /}; gcm=${gcm// /}; ggen=${ggen// /}
   fi
   # correlate the rail trace with the training timeline
   log=$(ls -t "$ROOT"/runs/*/train.jsonl 2>/dev/null | head -1) || log=""
