@@ -1,3 +1,28 @@
+**09:05 — CONVENTION SETTLED: parties = CANONICAL ENTITY NAMES ONLY (no defined terms, no role words).
+And the LLM labelling pipeline now runs on the OpenCode subscription, not the metered gateway.**
+The owner's call: Kimi's behaviour was right - a party is "MIMVI, INC.", not "Company"; defined terms
+are labels for parties, not parties. That has two consequences, both checked:
+1. LABELS. Prompt v3 asks for canonical names only, forbids role words and "NAME, as ROLE", and forbids
+   collective descriptions. On 8 records Kimi k3.1-pro returns 2.5 canonical names/record, all clean
+   (SANTANDER DRIVE AUTO RECEIVABLES TRUST 2022-4 / SANTANDER CONSUMER USA INC. / CITIBANK, N.A.).
+2. METRIC. CUAD gold under the same convention: 4.80 items/doc raw -> 3.77 canonical entities/doc.
+   Our current model predicts 4.53 raw -> 3.60 canonical, i.e. the convention change costs nothing:
+   canonical-convention parties = .878 contains / .879 precision (was .868/.858 on raw strings).
+WHAT THE MODELS DO (same 5 records, parties/record, CUAD gold raw 3.9):
+   gemini-4-argon  6.4  - over-emits: legal name AND variants AND role terms AND collective descriptions
+   kimi-k3.1-pro   2.8  - canonical names only (correct convention, slightly conservative vs 3.77)
+   kimi + prompt v2 (asked for defined terms) 0.8 - the instruction actively confused it
+   kimi + prompt v3 (canonical only)          2.5 clean
+So the model choice was not the issue - the CONVENTION written into the prompt was.
+PIPELINE (scripts/llm_label_preambles.py): three backends now - cloudflare gateway (blocked: account has
+$0.02, HTTP 402), opencode CLI (subscription, ~4-10 s/call), and a grounding step that locates every
+returned quote in the source text and DROPS anything it cannot find, so no hallucinated party can enter
+the training data. Resumable; failed rows are retried on resume; no mid-corpus model fallback (mixing
+conventions would corrupt the label distribution - owner's call).
+RUN: 500 LEDGAR preambles (records with a preamble marker in the first 6k chars), Kimi k3.1-pro, 3
+workers, ~0.3 rec/s -> ~30 min. Output data/llm_preambles.jsonl with grounded spans for
+document_name / agreement_date / parties, ready to merge into the 12-field corpus.
+
 **08:20 — EDGAR CLEANED ONCE (1.068M docs, 19GB, 5.4% dupes, 5.5 min) AND THE 12-FIELD SCHEMA IS
 NEUTRAL, NOT BETTER.**
 CLEANUP (scripts/clean_edgar_corpus.py -> data/edgar_clean/): 304 shards in 5.5 min with 10 workers at
