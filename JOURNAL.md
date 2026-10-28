@@ -1,3 +1,34 @@
+**19:45 — ADAPTER-STRENGTH SWEEP DONE: A FLAT PLATEAU, NO WINNER. K2'S r=32 / lr=2e-5 / 800 STAYS
+AND NOTHING FROM THE SWEEP IS APPLIED TO THE 41-FIELD SETUP.**
+Seven arms, 12-field bed, each = adapter on data/snippets_4k.jsonl -> merge -> fresh head at 65k
+(2 epochs = 940 steps) -> eval with K2's exact flags (recovered from the session log; identical).
+No drift (loss@500 2.06-3.48, all below the 6.0 gate), no CUDA event, ~70 min total.
+  arm          r    lr      steps  exact@all  vs ctrl   exact   tokF1   contains null_ok ans
+  k2-control   32   2e-5      800    .5670     ---      .6082   .7121    .7828   .8235 289/310
+  r16          16   2e-5      800    .5646    -0.24pp   .6015   .7166    .7865   .8235 291/310
+  r64          64   2e-5      800    .5678    +0.08pp   .5947   .7209    .7955   .8235 296/310
+  lr1e-5       32   1e-5      800    .5647    -0.23pp   .5914   .7151    .7864   .8294 296/310
+  lr4e-5       32   4e-5      800    .5384    -2.86pp   .5961   .7107    .7828   .7765 280/310
+  steps400     32   2e-5      400    .5571    -0.99pp   .5955   .7194    .7927   .8471 290/310
+  steps1200    32   2e-5     1200    .5675    +0.05pp   .5904   .7155    .7965   .8412 298/310
+VERDICT: the pre-registered bar was a winner >= 1.0pp over the reference. Nothing comes close (best
++0.08pp), so the adapter curve is a plateau across r=16-64, lr=1e-5-2e-5 and 800-1,200 steps; only the
+edges degrade (lr 4e-5 -2.9pp, 400 steps -1.0pp). Within the plateau, exact and contains/tokF1 move in
+opposite directions - stronger/longer adaptation answers more fields (296-298 vs 289) with slightly
+lower per-answer exactness - so the net is flat. Tuning adaptation strength is not a lever here; the
+L41 gain came from adaptation existing, not from its magnitude.
+CONTROL DID NOT REPRODUCE K2, AND THAT MATTERS: .5670 vs K2's .5729, with null_ok .8235 vs .8824,
+despite byte-identical eval flags. Candidates: the merge script was reimplemented (the original lived in
+/tmp and was lost with the reboots) and head-training RNG. The sweep's internal deltas are valid because
+every arm shares one harness; arm-vs-K2 should use the control. null_ok also ranged .7765-.8471 across
+arms, so it is the noisiest of the metrics at this sample size.
+CORRECTION TO THE 18:30 ENTRY: L41's head loss at step 500 was 1.60 (run L41-mild-r3). The 1.88 quoted
+there came from the failed L41-mild-r2 run. Both are well under H4's 3.44 and K2's 3.28, so the drift
+conclusion is unchanged.
+NEXT LEVERS (README "Levers we are on"): data density (finish the LLM preambles / build the 12-field
+hybrid corpus), candidate decode beyond `parties` for the 44% item under-emission, and growing the eval
+set so per-field deltas stop being single-corpus claims. GPU idle; no jobs in flight.
+
 **18:30 — L41: THE GENTLE ADAPTER TRANSFERS TO 41 FIELDS. BEST RESULT ON EVERY METRIC:
 exact@all .4089 -> .4252 (+1.6pp), exact .4943 -> .5139, tokF1 .6184 -> .6346,
 contains .6797 -> .6997, null_ok .9536 -> .9606, same 412/498 answers, same latency.**

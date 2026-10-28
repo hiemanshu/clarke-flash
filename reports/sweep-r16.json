@@ -1,0 +1,53 @@
+{
+  "checkpoint": "/home/hiemanshu/personal/clarke-flash/runs/sweep-r16-head/checkpoint-940",
+  "data": "data/doc_eval_40_twelve.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 480,
+      "answered": 291,
+      "null_n": 170,
+      "exact": 0.6015,
+      "located": 0.6015,
+      "null_correct": 0.8235,
+      "tok_f1": 0.7166,
+      "contains": 0.7865,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0767
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 480,
+        "answered": 291,
+        "null_n": 170,
+        "exact": 0.6015,
+        "located": 0.6015,
+        "null_correct": 0.8235,
+        "tok_f1": 0.7166,
+        "contains": 0.7865,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0767
+      }
+    }
+  },
+  "timing": {
+    "per_document_s": {
+      "n": 40,
+      "mean": 0.799,
+      "p50": 0.23,
+      "p90": 2.096,
+      "p99": 7.138,
+      "min": 0.027,
+      "max": 9.158
+    },
+    "encode_s": 0.532,
+    "infer_s": 31.429,
+    "total_s": 31.961,
+    "records_per_s": 1.252,
+    "fields_per_s": 15.0,
+    "batched": false,
+    "batch_size_max": 1
+  }
+}

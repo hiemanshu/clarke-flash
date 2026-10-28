@@ -1,0 +1,53 @@
+{
+  "checkpoint": "/home/hiemanshu/personal/clarke-flash/runs/sweep-k2-control-head/checkpoint-940",
+  "data": "data/doc_eval_40_twelve.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 480,
+      "answered": 289,
+      "null_n": 170,
+      "exact": 0.6082,
+      "located": 0.6082,
+      "null_correct": 0.8235,
+      "tok_f1": 0.7121,
+      "contains": 0.7828,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0791
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 480,
+        "answered": 289,
+        "null_n": 170,
+        "exact": 0.6082,
+        "located": 0.6082,
+        "null_correct": 0.8235,
+        "tok_f1": 0.7121,
+        "contains": 0.7828,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0791
+      }
+    }
+  },
+  "timing": {
+    "per_document_s": {
+      "n": 40,
+      "mean": 0.798,
+      "p50": 0.23,
+      "p90": 2.079,
+      "p99": 7.102,
+      "min": 0.027,
+      "max": 9.087
+    },
+    "encode_s": 0.536,
+    "infer_s": 31.391,
+    "total_s": 31.927,
+    "records_per_s": 1.253,
+    "fields_per_s": 15.0,
+    "batched": false,
+    "batch_size_max": 1
+  }
+}

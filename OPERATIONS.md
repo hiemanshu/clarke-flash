@@ -112,10 +112,11 @@ older diff-painted one-frame output. `WATCH_TUI=0` forces the old path.
   (.4252) we are 2.5 pp behind opus and 9.3 pp behind gemini. The superseded
   2026-10-26 run is in `reports/external_doc/` — its rows were distorted by 5–7
   failed calls each.
-- **Next queued:** the adapter-strength sweep (step 2 of the 2026-10-28
-  pre-registration) on the 12-field bed against K2 (.5729): arms r=16/64,
-  lr=1e-5/4e-5, steps=400/1,200, filtered by head-loss@500; only a winner
-  >= 1.0 pp over K2 is applied to the 41-field setup.
+- **Next queued:** data density (finish the LLM preamble labels / 12-field
+  hybrid corpus), candidate decode beyond `parties` (44% of gold list items are
+  never emitted), and growing the eval set. The adapter-strength sweep is done:
+  a flat plateau, no winner, K2's r=32 / lr=2e-5 / 800 stays
+  (`reports/sweep-summary.json`).
 - **Data threads:** `data/llm_preambles.jsonl` 271/545 complete (Kimi quota cut the
   run); `data/edgar_lm_4k.bin` 105.8M tokens built and unused;
   `data/sec_lm_65k.bin` 425M tokens blocked by the ~4k LoRA VRAM wall.
