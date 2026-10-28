@@ -1,3 +1,16 @@
+**00:20 — N ALSO WINS ON THE PRIVATE COMPANY SET: exact@all .1750 -> .2329 (+5.8pp), exact +11.2pp,
+tokF1 +5.4, null_ok +8.5, BUT it answers 13 fewer gold fields (82 vs 95) so contains drops 5.9pp.**
+  model  exact@all  exact   tokF1   contains null_ok answered
+  L41    .1750     .2063   .7464    .8702   .7000   95/112
+  N      .2329     .3181   .8003    .8110   .7850   82/112
+READ: N is more precise and declines more. On this distribution the binding constraint for BOTH models
+is recall, not clause-finding - contains .81-.87 while answered/gold is only 73-85%, and null_ok is not
+comparable to CUAD because 'no' in the export means 'not annotated' (governing_law is marked absent in
+19 of 39 real contracts). So the honest headline is "N finds the clause as often but quotes it more
+crisply and declines more of the ambiguous ones", not "N is better at extraction" full stop.
+Both models are scored with the baked decode config and zero flags; prediction dumps stay in
+reports/company-eval/ (gitignored). Public summary: reports/company-eval-summary.json.
+
 **00:12 — RUN N WINS: exact@all .4089 (L41 .4252) -> .4373, +1.21pp, above the pre-registered adopt
 threshold of .4352. Adapter preamble supervision + CUAD&LEDGAR 41-field head.**
   model      exact@all  exact   tokF1   contains null_ok answered

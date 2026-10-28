@@ -24,7 +24,17 @@
       "answered": 95,
       "gold": 112,
       "exact_at_all": 0.175
+    },
+    "clarke-N": {
+      "exact": 0.3181,
+      "tok_f1": 0.8003,
+      "contains": 0.811,
+      "null_ok": 0.785,
+      "answered": 82,
+      "gold": 112,
+      "exact_at_all": 0.2329
     }
   },
-  "note": "Only aggregate numbers are public. Source documents and per-record predictions stay under data/ and reports/company-eval/ (both gitignored)."
+  "note": "Only aggregate numbers are public. Source documents and per-record predictions stay under data/ and reports/company-eval/ (both gitignored).",
+  "read": "N beats L41 on exact@all (+5.8pp) and exact (+11.2pp) with better null discipline, but answers 13 fewer gold fields (82 vs 95), so contains falls. On this surface recall/coverage is the binding constraint for both models, not clause finding: contains is .81-.87 while answered/gold is 73-85%."
 }
