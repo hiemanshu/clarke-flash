@@ -14,6 +14,13 @@ records is ~$0.25 on a flash-tier model; the script refuses to exceed --max-cost
     uv run python scripts/llm_label_preambles.py --estimate --limit 500
     uv run python scripts/llm_label_preambles.py --limit 50            # pilot
     uv run python scripts/llm_label_preambles.py --limit 5000 --workers 4
+
+Backends:
+  cloudflare  metered gateway, OpenAI-compatible
+  opencode    subscription CLI (opencode run -m provider/model)
+  openrouter  pay per token, OpenAI-compatible; default model
+              moonshotai/kimi-k3.1-pro, priced from the PRICING table below so
+              --max-cost is a real guard rather than an input-only estimate
 """
 
 from __future__ import annotations
@@ -101,6 +108,88 @@ def _text_of(resp: dict) -> str:
     return json.dumps(resp)
 
 
+OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def _openrouter_headers() -> dict:
+    token = os.environ.get("OPENROUTER_API_KEY")
+    if not token:
+        raise SystemExit("set OPENROUTER_API_KEY (in .env or the environment)")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    # OpenRouter uses these for attribution/rate-limit tiers; both are optional.
+    if os.environ.get("OPENROUTER_REFERER"):
+        headers["HTTP-Referer"] = os.environ["OPENROUTER_REFERER"]
+    if os.environ.get("OPENROUTER_TITLE"):
+        headers["X-Title"] = os.environ["OPENROUTER_TITLE"]
+    return headers
+
+
+def _post_openrouter(payload: dict, timeout: int = 300) -> dict:
+    req = urllib.request.Request(OPENROUTER_ENDPOINT,
+                                 data=json.dumps(payload).encode(),
+                                 headers=_openrouter_headers(), method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            out = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"HTTP {exc.code}: {exc.read().decode()[:300]}") from exc
+    if isinstance(out, dict) and out.get("error"):
+        raise RuntimeError(f"openrouter error: {json.dumps(out['error'])[:300]}")
+    return out
+
+
+def _extract_fields(text: str, body: dict, out: dict) -> dict:
+    """Ground each returned value to a verbatim span; drop anything unlocatable.
+
+    Shared by every backend so the grounding rule cannot drift between them: a
+    hallucinated party must never reach the training data.
+    """
+    for field in ("document_name", "agreement_date", "parties"):
+        val = body.get(field)
+        if field == "parties":
+            vals = val if isinstance(val, list) else ([val] if val else [])
+            spans, kept = [], []
+            for v in vals:
+                span = ground(text, v)
+                if span:
+                    kept.append(str(v)); spans.append(list(span))
+            if kept:
+                out["fields"]["parties"] = {"value": kept, "spans": spans}
+        elif val:
+            span = ground(text, val)
+            if span:
+                out["fields"][field] = {"value": [str(val)], "spans": [list(span)]}
+    return out
+
+
+def one_openrouter(job: dict, model: str, chars: int, fallback: str = "") -> dict:
+    """Label through OpenRouter (pay per token). Retries 429/5xx with backoff."""
+    rec_id, text = job["id"], job["state"][:chars]
+    prompt = {"v1": PROMPT, "v2": PROMPT_V2, "v3": PROMPT_V3}[PROMPT_VERSION[0]].format(text=text)
+    t0 = time.time()
+    used, last = model, ""
+    resp = None
+    for attempt in range(3):
+        try:
+            resp = _post_openrouter({"model": used, "temperature": 0,
+                                     "messages": [{"role": "user", "content": prompt}]})
+            raw = _text_of(resp)
+            if not raw.strip():
+                raise RuntimeError(f"empty content: {json.dumps(resp)[:200]}")
+            break
+        except Exception as exc:                              # noqa: BLE001
+            last = f"{type(exc).__name__}: {exc}"[:200]
+            if fallback and any(m in last.lower() for m in LIMIT_MARKERS):
+                used = fallback
+            if attempt == 2:
+                return {"id": rec_id, "error": last}
+            time.sleep(2 ** attempt)
+    out = {"id": rec_id, "model": used, "backend": "openrouter",
+           "seconds": round(time.time() - t0, 1), "usage": (resp or {}).get("usage", {}),
+           "fields": {}}
+    return _extract_fields(text, _json_of(raw), out)
+
+
 def _json_of(text: str) -> dict:
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
@@ -150,7 +239,14 @@ TEXT:
 {text}"""
 
 
-PROMPT_VERSION = ["v2"]
+PROMPT_VERSION = ["v3"]
+
+# (input USD / 1M tokens, output USD / 1M tokens) for the cost guard.
+# openrouter kimi-k3.1-pro: $2 in / $10 out / $0.20 cached (Moonshot list price).
+PRICING = {"cloudflare": (0.30, 0.0), "opencode": (0.0, 0.0), "openrouter": (2.0, 10.0)}
+DEFAULT_MODEL = {"cloudflare": "@cf/deepseek-ai/deepseek-v4.1-flash-1017",
+                 "opencode": "opencode-go/kimi-k3.1-pro",
+                 "openrouter": "moonshotai/kimi-k3.1-pro"}
 
 
 LIMIT_MARKERS = ("limit", "quota", "rate", "429", "exhaust", "capacity", "overloaded")
@@ -193,25 +289,9 @@ def one_opencode(job: dict, model: str, chars: int, fallback: str = "") -> dict:
         used = fallback
     if err:
         return {"id": rec_id, "error": err}
-    body = _json_of(raw)
     out = {"id": rec_id, "model": used, "backend": "opencode",
            "seconds": round(time.time() - t0, 1), "fields": {}}
-    for field in ("document_name", "agreement_date", "parties"):
-        val = body.get(field)
-        if field == "parties":
-            vals = val if isinstance(val, list) else ([val] if val else [])
-            spans, kept = [], []
-            for v in vals:
-                span = ground(text, v)
-                if span:
-                    kept.append(str(v)); spans.append(list(span))
-            if kept:
-                out["fields"]["parties"] = {"value": kept, "spans": spans}
-        elif val:
-            span = ground(text, val)
-            if span:
-                out["fields"][field] = {"value": [str(val)], "spans": [list(span)]}
-    return out
+    return _extract_fields(text, _json_of(raw), out)
 
 
 def one(job: dict, model: str, chars: int) -> dict:
@@ -223,25 +303,9 @@ def one(job: dict, model: str, chars: int) -> dict:
         resp = _post(payload)
     except Exception as exc:                                  # noqa: BLE001
         return {"id": rec_id, "error": f"{type(exc).__name__}: {exc}"[:200]}
-    body = _json_of(_text_of(resp))
     out = {"id": rec_id, "model": model, "seconds": round(time.time() - t0, 1),
            "usage": resp.get("usage", {}), "fields": {}}
-    for field in ("document_name", "agreement_date", "parties"):
-        val = body.get(field)
-        if field == "parties":
-            vals = val if isinstance(val, list) else ([val] if val else [])
-            spans, kept = [], []
-            for v in vals:
-                span = ground(text, v)
-                if span:
-                    kept.append(str(v)); spans.append(list(span))
-            if kept:
-                out["fields"]["parties"] = {"value": kept, "spans": spans}
-        elif val:
-            span = ground(text, val)
-            if span:
-                out["fields"][field] = {"value": [str(val)], "spans": [list(span)]}
-    return out
+    return _extract_fields(text, _json_of(_text_of(resp)), out)
 
 
 def load_env() -> None:
@@ -261,21 +325,35 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--input", default="data/ledgar_split_cuad.jsonl")
     ap.add_argument("--out", default="data/llm_preambles.jsonl")
-    ap.add_argument("--backend", choices=["cloudflare", "opencode"], default="cloudflare")
+    ap.add_argument("--backend", choices=["cloudflare", "opencode", "openrouter"],
+                    default="cloudflare")
     ap.add_argument("--fallback-model", default="",
                     help="model to retry with when the primary reports a rate/quota limit")
-    ap.add_argument("--model", default="@cf/deepseek-ai/deepseek-v4.1-flash-1017")
+    ap.add_argument("--model", default=None,
+                    help="defaults per backend: cloudflare flash, opencode-go kimi-k3.1-pro, "
+                         "openrouter moonshotai/kimi-k3.1-pro")
     ap.add_argument("--limit", type=int, default=500)
     ap.add_argument("--chars", type=int, default=12000)
     ap.add_argument("--prompt", choices=["v1", "v2", "v3"], default="v3")
     ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--min-cost-per-mtok", type=float, default=0.30,
-                    help="USD per 1M input tokens, for the cost guard (default flash-tier)")
+    ap.add_argument("--min-cost-per-mtok", type=float, default=None,
+                    help="USD per 1M input tokens; default comes from PRICING[backend]")
+    ap.add_argument("--output-cost-per-mtok", type=float, default=None,
+                    help="USD per 1M output tokens; default comes from PRICING[backend]")
+    ap.add_argument("--assumed-output-tokens", type=int, default=300,
+                    help="output tokens per record for the estimate (JSON + optional reasoning)")
     ap.add_argument("--max-cost", type=float, default=25.0)
     ap.add_argument("--estimate", action="store_true")
     args = ap.parse_args(argv)
     load_env()
     PROMPT_VERSION[0] = args.prompt
+    if args.model is None:
+        args.model = DEFAULT_MODEL[args.backend]
+    in_rate, out_rate = PRICING[args.backend]
+    if args.min_cost_per_mtok is not None:
+        in_rate = args.min_cost_per_mtok
+    if args.output_cost_per_mtok is not None:
+        out_rate = args.output_cost_per_mtok
 
     done: set[str] = set()
     if Path(args.out).exists():
@@ -298,25 +376,29 @@ def main(argv: list[str] | None = None) -> None:
             jobs.append({"id": rec["id"], "state": rec["state"]})
 
     tokens = len(jobs) * (args.chars / 4.0)
-    cost = tokens / 1e6 * args.min_cost_per_mtok
+    out_tokens = len(jobs) * args.assumed_output_tokens
+    cost = tokens / 1e6 * in_rate + out_tokens / 1e6 * out_rate
     print(f"candidates: {len(jobs):,} (already done: {len(done):,})")
-    print(f"est input tokens: {tokens/1e6:.2f}M -> ~${cost:.2f} at "
-          f"${args.min_cost_per_mtok}/Mtok")
+    print(f"est input {tokens/1e6:.2f}M @ ${in_rate}/M + output {out_tokens/1e6:.2f}M "
+          f"@ ${out_rate}/M -> ~${cost:.2f}")
     if args.estimate:
         return
     if args.backend == "opencode":
         print("(opencode backend: billed to the OpenCode subscription, no gateway cost)")
-    if args.backend == "cloudflare" and cost > args.max_cost:
+    elif args.backend == "openrouter":
+        print(f"(openrouter backend: pay per token, model {args.model})")
+    if args.backend != "opencode" and cost > args.max_cost:
         raise SystemExit(f"estimated ${cost:.2f} exceeds --max-cost ${args.max_cost}")
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     started = time.time()
     ok = err = 0
     with open(args.out, "a") as fh, ThreadPoolExecutor(max_workers=args.workers) as pool:
-        fn = one_opencode if args.backend == "opencode" else one
         def call(j):
             if args.backend == "opencode":
                 return one_opencode(j, args.model, args.chars, args.fallback_model)
+            if args.backend == "openrouter":
+                return one_openrouter(j, args.model, args.chars, args.fallback_model)
             return one(j, args.model, args.chars)
         futures = {pool.submit(call, j): j["id"] for j in jobs}
         for i, fut in enumerate(as_completed(futures), 1):
