@@ -1,3 +1,25 @@
+**09:15 — LoRA IS BLOCKED AT OUR CONTEXT LENGTH: it fits ~4k tokens on 32GB, OOMs at 8k and above.
+The one untested mechanism turns out to be untestable in the 65k regime on this GPU.**
+Measured with Qwen3.5-2B, r=64, batch 1, on the 12-field CUAD data:
+  4096 tokens   fits (with and without gradient checkpointing)
+  8192 tokens   OOM (~30.4 GiB allocated)
+  16384/32768/65536  OOM at the same ~30 GiB
+Memory is ~30 GiB at 16k AND at 32k, i.e. it does not scale with the sequence, which means the
+activations of the hybrid backbone are not actually being freed by checkpointing. Fixed a real bug on
+the way: gradient_checkpointing_enable() was called only on the PeftModel wrapper and never reached the
+decoder blocks, so it was a no-op; it now applies to the wrapper, Qwen3_5ForConditionalGeneration and
+Qwen3_5Model, with enable_input_require_grads() and use_cache=False. That changed nothing measurable
+(a 4k run with --no-lora-grad-checkpoint uses the same memory and also succeeds), so the residual cost
+is in the 18 linear-attention blocks, which presumably ignore checkpointing.
+WHY THIS MATTERS: LoRA exists to adapt the backbone, and the whole point of this model is document-level
+extraction at 65k. A LoRA run at 4k would train on a different regime and evaluate on a different one -
+not the experiment we want. Options, none free: (a) defer LoRA until a 64-96GB card is available,
+(b) implement manual per-block torch.utils.checkpoint around the linear-attention blocks (invasive,
+uncertain), (c) run LoRA at 4k as a separate short-document experiment, knowing it does not transfer to
+65k for free.
+MEANWHILE the LLM labelling runs in parallel (CPU/network only, GPU untouched):
+~250/500 records, 0 errors, 0.29 rec/s, all Kimi k3.1-pro, canonical-name convention.
+
 **09:05 — CONVENTION SETTLED: parties = CANONICAL ENTITY NAMES ONLY (no defined terms, no role words).
 And the LLM labelling pipeline now runs on the OpenCode subscription, not the metered gateway.**
 The owner's call: Kimi's behaviour was right - a party is "MIMVI, INC.", not "Company"; defined terms

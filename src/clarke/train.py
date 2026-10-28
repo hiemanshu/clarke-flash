@@ -75,7 +75,29 @@ class Trainer:
                 bias="none", task_type="FEATURE_EXTRACTION")
             self.backbone = get_peft_model(self.backbone, lcfg)
             if getattr(args, "lora_grad_checkpoint", True):
-                self.backbone.gradient_checkpointing_enable()
+                # Enabling on the outer wrapper alone does not reach the decoder blocks for
+                # this hybrid Qwen3.5 class, so activations were still stored for every layer:
+                # 30.4 GiB at 16k tokens and OOM at 65k (2026-10-28). Do it on the wrapper,
+                # the inner model, and switch the KV cache off - a cache defeats checkpointing.
+                enabled = []
+                for obj in (self.backbone, getattr(self.backbone, "model", None),
+                            getattr(getattr(self.backbone, "model", None), "model", None)):
+                    if obj is not None and hasattr(obj, "gradient_checkpointing_enable"):
+                        try:
+                            obj.gradient_checkpointing_enable()
+                            enabled.append(type(obj).__name__)
+                        except Exception:
+                            pass
+                for obj in (self.backbone, getattr(self.backbone, "model", None)):
+                    if obj is not None and hasattr(obj, "enable_input_require_grads"):
+                        try:
+                            obj.enable_input_require_grads()
+                        except Exception:
+                            pass
+                    cfg = getattr(obj, "config", None)
+                    if cfg is not None and hasattr(cfg, "use_cache"):
+                        cfg.use_cache = False
+                self.log(f"grad checkpointing enabled on: {enabled}")
             trainable = sum(p.numel() for p in self.backbone.parameters() if p.requires_grad)
             self.log(f"lora r={args.lora_r} alpha={args.lora_alpha} "
                      f"trainable_backbone={trainable/1e6:.1f}M "
