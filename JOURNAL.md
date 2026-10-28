@@ -1,3 +1,40 @@
+**10:52 — COMMANDCODE TRANSPORT BUILT AND PROVEN; ALL THREE PUBLISHED EXTERNALS ARE BEHIND A HIGHER
+TIER. DECISION: TOP UP THE CLOUDFLARE GATEWAY AND RE-MEASURE ALL FOUR ON ONE TRANSPORT.**
+WHY: the results table is gaining a latency column, and the published external rows came through
+Cloudflare AI Gateway - whose balance is $0.02 - so no external latency could be measured there.
+CommandCode's provider API was the alternative; the owner supplied a key.
+WHAT WAS BUILT (scripts/external_baseline.py, commit ad640eb): transport "commandcode" with per-model
+"api": "chat" (/provider/v1/chat/completions, OpenAI wire) or "messages" (/provider/v1/messages,
+Anthropic wire - Claude models are served ONLY there; a chat-endpoint probe returns
+"must be called via /provider/v1/messages"). Base defaults to https://api.commandcode.ai/provider/v1,
+override COMMANDCODE_BASE_URL; auth is Bearer COMMANDCODE_API_KEY (from .env, gitignored).
+Prompt, JSON contract, context cap (65536) and scorer are identical to the Cloudflare path, so only the
+transport differs. Latency is measured around the HTTP request; the rate-limit sleep happens after the
+clock stops. Reports now carry timing (p50/p90/mean), token usage, failed_calls, transport, and
+preds.jsonl rows gain an "ok" flag plus a sibling .timing.jsonl. rescore_common.py now accepts several
+directories and scores only the intersection of successful records (a failed call scored as an empty
+prediction is rewarded as "correctly null" - the current CF rows carry 5-7 failed calls each, so this
+matters for any transport comparison).
+ENTITLEMENT MAP (probed 21 models with max_tokens=1; 403 MODEL_NOT_IN_PLAN is a plan gate, not a bug):
+  IN PLAN      claude-sonnet-5-5, claude-haiku-5-5, gemini-3.8-flash, deepseek-v4.1-flash-fast,
+               deepseek-v4-pro, Qwen3.8-Max, Qwen3.8-Flash, Kimi-K3, GLM-5.3, grok-4.7,
+               mistral-large-4, MiniMax-M3, Step-5-Preview, hy4-preview
+  GATED        claude-opus-5-5 -> "Provider and above"
+               google/gemini-4-argon -> "Pro and above"
+               gpt-6.1-sol -> "Max and above"   (gpt-6-sol -> Pro and above)
+So exactly the three rows we wanted are out of plan, and clairic exists only on Cloudflare - the
+CommandCode transport can never cover all four rows. Owner decision: top up the Cloudflare AI Gateway
+and re-run all four models on the SAME transport as the published metrics, with retries, which also
+removes the 5-7 failed calls that currently depress `answered` and `exact@all` for the external rows.
+ALSO DONE: latency instrumentation added to the Cloudflare paths too (call_cf_chat, call_cf_clairic now
+return meta; previously only CommandCode did), so the top-up run yields the column for all four.
+PILOT STATUS: 6 calls on 2 records returned 403 for all three models; those reports are invalid
+(answered 0) and live only in /tmp/opencode/cc_pilot, deliberately not committed.
+NEXT: on top-up, run configs/external_models.json into reports/external_doc_rerun/ (NOT over
+reports/external_doc, which is the published evidence), concurrency 1 to keep latency uncontended,
+retries 4. Sampling is non-deterministic (no temperature is sent), so metrics will differ slightly
+from the 2026-10-26 run even on identical inputs.
+
 **10:37 — LATENCY IS MEASURED AND IN THE TABLE. clarke 2B: 0.29 s p50 / 2.6 s p90 per document,
 end-to-end at 65k on the single 5090 (mean 1.0 s, 41 fields/s). External latency is blank, not zero.**
 WHY: the results table compared quality only, and no report anywhere in reports/ had ever recorded

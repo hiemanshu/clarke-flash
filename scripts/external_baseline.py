@@ -291,9 +291,12 @@ def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None, ti
     body.update(extra or {})
 
     resp, use_stream, last_err, applied = None, False, None, set()
+    latency = None
     for _ in range(6):
+        _t0 = time.perf_counter()
         try:
             resp = _post_json(url, _cf_headers(), body, timeout=int(timeout))
+            latency = time.perf_counter() - _t0
             break
         except RuntimeError as e:
             msg = last_err = str(e)
@@ -335,9 +338,12 @@ def call_cf_chat(record, fields, model, sleep_s, max_tokens=2000, extra=None, ti
 
     time.sleep(sleep_s)
     if use_stream:
-        return extract_json_block(_post_stream_text(url, _cf_headers(), body,
-                                                    timeout=int(timeout)))
-    return extract_json_block(_response_text(resp))
+        _t0 = time.perf_counter()
+        text = _post_stream_text(url, _cf_headers(), body, timeout=int(timeout))
+        return extract_json_block(text), {"latency_s": time.perf_counter() - _t0,
+                                         "endpoint": "chat-stream"}
+    meta = {"latency_s": latency, "endpoint": "chat", **_usage(resp)}
+    return extract_json_block(_response_text(resp)), meta
 
 
 def call_cf_clairic(record, fields, model, sleep_s, timeout=600):
@@ -345,6 +351,7 @@ def call_cf_clairic(record, fields, model, sleep_s, timeout=600):
     url = f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/run/{model}"
     payload = {"state": record["state"], "fields": fields}
     headers = _cf_headers()
+    _t0 = time.perf_counter()
     try:
         resp = _post_json(url, headers, payload, timeout=int(timeout))
     except RuntimeError:
@@ -352,11 +359,13 @@ def call_cf_clairic(record, fields, model, sleep_s, timeout=600):
         # direct call rather than losing the baseline entirely.
         headers.pop("cf-aig-gateway-id", None)
         resp = _post_json(url, headers, payload, timeout=int(timeout))
+    latency = time.perf_counter() - _t0
     time.sleep(sleep_s)
     if not resp.get("success", True):
         raise RuntimeError(f"cloudflare error: {json.dumps(resp)[:400]}")
     ans = resp.get("result", {}).get("answers", resp.get("answers", {}))
-    return {k: (v.get("value") if isinstance(v, dict) else v) for k, v in ans.items()}
+    return ({k: (v.get("value") if isinstance(v, dict) else v) for k, v in ans.items()},
+            {"latency_s": latency, "endpoint": "clairic"})
 
 
 # ---------------------------------------------------------------- scoring (mirrors eval.py)
@@ -442,14 +451,14 @@ def run_model(spec, records, args):
     def one(rec, fields):
         if spec.get("kind", "chat") == "clairic":
             return call_cf_clairic(rec, fields, spec["model"], args.sleep,
-                                   timeout=args.timeout), None
+                                   timeout=args.timeout)
         if transport == "commandcode":
             return call_cc(rec, fields, spec["model"], api=spec.get("api", "chat"),
                            sleep_s=args.sleep, max_tokens=args.max_output_tokens,
                            timeout=args.timeout)
         return call_cf_chat(rec, fields, spec["model"], args.sleep,
                             max_tokens=args.max_output_tokens, extra=spec.get("params"),
-                            timeout=args.timeout), None
+                            timeout=args.timeout)
     tag = spec.get("label") or spec["model"]
     print(f"[{tag}] start {label} ({spec.get('kind','chat')}) on {len(records)} records "
           f"(concurrency {args.concurrency})", flush=True)
