@@ -6,6 +6,14 @@
 #   ./scripts/watch_training.sh status     # one frame to stdout
 #   ./scripts/watch_training.sh --full     # + all runs, reports, eval log tails
 #   LOGDIR=.. CLEAR_EVERY=30 ROWS=40 COLS=100  # env overrides (ROWS/COLS when not a tty)
+#   TELEMETRY=0 TELEMETRY_FILE=.. TELEMETRY_MAX_BYTES=.. TELEMETRY_KEEP=..  # see below
+#
+# Every invocation also appends one CSV row per second to logs/telemetry.csv
+# (gitignored, self-rotating). That sampler is deliberately independent of the
+# GPU: when the card falls off the bus, nvidia-smi dies with it, but the PSU is
+# a USB device on its own rail and keeps reporting -- so this file is the only
+# telemetry that records *through* a Xid 79 and captures what the +12V rail did
+# in the seconds before it. Disable with TELEMETRY=0.
 #
 # Frame is built into OUT (top) + BOT (bottom-pinned) arrays and compared to
 # the previous frame: identical frame = ZERO bytes to the terminal (no
@@ -31,11 +39,15 @@ done
 LOGDIR="${LOGDIR:-/tmp/opencode}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# A real terminal gets the ncurses dashboard (GPU/CPU/RAM/NET panels); pipes, cron
-# and the `status` subcommand keep the old diff-painted output so logs stay readable.
-if (( ! STATUS )) && [[ -t 1 ]] && [[ "${WATCH_TUI:-1}" != "0" ]]; then
-  exec python3 "$ROOT/scripts/watch_tui.py" "$INTERVAL"
-fi
+# ---- telemetry ------------------------------------------------------------
+# Rotation is self-managed (no root, no cron): $TELEMETRY_KEEP rotated copies of
+# $TELEMETRY_MAX_BYTES, so the ceiling is (KEEP+1)*MAX = ~50 MiB by default.
+TELEMETRY="${TELEMETRY:-1}"
+TELEMETRY_FILE="${TELEMETRY_FILE:-$ROOT/logs/telemetry.csv}"
+TELEMETRY_INTERVAL="${TELEMETRY_INTERVAL:-$INTERVAL}"
+TELEMETRY_MAX_BYTES="${TELEMETRY_MAX_BYTES:-10485760}"   # 10 MiB
+TELEMETRY_KEEP="${TELEMETRY_KEEP:-4}"                     # 4 rotated copies
+TELEMETRY_PID=""
 : "${ROWS:=24}"; : "${COLS:=80}"
 K=$'\033[K'
 CLEAR_EVERY=${CLEAR_EVERY:-30}
@@ -164,6 +176,87 @@ psu_dir() {
   done
 }
 hw_val() { local v; v=$(cat "$1" 2>/dev/null) || return; printf '%s' $(( v / $2 )); }
+# raw -> scaled float; prints nothing when the sensor file is missing, so a
+# absent rail shows up as an empty CSV field rather than a fake 0.
+sc() { [[ -z "${1:-}" ]] && return 0; awk -v v="$1" -v d="$2" -v p="${3:-3}" 'BEGIN{printf "%."p"f", v/d}'; }
+sc1() { [[ -z "${1:-}" ]] && return 0; awk -v v="$1" 'BEGIN{printf "%.1f", v/1000}'; }
+
+TELEMETRY_HEADER='ts,epoch,psu_vin_v,psu_12v_v,psu_12v_a,psu_total_w,psu_12v_w,psu_vrm_c,psu_case_c,psu_fan_rpm,gpu_ok,pstate,gpu_power_w,gpu_temp_c,gpu_util_pct,gpu_mem_used_mib,gpu_clk_gr_mhz,gpu_clk_mem_mhz,pcie_gen_cur,run,step'
+
+# one CSV row; never blocks on a dead GPU and never buffers a partial line
+telemetry_row() {
+  local ts now psu vin v12 a12 pw pwt vrm cse fan
+  local ok=0 pst="" gpw="" gtm="" gut="" gmem="" gcg="" gcm="" ggen=""
+  local log run="" step="" smi
+  now=$(date +%s); ts=$(date -Is)
+  psu="$(psu_dir)"
+  if [[ -n "$psu" ]]; then
+    vin=$(cat "$psu/in0_input"    2>/dev/null)
+    v12=$(cat "$psu/in1_input"    2>/dev/null)
+    a12=$(cat "$psu/curr2_input"  2>/dev/null)
+    pw=$(cat  "$psu/power1_input" 2>/dev/null)
+    pwt=$(cat "$psu/power2_input" 2>/dev/null)
+    vrm=$(cat "$psu/temp1_input"  2>/dev/null)
+    cse=$(cat "$psu/temp2_input"  2>/dev/null)
+    fan=$(cat "$psu/fan1_input"   2>/dev/null)
+  fi
+  # nvidia-smi HANGS once the card is lost, and a hung sampler would stop
+  # recording at exactly the moment the evidence exists. Hence the timeout.
+  smi=$(timeout 3 nvidia-smi \
+        --query-gpu=pstate,power.draw,temperature.gpu,utilization.gpu,memory.used,clocks.current.graphics,clocks.current.memory,pcie.link.gen.current \
+        --format=csv,noheader,nounits 2>/dev/null | head -1)
+  if [[ -n "$smi" ]]; then
+    ok=1
+    IFS=', ' read -r pst gpw gtm gut gmem gcg gcm ggen <<< "$smi"
+  fi
+  # correlate the rail trace with the training timeline
+  log=$(ls -t "$ROOT"/runs/*/train.jsonl 2>/dev/null | head -1) || log=""
+  if [[ -n "$log" ]]; then
+    run=$(basename "$(dirname "$log")")
+    step=$(tail -n1 "$log" 2>/dev/null | sed -n 's/.*"step": *\([0-9][0-9]*\).*/\1/p')
+  fi
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+    "$ts" "$now" \
+    "$(sc "${vin:-}" 1000 3)" "$(sc "${v12:-}" 1000 3)" "$(sc "${a12:-}" 1000 2)" \
+    "$(sc "${pw:-}" 1000000 1)" "$(sc "${pwt:-}" 1000000 1)" \
+    "$(sc "${vrm:-}" 1000 1)" "$(sc "${cse:-}" 1000 1)" "${fan:-}" \
+    "$ok" "${pst:-}" "${gpw:-}" "${gtm:-}" "${gut:-}" "${gmem:-}" \
+    "${gcg:-}" "${gcm:-}" "${ggen:-}" "${run:-}" "${step:-}"
+}
+
+telemetry_logger() {
+  local main_pid="$1" file dir sz i
+  file="$TELEMETRY_FILE"; dir=$(dirname "$file")
+  mkdir -p "$dir" 2>/dev/null || return 0
+  command -v flock >/dev/null 2>&1 && { exec 9>"$dir/.$(basename "$file").lock" && flock -n 9 || return 0; }
+  trap 'exit 0' TERM INT
+  while :; do
+    kill -0 "$main_pid" 2>/dev/null || break        # parent gone (SIGKILL included)
+    [[ -s "$file" ]] || printf '%s\n' "$TELEMETRY_HEADER" >> "$file"
+    sz=$(stat -c %s "$file" 2>/dev/null || printf 0)
+    if (( sz >= TELEMETRY_MAX_BYTES )); then
+      for (( i = TELEMETRY_KEEP - 1; i >= 1; i-- )); do
+        [[ -f "$file.$i" ]] && mv -f "$file.$i" "$file.$((i+1))" 2>/dev/null
+      done
+      mv -f "$file" "$file.1" 2>/dev/null
+      printf '%s\n' "$TELEMETRY_HEADER" >> "$file"
+    fi
+    telemetry_row >> "$file" 2>/dev/null
+    sleep "$TELEMETRY_INTERVAL"
+  done
+}
+
+start_telemetry() {
+  (( TELEMETRY )) || return 0
+  ( telemetry_logger $$ ) &
+  TELEMETRY_PID=$!
+}
+stop_telemetry() {
+  [[ -n "$TELEMETRY_PID" ]] || return 0
+  kill "$TELEMETRY_PID" 2>/dev/null
+  wait "$TELEMETRY_PID" 2>/dev/null
+  TELEMETRY_PID=""
+}
 
 # ---- frame buffers ------------------------------------------------------
 declare -a OUT BOT
@@ -271,14 +364,16 @@ draw() {
       emit "$(lab gpu)[$(bar "$used" "$tot" 40 "$c2")]  ${B}${ug}${R}/${D}${tg}${R} GB   util ${B}${util}%${R}   ${D}${temp}°C${R}${K}"
       local psu; psu="$(psu_dir)"
       if [[ -n "$psu" ]]; then
-        local p1 p2 ac pt
+        local p1 p2 ac pt v12
         p1=$(hw_val "$psu/power1_input" 1000000); p2=$(hw_val "$psu/power2_input" 1000000)
         ac=$(hw_val "$psu/in0_input" 1000); pt=$(hw_val "$psu/temp1_input" 1000)
+        # rail VOLTAGE, rounded to 0.1 V so idle frames stay byte-stable
+        v12=$(sc1 "$(cat "$psu/in1_input" 2>/dev/null)"); : "${v12:=—}"
         p1=$(( p1 / 50 * 50 )); p2=$(( p2 / 50 * 50 )); pt=$(( pt / 4 * 4 ))
         local pmax=${PSU_MAX:-1200}
         local pload=$(( p1 * 100 / pmax ))
         local pc="$GR"; (( pload > 60 )) && pc="$YE"; (( pload > 85 )) && pc="$RD"
-        emit "$(lab power)${D}GPU ${pw}/${plim} W${R}   ${pc}PSU ${p1} W (${pload}%)${R}   ${D}+12V ${p2} W · ${ac} V · ${pt}°C${R}${K}"
+        emit "$(lab power)${D}GPU ${pw}/${plim} W${R}   ${pc}PSU ${p1} W (${pload}%)${R}   ${D}12V ${v12}V · ${p2} W · ${ac} V in · ${pt}°C${R}${K}"
       else
         emit "$(lab power)${D}GPU ${pw}/${plim} W  (no PSU sensors)${R}${K}"
       fi
@@ -338,11 +433,22 @@ draw() {
 assemble() { printf '%s\n' "${OUT[@]}" "${BOT[@]}"; }
 
 if (( TTY && ! STATUS )); then printf '\033[?1049h'; fi
-cleanup() { printf '\033[?25h\033[?1049l'; exit 0; }
+cleanup() { stop_telemetry; printf '\033[?25h\033[?1049l'; exit 0; }
 trap cleanup INT TERM
-(( TTY && ! STATUS )) && printf '\033[?25l'
 
 if (( STATUS )); then draw; assemble; exit 0; fi
+
+# A real terminal gets the ncurses dashboard (GPU/CPU/RAM/NET panels); pipes, cron
+# and the `status` subcommand keep the old diff-painted output so logs stay readable.
+# Telemetry starts first and is independent of which dashboard runs -- note this no
+# longer `exec`s, so the logger keeps a parent to die with and can be reaped on exit.
+start_telemetry
+if (( TTY )) && [[ "${WATCH_TUI:-1}" != "0" ]]; then
+  printf '\033[?25l'
+  python3 "$ROOT/scripts/watch_tui.py" "$INTERVAL"
+  cleanup
+fi
+(( TTY )) && printf '\033[?25l'
 
 PREV=""
 LAST_DIMS=""

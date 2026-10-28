@@ -8,7 +8,7 @@
 
 Shows ONE run: the active one, or the most recent when nothing is training.
 Panels: current run + component losses, GPU, CPU (per core), memory/swap/disk,
-network (interfaces that actually hold an IP), log tail.
+network/power (interfaces that hold an IP, plus PSU watts and the +12V rail), log tail.
 
 Keys: q quit | space pause | l cycle log | r reset samplers | ? help
 """
@@ -28,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 LOGDIR = Path(os.environ.get("LOGDIR", "/tmp/opencode"))
 HIST = 60
+PSU_MAX = float(os.environ.get("PSU_MAX", 1200))   # rated watts, for the load gauge
 SPARK = "▁▂▃▄▅▆▇█"
 EIGHTHS = "▏▎▍▌▋▊▉█"
 COMPS = ("null", "span", "cand", "op", "present", "dist")
@@ -171,6 +172,33 @@ def gpu_stats() -> dict | None:
 
     return {"util": num(0, 0.0), "mem": num(1, 0.0), "mem_total": num(2, 1024.0),
             "temp": num(3, 0.0), "power": num(4, 0.0), "power_limit": num(5)}
+
+
+def psu_stats() -> dict | None:
+    """Corsair PSU via hwmon (in*_input mV, curr*_input mA, power*_input uW).
+
+    Deliberately independent of the GPU: when the card falls off the bus this is
+    the only rail telemetry still reporting, so it belongs on screen next to the
+    card's own numbers rather than in a separate view.
+    """
+    for h in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+        try:
+            if Path(h, "name").read_text().strip() != "corsairpsu":
+                continue
+        except OSError:
+            continue
+
+        def rd(f: str, scale: float) -> float | None:
+            try:
+                return float(Path(h, f).read_text().strip()) / scale
+            except (OSError, ValueError):
+                return None
+
+        return {"vin": rd("in0_input", 1e3), "v12": rd("in1_input", 1e3),
+                "a12": rd("curr2_input", 1e3), "watts": rd("power1_input", 1e6),
+                "w12": rd("power2_input", 1e6), "vrm": rd("temp1_input", 1e3),
+                "case": rd("temp2_input", 1e3), "fan": rd("fan1_input", 1.0)}
+    return None
 
 
 def cpu_usage(prev: dict | None) -> tuple[list[float], dict]:
@@ -389,6 +417,7 @@ class Dash:
 
         run = current_run()
         gpu = gpu_stats()
+        psu = psu_stats()
         cores, cpust = cpu_usage(self.cpu_prev)
         self.cpu_prev = cpust["prev"]
         load = cpust["load"]
@@ -524,7 +553,12 @@ class Dash:
                      curses.color_pair(C_DIM) | curses.A_BOLD)
             fmt = lambda n, rx, tx: (f"{n[:10]:<11}{self.ips.get(n, '—')[:16]:<17}"
                                      f"{hb(rx) + '/s':>8}{hb(tx) + '/s':>8}")
-        top = sorted(shown.items(), key=lambda kv: -(kv[1][0] + kv[1][1]))[: low_h - 3]
+        # PSU gets the spare bottom row here rather than its own box: NETWORK lists one
+        # interface on almost every box, so its tail is usually blank -- and the rail is
+        # worth more than a blank line. Reserve the row so a second iface cannot collide.
+        show_psu = bool(psu and psu["watts"] is not None and right_w >= 30)
+        rows_for_if = low_h - 3 - (1 if show_psu else 0)
+        top = sorted(shown.items(), key=lambda kv: -(kv[1][0] + kv[1][1]))[: max(1, rows_for_if)]
         for i, (name, (rx, tx)) in enumerate(top):
             if narrow and only:
                 fmt_row = f"{name[:10]:<11}{hb(rx) + '/s':>7} {hb(tx) + '/s':>7}"
@@ -534,6 +568,20 @@ class Dash:
         if not top:
             self.put(win, y + 2, right_x + 2, "no interface with an IP",
                      curses.color_pair(C_DIM))
+        if show_psu:
+            # load % warns later than the GPU panels (a supply is happiest at 50-60%);
+            # the rail VOLTAGE is the diagnostic -- a sag toward 11.4 V is the ATX floor.
+            pl = 100.0 * psu["watts"] / max(PSU_MAX, 1.0)
+            pattr = C_BAD if pl >= 95 else (C_WARN if pl >= 85 else C_GOOD)
+            txt = f"{psu['watts']:.0f} W · {pl:.0f}%"
+            self.put(win, y + low_h - 2, right_x + 2, f"{'psu':<10}",
+                     curses.color_pair(C_DIM))
+            self.put(win, y + low_h - 2, right_x + 12, txt, curses.color_pair(pattr))
+            if psu["v12"] is not None:
+                v = psu["v12"]
+                vattr = C_BAD if v < 11.6 else (C_WARN if v < 11.8 else C_GOOD)
+                self.put(win, y + low_h - 2, right_x + 12 + len(txt) + 1, f"{v:.2f} V",
+                         curses.color_pair(vattr))
         y += low_h
 
         # ── RUN DETAIL ───────────────────────────────────────────────────
@@ -688,6 +736,7 @@ class Dash:
 def plain_frame() -> str:
     run = current_run()
     gpu = gpu_stats()
+    psu = psu_stats()
     mem = mem_stats()
     _, first = cpu_usage(None)
     time.sleep(0.2)
@@ -709,6 +758,15 @@ def plain_frame() -> str:
                      f"{gpu['temp']:.0f}C  {gpu['power']:.0f}W")
     else:
         lines.append("gpu  nvidia-smi unavailable")
+    if psu and psu["watts"] is not None:
+        bits = [f"{psu['watts']:.0f}/{PSU_MAX:.0f}W"]
+        if psu["v12"] is not None:
+            bits.append(f"12V {psu['v12']:.2f}V")
+        if psu["a12"] is not None:
+            bits.append(f"{psu['a12']:.1f}A")
+        if psu["vrm"] is not None:
+            bits.append(f"vrm {psu['vrm']:.0f}C")
+        lines.append("psu  " + "  ".join(bits))
     cpu_txt = f"  cpu {sum(cores) / len(cores):.0f}%  cores {os.cpu_count()}" if cores else ""
     lines.append(f"mem  {mem['used']:.1f}/{mem['total']:.1f}G  "
                  f"swap {mem['swap_used']:.1f}/{mem['swap_total']:.1f}G{cpu_txt}")
