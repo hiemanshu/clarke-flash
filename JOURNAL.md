@@ -1,3 +1,29 @@
+**20:20 — HARD SLICE: K3 vs K3.1 PRO ON 10 RECORDS WITH 4-30 PARTIES. Parties and dates
+byte-identical 10/10 (including a 30-party and a 12-party contract); document_name 8/10
+case-sensitive but 10/10 case-insensitive, because the two "mismatches" are title-case variants
+of the same title, each verbatim at a different offset. K3 is a safe substitute.**
+SLICE (all from shard 00304 - every one of the 271 complete labels is in that shard, so "later
+shards" was not available; party count is the harder axis): party counts 30, 12, 9, 9, 9, 7, 7, 6,
+5, 4; state lengths 9k-240k chars.
+RESULTS (scripts/compare_labels.py, preds /tmp/opencode/hard10_cc_k3.jsonl):
+  parties  P/R/F1 1.00, set-exact 10/10, raw-value and span equality 10/10, 9.8 vs 9.8 parties/doc
+  date     10/10 exact (raw and case-insensitive)
+  name     8/10 exact case-sensitive, 10/10 case-insensitive, contains 8/10
+  latency  37.3 s mean, max 105.7 s on the 30-party / 220k-char contract (one call each)
+THE TWO NAME DIFFERENCES ARE NOT ERRORS: id 165 gold "AMENDED and restated FORBEARANCE AGREEMENT"
+vs K3 "AMENDED AND RESTATED FORBEARANCE AGREEMENT", and id 323 "Sixth Amendment to Revolving Credit
+Agreement" vs "SIXTH AMENDMENT TO REVOLVING CREDIT AGREEMENT". Both are verbatim substrings of their
+documents (spans differ: 253-302 vs 310-357, and 0-51 vs 133-187). norm() only collapses whitespace,
+so the comparator was stricter than the labels warrant; it now reports both case-sensitive and
+case-insensitive columns, and the journal records the distinction rather than calling it a miss.
+RUNNING TOTAL: 20 of 20 records (easy + hard) reproduce the k3.1-pro labels at the field level, 0
+errors, on CommandCode's plan. Caveat unchanged: one shard, so this says the two Kimi versions agree
+on this corpus, not that either is correct; the labeler's grounding does the correctness guarantee
+(drop anything not verbatim).
+NEXT: finish the remaining preamble labels with K3 on CommandCode. OpenRouter remains blocked
+(HTTP 402 on the key in .env), and a Pro re-run is impossible until one of those clears - neither
+blocks the labelling decision.
+
 **20:05 — K3 (CommandCode) vs K3.1 Pro (the stored labels) ON 10 RECORDS: BYTE-IDENTICAL.
 document_name, agreement_date and parties match on raw value AND span for 10/10; party sets
 exact 10/10; mean 15.1 s/call. K3 is a safe substitute at this sample.**

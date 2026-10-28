@@ -25,6 +25,13 @@ from pathlib import Path
 from clarke.textmetrics import norm
 
 
+def ci(s: str) -> str:
+    """Case-insensitive comparison form. `norm` only collapses whitespace, but a
+    title quoted as 'AMENDED AND RESTATED ...' and 'AMENDED and restated ...' is
+    the same title at two valid offsets in the document, not a labelling error."""
+    return norm(s).casefold()
+
+
 def load(path: str) -> dict[str, dict]:
     out = {}
     for line in Path(path).read_text().splitlines():
@@ -59,10 +66,13 @@ def score_one(gold: dict, pred: dict) -> dict:
     pname = norm(vals(pred, "document_name")[0]) if vals(pred, "document_name") else ""
     gdate = norm(vals(gold, "agreement_date")[0]) if vals(gold, "agreement_date") else ""
     pdate = norm(vals(pred, "agreement_date")[0]) if vals(pred, "agreement_date") else ""
+    gc, pc = ci(gname), ci(pname)
     return {
         "name_exact": bool(gname and pname and gname == pname),
+        "name_exact_ci": bool(gc and pc and gc == pc),
         "name_contains": bool(gname and pname and (gname in pname or pname in gname)),
         "date_exact": bool(gdate and pdate and gdate == pdate),
+        "date_exact_ci": bool(gdate and pdate and ci(gdate) == ci(pdate)),
         "party_p": prec, "party_r": rec, "party_f1": f1,
         "party_exact": gset == pset,
         "gold_parties": len(gset), "pred_parties": len(pset),
@@ -92,8 +102,10 @@ def main(argv: list[str]) -> int:
             "file": path, "n": n,
             "errors": sum(r["error"] for r in rows),
             "name_exact": sum(r["name_exact"] for r in rows) / n,
+            "name_exact_ci": sum(r["name_exact_ci"] for r in rows) / n,
             "name_contains": sum(r["name_contains"] for r in rows) / n,
             "date_exact": sum(r["date_exact"] for r in rows) / n,
+            "date_exact_ci": sum(r["date_exact_ci"] for r in rows) / n,
             "party_p": sum(r["party_p"] for r in rows) / n,
             "party_r": sum(r["party_r"] for r in rows) / n,
             "party_f1": sum(r["party_f1"] for r in rows) / n,
@@ -108,16 +120,18 @@ def main(argv: list[str]) -> int:
             print(f"\n{path}")
             for i in ids:
                 r = score_one(gold_rows[i], preds[i])
-                print(f"  {i[:44]:44s} name={'Y' if r['name_exact'] else 'n'} "
-                      f"date={'Y' if r['date_exact'] else 'n'} "
+                print(f"  {i[:44]:44s} name={'Y' if r['name_exact'] else ('~' if r['name_exact_ci'] else 'n')} "
+                      f"date={'Y' if r['date_exact'] else ('~' if r['date_exact_ci'] else 'n')} "
                       f"partyF1={r['party_f1']:.2f} {r['pred_parties']}/{r['gold_parties']} "
                       f"{r['seconds']}s")
 
-    print(f"\n{'file':44s} {'n':>3s} {'err':>3s} {'name':>6s} {'ncont':>6s} {'date':>6s} "
-          f"{'P':>6s} {'R':>6s} {'F1':>6s} {'set':>6s} {'part/doc':>8s} {'sec':>5s}")
+    print(f"\n{'file':44s} {'n':>3s} {'err':>3s} {'name':>6s} {'name~':>6s} {'ncont':>6s} "
+          f"{'date':>6s} {'date~':>6s} {'P':>6s} {'R':>6s} {'F1':>6s} {'set':>6s} "
+          f"{'part/doc':>8s} {'sec':>5s}")
     for a in reports:
         print(f"{Path(a['file']).name:44s} {a['n']:3d} {a['errors']:3d} "
-              f"{a['name_exact']:6.2f} {a['name_contains']:6.2f} {a['date_exact']:6.2f} "
+              f"{a['name_exact']:6.2f} {a['name_exact_ci']:6.2f} {a['name_contains']:6.2f} "
+              f"{a['date_exact']:6.2f} {a['date_exact_ci']:6.2f} "
               f"{a['party_p']:6.2f} {a['party_r']:6.2f} {a['party_f1']:6.2f} "
               f"{a['party_exact']:6.2f} {a['pred_parties']:4.1f}/{a['gold_parties']:<3.1f} "
               f"{a['seconds']:5.1f}")
