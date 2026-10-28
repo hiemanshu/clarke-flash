@@ -1,3 +1,22 @@
+**00:25 — PRE-REGISTRATION: RUN Q, PER-FIELD FAILURE TAXONOMY ON THE PRIVATE COMPANY SET.**
+WHY: N beats L41 on both surfaces but answers 13 fewer gold fields on the company set (82 vs 95), so
+the open question is WHERE recall is lost. The aggregate cannot say.
+FIX FIRST: scripts/doc_diagnose.py decoded with defaults and ignored the checkpoint's decode policy, so
+it would have understated `parties` (candidate decode + ranker are part of production). It now loads
+decode_config.json, rebuilds the embedded length priors exactly as clarke-eval does (Laplace +1, then
+normalise), and passes slot mask / tie-break / candidate / ranker settings, overriding ONLY
+null_threshold to 1.01 so a span is always produced. Output gains a per-field tally.
+METHOD: for every gold-present field on the 39 company contracts, classify
+  ok_reported     answered and correct              -> working
+  ok_rejected     correct span but p_null > 0.5     -> calibration loss
+  wrong_reported  answered but wrong span           -> selection/localisation loss
+  wrong_rejected  gated and wrong                   -> true miss (data)
+READ (pre-registered): whatever dominates per field names the fix - ok_rejected => gate/threshold,
+wrong_reported => selection/crop, wrong_rejected => data/coverage. No fix is proposed from the aggregate
+alone. `parties` is the field to watch (39 of 112 gold-present fields).
+PRIVACY: full diagnostics (they contain gold/pred quote text) go to reports/company-eval/ (gitignored);
+only a counts-only reports/company-eval-perfield-summary.json is committed.
+
 **00:20 — N ALSO WINS ON THE PRIVATE COMPANY SET: exact@all .1750 -> .2329 (+5.8pp), exact +11.2pp,
 tokF1 +5.4, null_ok +8.5, BUT it answers 13 fewer gold fields (82 vs 95) so contains drops 5.9pp.**
   model  exact@all  exact   tokF1   contains null_ok answered

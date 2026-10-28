@@ -54,7 +54,20 @@ def main(argv: list[str] | None = None) -> int:
     model = ClarkeModel(backbone, head).eval()
 
     records = [json.loads(l) for l in open(args.data)][: args.limit]
+    dec: dict = {}
+    cfg_path = Path(args.head) / "decode_config.json"
+    if cfg_path.exists():
+        dec = json.loads(cfg_path.read_text())
+        print(f"[decode] using baked config from {cfg_path}")
+    priors = None
+    if dec.get("span_priors"):
+        priors = {}
+        for name, counts in dec["span_priors"].items():
+            t = torch.tensor([float(c) + 1.0 for c in counts])
+            priors[name] = t / t.sum()
+        print(f"[decode] embedded length priors for {len(priors)} fields")
     tally = Counter()
+    tally_field: dict[str, Counter] = {}
     pnulls: list[float] = []
     rows: list[dict] = []
 
@@ -70,7 +83,20 @@ def main(argv: list[str] | None = None) -> int:
         chunk = encoded[start:start + args.batch_size]
         batch = collate_records(chunk, processor.tokenizer.pad_token_id, "cuda")
         with torch.inference_mode():
-            answers = model.answer(batch, null_threshold=1.01)   # never gate on p_null
+            answers = model.answer(
+                batch,
+                null_threshold=1.01,                                # never gate on p_null
+                slot_threshold=dec.get("slot_threshold", 0.5),
+                slot_mask=dec.get("slot_mask", False),
+                span_tiebreak_eps=dec.get("span_tiebreak_eps", 0.0),
+                length_priors=priors,
+                length_prior_alpha=dec.get("span_prior_alpha", 0.0),
+                candidate_decode=dec.get("candidate_decode", False),
+                candidate_fields=set(dec.get("candidate_fields") or []),
+                candidate_extra=dec.get("candidate_extra", 0),
+                candidate_ranker=dec.get("candidate_ranker"),
+                ranker_alpha=dec.get("ranker_alpha", 1.0),
+            )
         for enc, rec, ans in zip(chunk, records[start:start + len(chunk)], answers):
             for field, spec in rec["fields"].items():
                 gold = rec["answers"].get(field) or {}
@@ -89,6 +115,9 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     tally["wrong_rejected"] += 1
                 pnulls.append(pn)
+                cat = ("ok_reported" if ok and not nulled else "ok_rejected" if ok
+                       else "wrong_reported" if not nulled else "wrong_rejected")
+                tally_field.setdefault(field, Counter())[cat] += 1
                 rows.append({"id": rec["id"], "field": field, "p_null": round(pn, 3),
                              "correct": ok, "nulled": nulled,
                              "gold": [str(v)[:120] for v in as_list(gold.get("value"))][:4],
@@ -105,7 +134,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"p_null on gold-present fields: p10 {q(.1):.3f}  p50 {q(.5):.3f}  "
               f"p90 {q(.9):.3f}  |  share > 0.9: {sum(1 for x in s if x > 0.9) / len(s):.1%}")
     if args.out:
-        Path(args.out).write_text(json.dumps({"tally": tally, "rows": rows}, indent=1))
+        Path(args.out).write_text(json.dumps(
+            {"tally": tally, "by_field": {k: dict(v) for k, v in tally_field.items()},
+             "rows": rows}, indent=1))
         print(f"-> {args.out}")
     return 0
 
