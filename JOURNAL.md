@@ -1,3 +1,26 @@
+**23:55 — PREAMBLE SNIPPET SET BUILT FOR BOTH CORPORA: 1,162 unique 4k windows (CUAD + LEDGAR),
+12-field schema, every span re-verified. Combined adapter set is 24,548 records at 28% preamble.**
+WHY: measured the existing 17,576 snippets (all LEDGAR clause crops, no CUAD at all): the only
+targets ever present are governing_law 13,990, anti_assignment 5,976, cap_on_liability 527,
+termination_for_convenience 526, effective_date 186 - and **parties 0, document_name 0,
+agreement_date 0**. The adapter read those names in the schema prompt but was never asked to locate
+them, and parties is the head's weakest field.
+BUILDER (scripts/build_preamble_snippets.py): token-exact crops using the tokenizer offset map, with
+the state budget computed from encode_record on a 1-char state (schema+prompt = 692 tokens -> 3,403
+state tokens at 4,096), so a crop can never be truncated (truncation would turn out-of-range positives
+into NULL targets). Every answer span is re-checked against the cropped text; a mismatched window is
+dropped, not written.
+DEDUPE MATTERS: name/date/parties sit together in the preamble, so 2,825 field-centred attempts
+collapsed to **1,162 unique windows**; keeping the duplicates would have multiplied those documents'
+weight. Repeat factor 6 gives 17,576 existing + 6,972 = 24,548 records, 28% preamble - close to the
+25% target, and ~224 preamble updates in an 800-step adapter run.
+OUTPUTS: data/preamble_snippets_4k.jsonl (1,162 unique) and
+data/snippets_4k_with_preamble.jsonl (24,548 combined).
+NEXT (awaiting go): adapter r=32 / lr 2e-5 / 800 steps on the combined set -> merge ->
+fresh head on data/doc_train_470.jsonl + data/ledgar_labelled_cuad.jsonl, 4 epochs = 3,908 steps at
+65k -> doc40 eval vs L41 .4252. CAVEAT: that run changes the backbone and the head data together, so
+a win is a pipeline win, not a clean attribution.
+
 **23:25 — PRE-REGISTRATION: M-twelve-mix, the labelled corpus on the 12-field bed.
 CUAD-12 + LEDGAR-12, 1 epoch, fresh head, 65k; evaluated on BOTH the 12-field and the 41-field docs.**
 WHY: L42 (41-field, continual from L41 at lr 1e-4) was negative but confounded - it is not a corpus
