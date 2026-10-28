@@ -291,27 +291,77 @@ uv run python scripts/finalize_checkpoint.py --head runs/H4-assign/checkpoint-18
   seeded generator plus the commands above. `reports/` **is** tracked, so every
   number in `JOURNAL.md` traces to the JSON that produced it.
 
-## Roadmap
+## Current focus and roadmap
 
-- **12-field subset** as the default experiment loop (~12 min per run), then add
-  fields back as supervision for them lands. Only 9 of the top 25 CUAD fields have
-  LEDGAR supervision today, which is why mined/LLM-labelled rare-field data is the
-  open thread.
-- **Mining rare fields** from the cleaned EDGAR corpus, with free verification
-  layers (plausibility: a mined `expiration_date` must contain a date, a
-  `revenue_profit_sharing` must contain a percentage) before any paid check.
-- **Party ranker as a learned component** rather than a logistic regression, and
-  the same treatment for the other `list<text>` fields — under-emission
-  (1.03 predicted vs 1.84 gold items per list field) is the single biggest
-  remaining structural failure, and it is a set-completeness problem, not a
-  retrieval one.
-- **LoRA**, once a 64–96 GB card or a working per-block checkpoint exists.
-- **Publish**: model card, weights, `clarke-serve` (`/v1/extraction`, mirroring
-  `clef-server`'s shape), decode policy baked so the release behaves like the
-  paper number.
-- **v2**: image states (the backbone ships a vision tower; render synthetic
-  receipts with the same construction-time ground truth, then run ExtractBenchPro —
-  real chart/diagram documents with quote+bbox evidence).
+### Where the loss actually is
+
+We sit at the frontier on `exact@all` (.41 vs .40–.42) and well behind on `contains`
+(.68 vs .90). It is not tokenization: **94.4% of the 1,022 gold spans in doc40 are
+expressible with Qwen's vocabulary** (94.1% with a contract-trained BPE — 5.6% start or
+end mid-token and are unreachable with *any* BPE), and our per-answer `exact` (~.45) is
+about 48% of that ceiling. What remains is mostly **one** failure, measured three ways:
+
+1. **Under-emission, and it is universal — not a `parties` quirk.** Every `list<text>`
+   field emits **1.03 items where gold has 1.84: 44% of gold items are never produced.**
+   Worst: `minimum_commitment` 2.54→0.69, `covenant_not_to_sue` 2.57→0.71,
+   `ip_ownership_assignment` 3.14→1.43, `insurance` 2.79→1.21.
+2. **The misses are wrong answers, not refusals.** At the current operating point ~305
+   of 335 misses are *wrong-reported* and only ~30 are false nulls. Lowering the slot
+   threshold or adding per-field null thresholds buys recall but not exactness — the
+   extra items are wrong (+0.24 pp `exact@all` at slot .35, i.e. noise).
+3. **It is selection, not cropping.** When the model answers, crops are
+   boundary-exact ~86–88% of the time, and for `parties` 82% of gold starts are already
+   in some slot's top-5. The model can find the text; it cannot decide *which* and
+   *how many*.
+
+### Levers we are on
+
+| lever | targets | cost | what a result would tell us |
+|---|---|---|---|
+| **Constrained candidate decode beyond `name`-like fields** | set-completeness for clause fields | one decode sweep per field, no training | whether under-emission is recoverable without new supervision — this is what took `parties` from 0/40 to 20/40 |
+| **Learned ranker as a real component** | *which* candidate, once found | ~1 min to fit, CPU only | the 14-feature logistic regression already beats the span pointer on `parties` (precision .858→.890); does a small MLP? |
+| **Order-free slot assignment + an extra-candidate dial** | *how many* items | one training run each | assignment gave the best single-run result so far; +1 candidate crosses 90% `contains` on `parties` but costs strict doc-exactness |
+| **Supervision for rare fields** (12-field loop, LEDGAR spans, LLM-labelled preambles, mined EDGAR) | coverage of the fields that only have 3–15 gold examples | CPU/network, subscription not metered spend | the 12-field schema is neutral on score but 12 min per run — cheap enough to make data questions answerable. Labels must carry the **full schema with explicit nulls**, or we re-create the sparse-mix failure |
+| **Schema / field / prompt permutation augmentation** | the head keying on CUAD's exact instruction wording | one training run | untested, and Cloudflare's recipe uses it — cheap to falsify |
+| **Per-field null bias and slot completeness in the loss** | the ~30 false nulls and set completeness | one training run | untested as loss terms (as decode knobs they were noise) |
+
+### LoRA: the one untested mechanism, and why it is stuck
+
+LoRA is the last untested lever, and the one Cloudflare's published recipe actually uses.
+On a single 32 GB card it fits **~4k tokens and OOMs at 8k+** — memory is ~30 GB at 16k
+*and* at 32k, which is what proves gradient checkpointing is a no-op in the 18
+linear-attention blocks (the fix to reach the decoder blocks changed nothing). Since our
+regime is 65k, that blocks the experiment rather than just slowing it.
+
+We tried the obvious workaround — adapt on 4k snippets, merge, then re-fit the head on
+full documents — and it **degraded the backbone catastrophically**: `null_ok` .0000,
+exact .0801, because the snippets taught the head that ~89% of fields are absent. The
+open question is therefore sharper than "does LoRA help": **does adapting the backbone at
+all beat adapting the head, in the regime we actually care about?** Three ways to find
+out, none free: (a) wait for a 64–96 GB card, (b) implement manual per-block
+`torch.utils.checkpoint` around the linear-attention blocks (invasive, uncertain), (c) run
+LoRA at 4k as a separate short-context experiment, knowing it does not transfer to 65k for
+free.
+
+### Explicitly not doing
+
+Head capacity (112M→371M measured flat), backbone scale below 27B (0.23B→9B flat; 2B
+wins), decode tuning past the knee of the coverage/`null_ok` curve, more paid API
+baselines (budget went to verification, not annotation), and choice-task datasets
+like MAUD — those are clef's `choice` API, not an extraction surface.
+
+### Horizon
+
+- **Publish**: model card, weights, decode policy baked so the release behaves like these
+  numbers, and `clarke-serve` (`/v1/extraction`, mirroring `clef-server`'s shape).
+- **v2 — image states**: the backbone ships a vision tower; render synthetic receipts with
+  the same construction-time ground truth, then run ExtractBenchPro (real chart/diagram
+  documents with quote+bbox evidence).
+- **From-scratch small model**: a 1B trained on ~20B tokens (16B contracts + 4B wiki)
+  instead of adapting a general backbone. Needs GPU access we do not have; the 2B result
+  says it is not worth attempting on one 32 GB card.
+- **Bigger backbones** (27B+): they cost nothing extra in head memory, so the decision is
+  purely backbone VRAM and throughput — deferred with the same hardware constraint as LoRA.
 
 ## Project docs
 
