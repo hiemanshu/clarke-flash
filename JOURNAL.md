@@ -1,3 +1,26 @@
+**09:56 — BACKBONE ADAPTATION FINALLY HELPS, BUT ONLY IF IT IS GENTLE. K2 (r=32, lr 2e-5, 800 steps on
+4k LEDGAR snippets) BEATS THE BASELINE ON EVERY METRIC AND IS THE BEST 12-FIELD RESULT.**
+Setup: LoRA trains on data/snippets_4k.jsonl (17,576 cropped windows around LEDGAR-matched spans, full
+12-field schema, ~3k tokens each - the only length where LoRA fits on 32GB). The adapter is merged into a
+standalone backbone, and a FRESH head is trained on the real task (full 65k CUAD docs). Only the adapter
+is kept: the head trained on snippets is useless because snippets are ~11% present fields while doc40 is
+~65%, so it learns "null" and answers nothing (measured: 0/310 answered).
+RESULTS (12-field eval, doc40):
+  baseline I-twelve                    exact .5941  tokF1 .7261  contains .7941  null_ok .8118  293/310  .5615
+  41-field H4 on the same eval         exact .6067  .7213  .7940  .8765  281/310  .5499
+  K  harsh LoRA r64 lr2e-4 2000 steps  exact .0801  .1717  .1192  .0000   310/310  .0801   <- destroyed
+  K2 gentle LoRA r32 lr2e-5 800 steps  exact .6103  .7311  .7994  .8824   291/310  .5729   <- best
+WHY K FAILED AND K2 DIDN'T - the cheap proxy is head-training loss on full docs at step 500: original
+3.44, harsh 9.01, gentle 2.91. The harsh adapter rewrote the features (it also answered EVERY field,
+null_ok 0.000); the gentle one left them intact and slightly better. LoRA magnitude is controlled by
+lr x steps (rank controls capacity, alpha=r makes the scale 1.0), so "gentle" means ~10x smaller lr and
+2.5x fewer steps at half the rank.
+TWO BUGS FOUND ON THE WAY: (a) the checkpoint pruner called unlink() on every entry, so any LoRA run
+died at its 4th checkpoint (lora/ is a directory) - now shutil.rmtree; (b) the snippet head collapse above.
+WHAT THIS OPENS: adaptation is a real lever after all, but it must be tuned (the same mechanism ranges
+from catastrophic to +1.1pp exact@all), and the gain is small so far. Next: sweep the adapter strength
+(r/lr/steps) and apply the winning adapter to the 41-field setup.
+
 **09:15 — LoRA IS BLOCKED AT OUR CONTEXT LENGTH: it fits ~4k tokens on 32GB, OOMs at 8k and above.
 The one untested mechanism turns out to be untestable in the 65k regime on this GPU.**
 Measured with Qwen3.5-2B, r=64, batch 1, on the 12-field CUAD data:
