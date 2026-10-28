@@ -74,7 +74,8 @@ class ClarkeModel(torch.nn.Module):
                candidate_fields: set[str] | None = None,
                candidate_extra: int = 0,
                candidate_ranker: dict | None = None,
-               ranker_alpha: float = 1.0) -> list[dict[str, Any]]:
+               ranker_alpha: float = 1.0,
+               field_null_thresholds: dict[str, float] | None = None) -> list[dict[str, Any]]:
         """One forward pass -> list (aligned with batch["records"]) of {field: answer}.
 
         Keyed by POSITION, not record_id: eval files can legitimately contain several
@@ -88,7 +89,8 @@ class ClarkeModel(torch.nn.Module):
         for record, record_logits in zip(batch["records"], logits):
             out.append({
                 encoded.name: decode_answer(encoded.spec, record, field_logits,
-                                            null_threshold=null_threshold,
+                                            null_threshold=((field_null_thresholds or {}).get(
+                                                encoded.name, null_threshold)),
                                             slot_threshold=slot_threshold, dedupe=dedupe,
                                             pointer_temp=pointer_temp,
                                             span_max_tokens=span_max_tokens,

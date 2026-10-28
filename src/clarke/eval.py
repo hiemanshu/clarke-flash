@@ -48,7 +48,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
              candidate_decode: bool = False, candidate_region: float = 1.0,
              candidate_fields: set[str] | None = None, candidate_extra: int = 0,
              candidate_ranker: dict | None = None,
-             ranker_alpha: float = 0.0) -> dict[str, Any]:
+             ranker_alpha: float = 0.0,
+             field_null_thresholds: dict[str, float] | None = None) -> dict[str, Any]:
     stats: dict[tuple[str, str], dict[str, float]] = {}
 
     def stat(dom: str, kind: str) -> dict[str, float]:
@@ -88,7 +89,8 @@ def evaluate(records: list[dict[str, Any]], model: ClarkeModel, tokenizer: Any,
                                    candidate_fields=candidate_fields,
                                    candidate_extra=candidate_extra,
                                    candidate_ranker=candidate_ranker,
-                                   ranker_alpha=ranker_alpha)
+                                   ranker_alpha=ranker_alpha,
+                                   field_null_thresholds=field_null_thresholds)
         torch.cuda.empty_cache()  # varying-length long docs + per-field NxN pointer
         # matrices fragment the allocator fast; releasing per batch costs ~nothing
         # next to a 19GB model and prevents the 30GB OOM seen at 02:46
@@ -335,6 +337,8 @@ def main(argv: list[str] | None = None) -> None:
                              "present head asks for)")
     parser.add_argument("--ranker-alpha", dest="ranker_alpha", type=float, default=0.0,
                         help="strength of the baked party ranker when no config is present")
+    parser.add_argument("--field-null-thresholds", dest="field_null_thresholds", default=None,
+                        help="JSON {field: threshold} overriding --null-threshold per field")
     parser.add_argument("--no-decode-config", dest="decode_config", action="store_false",
                         help="ignore decode_config.json inside the checkpoint (reproduce raw "
                              "defaults instead of the finalized decode settings)")
@@ -435,6 +439,12 @@ def main(argv: list[str] | None = None) -> None:
                 length_priors[name] = t / t.sum()
             print(f"[eval] embedded length priors for {len(length_priors)} fields", flush=True)
 
+    field_null = None
+    if args.field_null_thresholds:
+        field_null = {k: float(v) for k, v in
+                      json.loads(Path(args.field_null_thresholds).read_text()).items()}
+        print(f"[eval] per-field null thresholds for {len(field_null)} fields", flush=True)
+
     ranker = baked.get("candidate_ranker") or None
     ranker_alpha = float(getattr(args, "ranker_alpha", 0.0)) if ranker else 0.0
 
@@ -490,6 +500,7 @@ def main(argv: list[str] | None = None) -> None:
                            candidate_extra=getattr(args, "candidate_extra", 0),
                            candidate_ranker=ranker,
                            ranker_alpha=ranker_alpha,
+                           field_null_thresholds=field_null,
                            agg_atoms=args.agg_atoms)
         report = {"checkpoint": args.head, "data": args.data, "records": len(records),
                   "metrics": summary["overall"], "by_domain": summary["by_domain"]}

@@ -1,3 +1,34 @@
+**08:55 — UNDER-EMISSION IS UNIVERSAL, NOT A parties QUIRK. Every list<text> field emits 1.03 items
+where gold has 1.84: 44% of gold items are never produced.**
+Measured from the per-field diagnostic (gold-present fields, doc40):
+  field                          gold items/doc  predicted  short by
+  minimum_commitment                  2.54          0.69      1.85
+  covenant_not_to_sue                 2.57          0.71      1.86
+  ip_ownership_assignment             3.14          1.43      1.71
+  insurance                           2.79          1.21      1.57
+  revenue_profit_sharing              2.67          1.20      1.47
+  audit_rights                        2.33          1.00      1.33
+  license_grant                       2.39          1.17      1.22
+  parties (before candidate decode)   3.90          2.20      1.70
+  ALL list fields                     1.84          1.03      0.81
+This is the same collapse that candidate decode fixed for parties (0/40 -> 20/40), but the other
+fields have no constrained candidate set to fall back on.
+DECODE KNOBS CANNOT FIX IT. Lowering the slot threshold (more items per field) buys recall and
+contains but not exactness, because the extra items are wrong:
+  slot .50 (baked)  exact .4943  tokF1 .6184  contains .6797  null_ok .9536  412/498  exact@all .4089
+  slot .35          exact .4924  .6281  .6894  .9510  416/498  .4113
+  slot .25          exact .4878  .6456  .7076  .9501  417/498  .4085
+  slot .15          exact .4562  .6635  .7280  .9501  417/498  .3820
++0.24pp exact@all at .35 is noise. Likewise per-field null thresholds (targeting the ~30 false nulls)
+gave only +4 answers and +0.26pp: the declines are not the loss, the WRONG answers are (305 of 335
+misses are wrong-reported, ~30 are false nulls).
+CONSEQUENCE FOR THE NEXT PHASE: the remaining gains need better SPANS/CANDIDATES per field, not a
+better gate. The owner proposes a schema-subset experiment (20-25 CUAD labels, EDGAR/LEDGAR sparse
+labels, LoRA, eval on well-labelled docs). Frequency check on the 470 training contracts: top 20
+fields = 81.5% of all gold instances (8 LEDGAR-supervised), top 25 = 89.0% (9), top 30 = 94.7% (10).
+So a 25-field schema keeps ~90% of supervision with 60% of the fields - but only 9 of those 25 fields
+have LEDGAR data; the other 16 would still see only the 470 CUAD contracts unless we mine more.
+
 **08:40 — PARTY RANKER BUILT AND BAKED INTO THE CHECKPOINT. Parties: contains .911 (best of any model),
 precision .890, entity doc-exact 19-20/40 (from 17). Decode policy now lives in the checkpoint folder.**
 RANKER (scripts/train_party_ranker.py -> reports/party_ranker.json): logistic regression over 14
