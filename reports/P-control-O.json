@@ -1,0 +1,53 @@
+{
+  "checkpoint": "runs/P-control-O/checkpoint-3908",
+  "data": "data/doc_eval_40.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 1640,
+      "answered": 421,
+      "null_n": 1142,
+      "exact": 0.5341,
+      "located": 0.5341,
+      "null_correct": 0.9632,
+      "tok_f1": 0.6426,
+      "contains": 0.7009,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0566
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 1640,
+        "answered": 421,
+        "null_n": 1142,
+        "exact": 0.5341,
+        "located": 0.5341,
+        "null_correct": 0.9632,
+        "tok_f1": 0.6426,
+        "contains": 0.7009,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0566
+      }
+    }
+  },
+  "timing": {
+    "per_document_s": {
+      "n": 40,
+      "mean": 1.004,
+      "p50": 0.29,
+      "p90": 2.633,
+      "p99": 8.908,
+      "min": 0.064,
+      "max": 11.337
+    },
+    "encode_s": 0.62,
+    "infer_s": 39.527,
+    "total_s": 40.147,
+    "records_per_s": 0.996,
+    "fields_per_s": 40.8,
+    "batched": false,
+    "batch_size_max": 1
+  }
+}

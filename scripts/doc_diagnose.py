@@ -30,10 +30,22 @@ from clarke.model import ClarkeModel, load_backbone, load_head
 from clarke.textmetrics import as_list, norm
 
 
-def matches(gold: object, got: object) -> bool:
+def overlap(gold: object, got: object) -> float:
+    """Jaccard over normalised items, the same shape as clarke-eval's list `exact`.
+
+    Strict set equality was the wrong test here: it labelled a party list wrong when
+    one name was punctuated differently, so `ok_reported` came out 0 while the eval
+    scored the same predictions .68. 0.5 means "at least half the union matched".
+    """
     g = {norm(v) for v in as_list(gold)}
     p = {norm(v) for v in as_list(got)}
-    return bool(g) and g == p
+    if not g:
+        return 0.0
+    return len(g & p) / len(g | p)
+
+
+def matches(gold: object, got: object, threshold: float = 0.5) -> bool:
+    return overlap(gold, got) >= threshold
 
 
 def main(argv: list[str] | None = None) -> int:

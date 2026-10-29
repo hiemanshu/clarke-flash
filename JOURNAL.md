@@ -1,3 +1,36 @@
+**06:50 — O, P AND Q ALL LANDED. THREE FINDINGS: (1) THE LABELLED LEDGAR CORPUS HURT THE HEAD AT
+MATCHED STEPS; (2) MORE CUAD PASSES AND A LONGER GENTLE ADAPTER ARE THE REAL LEVERS; (3) THE
+doc40 BEST IS THE WORST ON THE COMPANY DISTRIBUTION.**
+doc40 RESULTS (all zero-flag, baked decode, vs L41 .4252):
+  O-1  2,000-step adapter, 12-field bed       exact@all .5662  (gate .5620 PASS; but < control .5670
+                                                                 and < K2 .5729 - longer adapter did not
+                                                                 help the 12-field bed)
+  O-2  2,000 adapter + CUAD&LEDGAR head       .4305  (+0.53pp, below the .4352 adopt bar)
+  P-N  N's backbone, CUAD-ONLY head, 3,908    .4431  (7.1 pp above L41? no: +1.79pp)
+  P-O  2,000 adapter, CUAD-ONLY head, 3,908   **.4515  <- best doc40, +2.63pp over L41**
+ATTRIBUTION (the controls did their job): the LEDGAR head data HURT at matched steps - N .4373 vs its
+control .4431 (-0.58pp), O-2 .4305 vs its control .4515 (-2.10pp). The gains came from elsewhere:
+  800 adapter, CUAD 4 passes (L41)        .4252
+  800 adapter, CUAD 8.3 passes            .4431   -> +1.79pp from more CUAD exposure alone
+  2,000 adapter, CUAD 8.3 passes          .4515   -> +0.84pp more from the longer gentle adapter
+So "add the 507 labelled docs to the head" does not pay at this ratio; "train CUAD longer" does.
+COMPANY EVAL (private; reports/company-eval-summary.json):
+  N    .2329 exact@all (best balanced)     parties exact .6839, answered 29/39
+  L41  .1750                                parties exact .4915, answered 39/39
+  PO   .1176 (worst)                        parties exact .1966, answered 39/39
+PO is the doc40 winner and the company-eval loser: its CUAD-only head over-answers commercial
+contracts (Q: 75 wrong_reported vs 24 true misses) while N declines more (52 misses) and is precise
+when it commits. In-distribution and out-of-distribution therefore disagree, which is exactly what the
+private set was for.
+Q (per-field taxonomy, fixed): doc_diagnose's strict set equality was replaced with item Jaccard >= 0.5
+(the same shape as clarke-eval's list `exact`); with strict equality every field showed 0 ok, which was
+a definition artefact, not model failure. Parties totals: N 6 ok / 5 gate / 13 selection / 15 miss;
+L41 7 / 2 / 27 / 3; PO 6 / 0 / 31 / 2.
+OPEN DECISION FOR THE OWNER: which config is the README product row - doc40-best (PO .4515, poor OOD) or
+balanced (N .4373, best OOD)? The README will state the choice and the trade once made. The missing
+control for full rigour is the OLD adapter (bb-snip-lora-mild) at 3,908 CUAD-only steps, which would
+separate "adapter" from "extra CUAD passes" for the +1.79pp.
+
 **00:35 — PARTIES-ONLY ON THE PRIVATE COMPANY SET: N IS +19.2pp MORE EXACT PER ANSWER BUT DECLINES 10 OF
 39 CONTRACTS. The overall 13-answer gap on this surface is this one field.**
   model  exact   tokF1   contains answered  exact@all

@@ -1,0 +1,135 @@
+{
+  "surface": "company-heldout-commercial-contracts",
+  "private_source": true,
+  "method": "baked checkpoint decode, null gate disabled to force spans; correct = item Jaccard >= 0.5",
+  "models": {
+    "N": {
+      "by_field": {
+        "effective_date": {
+          "wrong_rejected": 19
+        },
+        "parties": {
+          "wrong_rejected": 15,
+          "wrong_reported": 13,
+          "ok_reported": 6,
+          "ok_rejected": 5
+        },
+        "governing_law": {
+          "wrong_reported": 15,
+          "wrong_rejected": 4
+        },
+        "anti_assignment": {
+          "wrong_reported": 9,
+          "wrong_rejected": 4,
+          "ok_rejected": 1
+        },
+        "cap_on_liability": {
+          "wrong_reported": 4,
+          "ok_reported": 1,
+          "wrong_rejected": 3
+        },
+        "expiration_date": {
+          "wrong_rejected": 6,
+          "wrong_reported": 1
+        },
+        "termination_for_convenience": {
+          "ok_rejected": 3,
+          "wrong_reported": 2
+        },
+        "non_compete": {
+          "wrong_rejected": 1
+        }
+      },
+      "tally": {
+        "wrong_rejected": 52,
+        "wrong_reported": 44,
+        "ok_reported": 7,
+        "ok_rejected": 9
+      }
+    },
+    "L41": {
+      "by_field": {
+        "effective_date": {
+          "wrong_rejected": 19
+        },
+        "parties": {
+          "ok_reported": 7,
+          "wrong_reported": 27,
+          "wrong_rejected": 3,
+          "ok_rejected": 2
+        },
+        "governing_law": {
+          "wrong_rejected": 19
+        },
+        "anti_assignment": {
+          "wrong_rejected": 10,
+          "wrong_reported": 4
+        },
+        "cap_on_liability": {
+          "wrong_reported": 8
+        },
+        "expiration_date": {
+          "wrong_rejected": 7
+        },
+        "termination_for_convenience": {
+          "wrong_reported": 3,
+          "wrong_rejected": 2
+        },
+        "non_compete": {
+          "wrong_rejected": 1
+        }
+      },
+      "tally": {
+        "wrong_rejected": 61,
+        "ok_reported": 7,
+        "wrong_reported": 42,
+        "ok_rejected": 2
+      }
+    },
+    "PO": {
+      "by_field": {
+        "effective_date": {
+          "wrong_rejected": 15,
+          "wrong_reported": 3,
+          "ok_rejected": 1
+        },
+        "parties": {
+          "wrong_reported": 31,
+          "wrong_rejected": 2,
+          "ok_reported": 6
+        },
+        "governing_law": {
+          "wrong_reported": 18,
+          "ok_reported": 1
+        },
+        "anti_assignment": {
+          "wrong_reported": 14
+        },
+        "cap_on_liability": {
+          "wrong_reported": 4,
+          "ok_reported": 1,
+          "wrong_rejected": 3
+        },
+        "expiration_date": {
+          "wrong_rejected": 3,
+          "ok_rejected": 1,
+          "wrong_reported": 3
+        },
+        "termination_for_convenience": {
+          "ok_reported": 1,
+          "wrong_reported": 2,
+          "ok_rejected": 2
+        },
+        "non_compete": {
+          "wrong_rejected": 1
+        }
+      },
+      "tally": {
+        "wrong_rejected": 24,
+        "wrong_reported": 75,
+        "ok_reported": 9,
+        "ok_rejected": 4
+      }
+    }
+  }
+}

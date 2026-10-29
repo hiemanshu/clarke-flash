@@ -1,0 +1,53 @@
+{
+  "checkpoint": "runs/O-len2000-head12/checkpoint-940",
+  "data": "data/doc_eval_40_twelve.jsonl",
+  "records": 40,
+  "metrics": {
+    "list-text": {
+      "n": 480,
+      "answered": 294,
+      "null_n": 170,
+      "exact": 0.597,
+      "located": 0.597,
+      "null_correct": 0.8824,
+      "tok_f1": 0.7092,
+      "contains": 0.7785,
+      "mean_confidence": 0.0,
+      "brier_null": 0.0595
+    }
+  },
+  "by_domain": {
+    "cuad": {
+      "list-text": {
+        "n": 480,
+        "answered": 294,
+        "null_n": 170,
+        "exact": 0.597,
+        "located": 0.597,
+        "null_correct": 0.8824,
+        "tok_f1": 0.7092,
+        "contains": 0.7785,
+        "mean_confidence": 0.0,
+        "brier_null": 0.0595
+      }
+    }
+  },
+  "timing": {
+    "per_document_s": {
+      "n": 40,
+      "mean": 0.798,
+      "p50": 0.23,
+      "p90": 2.077,
+      "p99": 7.106,
+      "min": 0.027,
+      "max": 9.094
+    },
+    "encode_s": 0.534,
+    "infer_s": 31.387,
+    "total_s": 31.921,
+    "records_per_s": 1.253,
+    "fields_per_s": 15.0,
+    "batched": false,
+    "batch_size_max": 1
+  }
+}
